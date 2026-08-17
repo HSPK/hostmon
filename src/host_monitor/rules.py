@@ -5,6 +5,7 @@ import json
 import math
 import re
 import time
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Sequence
@@ -141,6 +142,16 @@ class CaptureDispatcher:
 class RuleStore:
     def __init__(self, path: Path):
         self.path = path
+        self._cached_signature: tuple[int, int] | None = None
+        self._cached_rules: list[AlertRule] | None = None
+        self.last_error: str | None = None
+
+    def _signature(self) -> tuple[int, int]:
+        try:
+            stat = self.path.stat()
+        except OSError as error:
+            raise RuleError(f"cannot stat rules {self.path}: {error}") from error
+        return stat.st_mtime_ns, stat.st_size
 
     def _read_raw(self) -> list[dict[str, Any]]:
         try:
@@ -176,7 +187,23 @@ class RuleStore:
         return rules
 
     def load(self) -> list[AlertRule]:
-        return self._parse_entries(self._read_raw())
+        try:
+            signature = self._signature()
+            if (
+                signature == self._cached_signature
+                and self._cached_rules is not None
+            ):
+                return deepcopy(self._cached_rules)
+            rules = self._parse_entries(self._read_raw())
+        except RuleError as error:
+            if self._cached_rules is None:
+                raise
+            self.last_error = str(error)
+            return deepcopy(self._cached_rules)
+        self._cached_signature = signature
+        self._cached_rules = deepcopy(rules)
+        self.last_error = None
+        return rules
 
     def write(self, entries: Sequence[dict[str, Any]]) -> None:
         self._parse_entries(entries)
@@ -189,6 +216,9 @@ class RuleStore:
             atomic_write_text(self.path, content + "\n")
         except ConfigError as error:
             raise RuleError(f"cannot write rules {self.path}: {error}") from error
+        self._cached_signature = None
+        self._cached_rules = None
+        self.last_error = None
 
     def add(self, entry: dict[str, Any]) -> AlertRule:
         try:
@@ -281,11 +311,15 @@ class ContextFactory:
         record: dict[str, Any],
         step: int,
         now: float,
+        started_at: float,
+        last_commit_time: float,
     ):
         self.series = series
         self.record = record
         self.step = step
         self.now = now
+        self.started_at = started_at
+        self.last_commit_time = last_commit_time
 
     def __call__(self, record: dict[str, Any] | None) -> EvalContext:
         current = record or self.record
@@ -293,8 +327,8 @@ class ContextFactory:
             self.series,
             step=self.step,
             now=self.now,
-            started_at=self.now,
-            last_commit_time=self.now,
+            started_at=self.started_at,
+            last_commit_time=self.last_commit_time,
             record=current,
         )
 
@@ -308,8 +342,12 @@ def evaluate_rules(
     hostname: str,
     history_size: int,
     now: float | None = None,
+    started_at: float | None = None,
+    last_commit_time: float | None = None,
 ) -> RuleEvaluation:
     now = time.time() if now is None else now
+    started_at = now if started_at is None else started_at
+    last_commit_time = now if last_commit_time is None else last_commit_time
     samples = state.get("samples", [])
     if not isinstance(samples, list):
         raise RuleError("state samples must be a list")
@@ -341,7 +379,14 @@ def evaluate_rules(
     series.add(step, now, record)
 
     capture = CaptureDispatcher()
-    context = ContextFactory(series, record, step, now)
+    context = ContextFactory(
+        series,
+        record,
+        step,
+        now,
+        started_at,
+        last_commit_time,
+    )
     engine = AlertEngine(
         capture,
         context,

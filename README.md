@@ -158,6 +158,7 @@ Default locations:
 | Configuration | `~/.config/host-monitor/config.toml` |
 | Rules | `~/.config/host-monitor/rules.json` |
 | Runtime state | `~/.local/state/host-monitor/state.json` |
+| Alert outbox | `~/.local/state/host-monitor/reliability.db` |
 | Long-term history | `~/.local/state/host-monitor/history/` |
 | User service | `~/.config/systemd/user/host-monitor.service` |
 
@@ -165,6 +166,33 @@ Complete samples are written as
 `metrics-YYYY-MM-DD-NNNN.jsonl`. A new file is created when the UTC date
 changes or the configured size limit is reached. Files are not automatically
 deleted.
+
+## Reliability model
+
+Collectors run concurrently. Every collector supports hostmon-level controls:
+
+```toml
+[collectors.kubernetes]
+enabled = true
+required = false
+deadline_seconds = 35
+max_stale_seconds = 300
+```
+
+- A required collector fails the cycle when no valid stale value exists.
+- An optional collector failure does not discard healthy localhost metrics.
+- Last-good data may be reused only within `max_stale_seconds`.
+- `monitor.collector.<name>.up`, `.stale`, `.duration_ms`, and related health
+  metrics are available to rules and history.
+
+Generated alerts are committed to a SQLite outbox before delivery. Each
+channel is acknowledged separately, so a successful channel is not repeated
+when another channel needs a retry. `hmon status` exposes
+`reliability.outbox_pending`.
+
+Runtime state upgrades are explicit. A v1 state file is backed up before being
+migrated to v2; unknown future versions fail closed instead of resetting edge
+and cooldown state.
 
 ## Architecture
 

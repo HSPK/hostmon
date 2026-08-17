@@ -1,7 +1,7 @@
 # Alert channels and rules
 
 hostmon uses Expr Tracker for expression parsing, rule state, message models,
-channel routing, retries, rate limiting, and delivery.
+channel routing, retries, and delivery.
 
 ## Delivery flow
 
@@ -18,9 +18,14 @@ AlertMessage
 Lark / Slack / DingTalk / WeCom / webhook / email
 ```
 
-hostmon evaluates rules first, sends alerts synchronously, and only then
-commits the new firing state. A failed delivery therefore remains retryable on
-the next cycle.
+hostmon evaluates rules, stores generated events in a durable SQLite outbox,
+and commits the new firing state before attempting delivery. Every target
+channel has its own delivery row. A failed channel is retried without
+duplicating channels that already succeeded.
+
+The outbox is stored beside runtime state as `reliability.db`. Event IDs are
+stable across process restarts, and delivery errors are redacted before being
+persisted. `hmon status` reports the pending delivery count.
 
 ## Secrets and environment mapping
 
@@ -212,16 +217,14 @@ backoff_factor = 2
 backoff_max = 15
 retry_on_status = [408, 429, 500, 502, 503, 504]
 respect_retry_after = true
-rate_limit_per_minute = 20
-on_rate_limited = "coalesce"
-dedup_window = 0
 queue_size = 100
 on_queue_full = "drop_oldest"
 ```
 
-hostmon makes the global policy synchronous and non-silent so rule state is
-not committed after a failed delivery. Expr Tracker still handles retries,
-`Retry-After`, rate limiting, and per-channel filtering.
+hostmon makes channel delivery synchronous and non-silent, and disables the
+in-memory deduper/rate limiter because durable idempotency is owned by the
+outbox. Expr Tracker still handles HTTP retries, `Retry-After`, and
+per-channel filtering.
 
 ## Rule expressions and templates
 

@@ -82,9 +82,17 @@ class AlertSender:
         load_alert_environment(settings)
         try:
             channels = [ChannelConfig.from_dict(item) for item in settings.channels]
+            for channel in channels:
+                if channel.policy is not None:
+                    channel.policy.async_send = False
+                    channel.policy.fail_silently = False
+                    channel.policy.dedup_window = 0
+                    channel.policy.rate_limit_per_minute = None
             policy_values = dict(settings.policy)
             policy_values["async_send"] = False
             policy_values["fail_silently"] = False
+            policy_values["dedup_window"] = 0
+            policy_values["rate_limit_per_minute"] = None
             policy = WebhookPolicy.from_dict(policy_values)
             self.dispatcher = Dispatcher(
                 AlertConfig(
@@ -109,17 +117,33 @@ class AlertSender:
     def validate_channels(self, channels: Sequence[str] | None) -> None:
         self._validate_channels(channels)
 
+    def targets(self, captured: CapturedAlert) -> list[str]:
+        if not self.settings.enabled or self.dispatcher is None:
+            return []
+        self._validate_channels(captured.channels)
+        return (
+            sorted(set(captured.channels))
+            if captured.channels
+            else sorted(self.channel_names)
+        )
+
+    def send_one(self, message: AlertMessage, channel: str) -> None:
+        if not self.settings.enabled or self.dispatcher is None:
+            raise AlertError("alerts are disabled in the configuration")
+        self._validate_channels([channel])
+        try:
+            self.dispatcher.send(message, [channel])
+        except RuntimeError as error:
+            raise AlertError(str(error)) from error
+
     def send_captured(self, alerts: Sequence[CapturedAlert]) -> int:
         if not alerts:
             return 0
         if not self.settings.enabled or self.dispatcher is None:
             return 0
         for captured in alerts:
-            self._validate_channels(captured.channels)
-            try:
-                self.dispatcher.send(captured.message, captured.channels)
-            except RuntimeError as error:
-                raise AlertError(str(error)) from error
+            for channel in self.targets(captured):
+                self.send_one(captured.message, channel)
         return len(alerts)
 
     def send_manual(

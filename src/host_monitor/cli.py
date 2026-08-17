@@ -17,6 +17,7 @@ from .config import (
 )
 from .errors import MonitorError
 from .history import HistoryReader, HistoryWriter, migrate_rolling_state
+from .outbox import OutboxStore
 from .rules import RuleStore, inspect_rules, write_default_rules
 from .runtime import capture_snapshot, run_daemon
 from .service import (
@@ -245,9 +246,15 @@ def command_status(args: argparse.Namespace) -> int:
     status = service_status()
     path = resolve_config_path(args.config)
     state: dict[str, Any] | None = None
+    outbox_pending: int | None = None
     if path.exists():
         settings = load_settings(path)
         state = StateStore(settings.state_file).load()
+        outbox = OutboxStore(settings.state_file.with_name("reliability.db"))
+        try:
+            outbox_pending = outbox.pending_count()
+        finally:
+            outbox.close()
     payload = {
         "service": {
             "load": status.get("LoadState"),
@@ -267,6 +274,9 @@ def command_status(args: argparse.Namespace) -> int:
             if state and state.get("updated_at")
             else None
         ),
+        "reliability": {
+            "outbox_pending": outbox_pending,
+        },
     }
     if args.json:
         print_json(payload)
@@ -285,6 +295,7 @@ def command_status(args: argparse.Namespace) -> int:
                 print(f"{name}={value:.6g}")
             for name, value in sorted(sample["fields"].items()):
                 print(f"{name}={value}")
+        print(f"outbox_pending={outbox_pending if outbox_pending is not None else '-'}")
     return 0
 
 

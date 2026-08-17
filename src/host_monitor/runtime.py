@@ -14,6 +14,7 @@ from .collectors import Collection, CollectorManager, build_collectors
 from .config import Settings
 from .errors import MonitorError
 from .history import HistoryWriter
+from .outbox import OutboxStore
 from .rules import RuleEvaluation, RuleStore, evaluate_rules
 from .state import StateStore
 
@@ -47,16 +48,22 @@ class MonitorRuntime:
         self.settings = settings
         self.clock = clock
         self.monotonic = monotonic
+        self.started_at = self.clock()
         self.collectors = CollectorManager(build_collectors(settings.collectors))
         self.rules = RuleStore(settings.rules_file)
         self.state_store = StateStore(settings.state_file)
         self.alerts = AlertSender(settings.alerts)
         self.history = HistoryWriter(settings.history)
+        self.outbox = OutboxStore(
+            settings.state_file.with_name("reliability.db")
+        )
         self.state = self.state_store.load()
         self.hostname = local_hostname(settings)
 
     def close(self) -> None:
+        self.collectors.close()
         self.alerts.close()
+        self.outbox.close()
 
     def cycle(self, *, send_alerts: bool = True, persist: bool = True) -> CycleResult:
         started = self.monotonic()
@@ -69,6 +76,10 @@ class MonitorRuntime:
             self.monotonic() - started
         ) * 1000
         rules = self.rules.load()
+        if self.rules.last_error:
+            collection.warnings.append(
+                f"using last-known-good rules: {self.rules.last_error}"
+            )
         evaluation = evaluate_rules(
             rules,
             collection.metrics,
@@ -77,30 +88,40 @@ class MonitorRuntime:
             hostname=self.hostname,
             history_size=self.settings.history_size,
             now=now,
+            started_at=self.started_at,
+            last_commit_time=float(self.state.get("updated_at") or now),
         )
-        rendered_alerts = [
-            {
-                "title": str(item.message.title),
-                "level": item.message.level.value,
-                "message": str(item.message.text),
-            }
-            for item in evaluation.alerts
-        ]
-        history_path = self.history.append(
-            timestamp=now,
-            host=self.hostname,
-            metrics=collection.metrics,
-            fields=collection.fields,
-            alerts=rendered_alerts,
-        )
+        rendered_alerts: list[dict[str, Any]] = []
         if send_alerts:
-            self.alerts.send_captured(evaluation.alerts)
+            for captured in evaluation.alerts:
+                channels = self.alerts.targets(captured)
+                event_id = self.outbox.enqueue(captured, channels, now=now)
+                rendered_alerts.append(
+                    {
+                        "event_id": event_id,
+                        "title": str(captured.message.title),
+                        "level": captured.message.level.value,
+                        "message": str(captured.message.text),
+                        "channels": channels,
+                    }
+                )
+        else:
+            rendered_alerts = [
+                {
+                    "event_id": None,
+                    "title": str(item.message.title),
+                    "level": item.message.level.value,
+                    "message": str(item.message.text),
+                    "channels": [],
+                }
+                for item in evaluation.alerts
+            ]
 
         samples = list(self.state.get("samples", []))
         samples.append(evaluation.sample)
         next_state = {
             **self.state,
-            "version": 1,
+            "version": 2,
             "step": evaluation.sample["_step"],
             "updated_at": now,
             "host": self.hostname,
@@ -109,11 +130,47 @@ class MonitorRuntime:
             "collectors": collection.states,
             "last_metrics": collection.metrics,
             "last_fields": collection.fields,
-            "last_history_file": str(history_path) if history_path else None,
         }
         if persist:
             self.state_store.save(next_state)
         self.state = next_state
+
+        delivery = None
+        if send_alerts:
+            delivery = self.outbox.deliver_pending(self.alerts, now=now)
+            collection.metrics["monitor/outbox/delivered"] = float(
+                delivery.delivered
+            )
+            collection.metrics["monitor/outbox/failed"] = float(delivery.failed)
+            collection.metrics["monitor/outbox/pending"] = float(delivery.pending)
+            collection.warnings.extend(delivery.errors)
+            for alert in rendered_alerts:
+                event_id = alert["event_id"]
+                alert["delivery"] = (
+                    self.outbox.event_status(event_id) if event_id else {}
+                )
+
+        history_path = None
+        try:
+            history_path = self.history.append(
+                timestamp=now,
+                host=self.hostname,
+                metrics=collection.metrics,
+                fields=collection.fields,
+                alerts=rendered_alerts,
+            )
+        except MonitorError as error:
+            collection.warnings.append(f"history write failed: {error}")
+
+        next_state["last_metrics"] = collection.metrics
+        next_state["last_fields"] = collection.fields
+        if history_path is not None:
+            next_state["last_history_file"] = str(history_path)
+        if persist:
+            self.state_store.save(next_state)
+        self.state = next_state
+        if send_alerts:
+            self.outbox.prune_delivered(before=now - 7 * 86400)
         return CycleResult(
             metrics=collection.metrics,
             fields=collection.fields,
@@ -176,7 +233,7 @@ class MonitorRuntime:
                 )
                 for alert in result.alerts:
                     LOGGER.info(
-                        "alert level=%s title=%s",
+                        "alert generated level=%s title=%s",
                         alert["level"],
                         alert["title"],
                     )
@@ -232,12 +289,15 @@ def capture_snapshot(
     monotonic: Callable[[], float] = time.monotonic,
 ) -> Collection:
     manager = CollectorManager(build_collectors(settings.collectors))
-    first = manager.collect({}, now=clock())
-    sleeper(settings.snapshot_seconds)
-    started = monotonic()
-    second = manager.collect(first.states, now=clock())
-    second.metrics["monitor/collection_duration_ms"] = (
-        monotonic() - started
-    ) * 1000
-    second.warnings = list(dict.fromkeys(first.warnings + second.warnings))
-    return second
+    try:
+        first = manager.collect({}, now=clock())
+        sleeper(settings.snapshot_seconds)
+        started = monotonic()
+        second = manager.collect(first.states, now=clock())
+        second.metrics["monitor/collection_duration_ms"] = (
+            monotonic() - started
+        ) * 1000
+        second.warnings = list(dict.fromkeys(first.warnings + second.warnings))
+        return second
+    finally:
+        manager.close()

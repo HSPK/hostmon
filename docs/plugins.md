@@ -90,12 +90,21 @@ After installation, enable it in hostmon:
 ```toml
 [collectors.my_collector]
 enabled = true
+required = false
+deadline_seconds = 10
+max_stale_seconds = 60
 device = "/dev/example"
 poll_interval_seconds = 30
 ```
 
-The `enabled` key is consumed by hostmon. Every other key is passed to the
-collector constructor.
+`enabled`, `required`, `deadline_seconds`, and `max_stale_seconds` are consumed
+by hostmon. Every other key is passed to the collector constructor.
+
+Collectors run concurrently. A timed-out invocation remains in flight and is
+not submitted again until it finishes, preventing an unbounded thread/task
+pile-up. Optional collectors can reuse their last valid result within the
+configured stale window. Hostmon emits per-collector `up`, `stale`,
+`duration_ms`, `last_success_age_seconds`, and `failures_total` metrics.
 
 ```bash
 python -m pip install hostmon-my-collector

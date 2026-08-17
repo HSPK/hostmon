@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hostmon"
-version = "0.1.0"
+version = "0.1.1.dev0"
 description = "Lightweight, config-driven localhost resource monitoring with Expr Tracker alerts"
 readme = "README.md"
 requires-python = ">=3.11"
@@ -32,7 +32,7 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
-  "expr-tracker>=0.2.3,<1",
+  "expr-tracker>=0.2.3,<0.3",
 ]
 
 [project.urls]
@@ -44,7 +44,7 @@ Changelog = "https://github.com/HSPK/hostmon/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 lark = [
-  "expr-tracker[lark]>=0.2.3,<1",
+  "expr-tracker[lark]>=0.2.3,<0.3",
 ]
 dev = [
   "build>=1.2",

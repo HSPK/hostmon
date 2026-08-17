@@ -24,12 +24,16 @@ KNOWN_MONITOR_KEYS = {
 }
 KNOWN_ALERT_KEYS = {"enabled", "env_file", "env", "channels", "policy"}
 KNOWN_HISTORY_KEYS = {"enabled", "directory", "max_file_mb"}
+REQUIRED_COLLECTORS = {"cpu", "memory", "disk", "network"}
 
 
 @dataclass(frozen=True)
 class CollectorSettings:
     name: str
     enabled: bool = True
+    required: bool = False
+    deadline_seconds: float = 30.0
+    max_stale_seconds: float = 300.0
     options: dict[str, Any] = field(default_factory=dict)
 
 
@@ -121,6 +125,18 @@ def _positive_int(name: str, value: Any, minimum: int = 0) -> int:
     return number
 
 
+def _nonnegative_number(name: str, value: Any) -> float:
+    if isinstance(value, bool):
+        raise ConfigError(f"{name} must be a number")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as error:
+        raise ConfigError(f"{name} must be a number, got {value!r}") from error
+    if number < 0:
+        raise ConfigError(f"{name} must not be negative")
+    return number
+
+
 def _mapping(name: str, value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ConfigError(f"{name} must be a TOML table")
@@ -173,8 +189,36 @@ def load_settings(path: str | Path | None = None) -> Settings:
         enabled = options.pop("enabled", True)
         if not isinstance(enabled, bool):
             raise ConfigError(f"collectors.{name}.enabled must be true or false")
+        required = options.pop("required", name in REQUIRED_COLLECTORS)
+        if not isinstance(required, bool):
+            raise ConfigError(f"collectors.{name}.required must be true or false")
+        raw_timeout = options.get("timeout_seconds", 3)
+        try:
+            default_deadline = max(5.0, float(raw_timeout) + 2.0)
+        except (TypeError, ValueError) as error:
+            raise ConfigError(
+                f"collectors.{name}.timeout_seconds must be a number"
+            ) from error
+        deadline = _positive_number(
+            f"collectors.{name}.deadline_seconds",
+            options.pop("deadline_seconds", default_deadline),
+        )
+        max_stale = _nonnegative_number(
+            f"collectors.{name}.max_stale_seconds",
+            options.pop(
+                "max_stale_seconds",
+                0 if required else max(300.0, interval * 3),
+            ),
+        )
         collectors.append(
-            CollectorSettings(name=str(name), enabled=enabled, options=options)
+            CollectorSettings(
+                name=str(name),
+                enabled=enabled,
+                required=required,
+                deadline_seconds=deadline,
+                max_stale_seconds=max_stale,
+                options=options,
+            )
         )
     enabled_collectors = [item for item in collectors if item.enabled]
     if not enabled_collectors:
@@ -264,30 +308,41 @@ def render_default_config(
         "",
         "[collectors.cpu]",
         "enabled = true",
+        "required = true",
         "",
         "[collectors.memory]",
         "enabled = true",
+        "required = true",
         "",
         "[collectors.disk]",
         "enabled = true",
+        "required = true",
         'paths = ["/"]',
         "",
         "[collectors.network]",
         "enabled = true",
+        "required = true",
         'include = ["*"]',
         'exclude = ["lo", "docker*", "veth*", "br-*", "virbr*", "cni*", "flannel*", "cali*"]',
         "",
         "[collectors.gpu]",
         "enabled = true",
+        "required = false",
+        "deadline_seconds = 7",
+        "max_stale_seconds = 300",
         'command = "nvidia-smi"',
         "timeout_seconds = 5",
         "optional = true",
         "",
         "[collectors.pressure]",
         "enabled = true",
+        "required = false",
         "",
         "[collectors.kubernetes]",
         "enabled = false",
+        "required = false",
+        "deadline_seconds = 35",
+        "max_stale_seconds = 300",
         'context = ""',
         'namespace = ""',
         'queue = ""',
@@ -299,6 +354,9 @@ def render_default_config(
         "",
         "[collectors.kubernetes_permissions]",
         "enabled = false",
+        "required = false",
+        "deadline_seconds = 20",
+        "max_stale_seconds = 300",
         "poll_interval_seconds = 60",
         'kubectl = "kubectl"',
         "timeout_seconds = 15",
@@ -336,7 +394,6 @@ def render_default_config(
             "backoff_initial = 0.5",
             "backoff_factor = 2",
             "backoff_max = 15",
-            "rate_limit_per_minute = 20",
             "dedup_window = 0",
             "async_send = false",
             "queue_size = 100",
