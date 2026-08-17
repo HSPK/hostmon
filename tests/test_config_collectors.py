@@ -40,6 +40,12 @@ class ConfigTests(unittest.TestCase):
             self.assertFalse(settings.alerts.enabled)
             self.assertTrue(settings.history.enabled)
             self.assertEqual(settings.history.max_file_bytes, 64 * 1024 * 1024)
+            disabled = {item.name: item for item in settings.collectors}
+            self.assertEqual(disabled["kubernetes"].deadline_seconds, 5)
+            self.assertEqual(
+                disabled["kubernetes_permissions"].deadline_seconds,
+                5,
+            )
 
 
 class CPUCollectorTests(unittest.TestCase):

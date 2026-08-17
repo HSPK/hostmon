@@ -194,7 +194,10 @@ def load_settings(path: str | Path | None = None) -> Settings:
             raise ConfigError(f"collectors.{name}.required must be true or false")
         raw_timeout = options.get("timeout_seconds", 3)
         try:
-            default_deadline = max(5.0, float(raw_timeout) + 2.0)
+            default_deadline = min(
+                max(1.0, interval / 2.0),
+                max(1.0, float(raw_timeout) + 2.0),
+            )
         except (TypeError, ValueError) as error:
             raise ConfigError(
                 f"collectors.{name}.timeout_seconds must be a number"
@@ -341,7 +344,7 @@ def render_default_config(
         "[collectors.kubernetes]",
         "enabled = false",
         "required = false",
-        "deadline_seconds = 35",
+        "deadline_seconds = 5",
         "max_stale_seconds = 300",
         'context = ""',
         'namespace = ""',
@@ -355,7 +358,7 @@ def render_default_config(
         "[collectors.kubernetes_permissions]",
         "enabled = false",
         "required = false",
-        "deadline_seconds = 20",
+        "deadline_seconds = 5",
         "max_stale_seconds = 300",
         "poll_interval_seconds = 60",
         'kubectl = "kubectl"',

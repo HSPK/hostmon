@@ -20,6 +20,8 @@ All notable changes to this project are documented here.
 - Changed Kubernetes notifications to fire only when occupied GPU nodes
   decrease below quota, including the task names and nodes affected by that
   transition.
+- Bounded default remote collector deadlines to half the collection interval,
+  so slow Kubernetes API calls cannot create long gaps in localhost history.
 
 ## [0.1.0] - 2026-08-17
 
