@@ -17,6 +17,9 @@ All notable changes to this project are documented here.
 - Made history write failures non-blocking for alert delivery.
 - Added a last-known-good rule cache so transient invalid rule files do not
   interrupt collection.
+- Changed Kubernetes notifications to fire only when occupied GPU nodes
+  decrease below quota, including the task names and nodes affected by that
+  transition.
 
 ## [0.1.0] - 2026-08-17
 

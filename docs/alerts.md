@@ -243,15 +243,17 @@ per-channel filtering.
 }
 ```
 
-Collectors may expose non-numeric template fields, such as failed Kubernetes
-task names. They are available in `title` and `message`:
+Collectors may expose non-numeric template fields, such as Kubernetes tasks
+that lost GPU nodes. They are available in `title` and `message`:
 
 ```json
 {
-  "alert": "kubernetes-task-failure",
-  "expr": "k8s.failed_task_count > 0",
+  "alert": "kubernetes-gpu-node-drop",
+  "expr": "k8s.occupied_gpu_nodes < k8s.quota_nodes and diff(k8s.occupied_gpu_nodes[2]) < 0",
   "title": "Kubernetes GPU nodes {k8s_occupied_gpu_nodes:.0f}/{k8s_quota_nodes:.0f}",
-  "message": "Failed tasks: {k8s_failed_tasks}\nDetails: {k8s_failed_task_details}"
+  "message": "Stopped or reduced tasks: {k8s_stopped_tasks}\nLost nodes: {k8s_stopped_task_details}",
+  "mode": "edge",
+  "notify_recovery": false
 }
 ```
 

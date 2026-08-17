@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import shlex
 import subprocess
+from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation, ROUND_CEILING
 from typing import Any
 
@@ -122,16 +123,24 @@ def failed_jobs(jobs: list[dict[str, Any]]) -> dict[str, str]:
     return failed
 
 
+@dataclass(frozen=True)
+class WorkloadAnalysis:
+    metrics: dict[str, float]
+    fields: dict[str, Any]
+    gpu_task_nodes: dict[str, list[str]]
+
+
 def analyze_workloads(
     pods: list[dict[str, Any]],
     jobs: list[dict[str, Any]],
     *,
     gpu_resource: str,
-) -> tuple[dict[str, float], dict[str, Any]]:
+) -> WorkloadAnalysis:
     job_problems = failed_jobs(jobs)
     problems = dict(job_problems)
     problem_pods = 0
     occupied_nodes: set[str] = set()
+    gpu_task_nodes: dict[str, set[str]] = {}
     gpu_pods = 0
     for pod in pods:
         problem = pod_problem(pod)
@@ -147,8 +156,12 @@ def analyze_workloads(
             and pod_uses_resource(pod, gpu_resource)
         ):
             occupied_nodes.add(str(node))
+            gpu_task_nodes.setdefault(controller_name(pod), set()).add(str(node))
             gpu_pods += 1
 
+    normalized_task_nodes = {
+        task: sorted(nodes) for task, nodes in sorted(gpu_task_nodes.items())
+    }
     names = sorted(problems)
     details = [f"{name} ({problems[name]})" for name in names]
     metrics = {
@@ -157,12 +170,41 @@ def analyze_workloads(
         "k8s/problem_pod_count": float(problem_pods),
         "k8s/occupied_gpu_nodes": float(len(occupied_nodes)),
         "k8s/gpu_pod_count": float(gpu_pods),
+        "k8s/gpu_task_count": float(len(normalized_task_nodes)),
     }
     fields = {
         "k8s_failed_tasks": ", ".join(names) if names else "(none)",
         "k8s_failed_task_details": "; ".join(details) if details else "(none)",
+        "k8s_gpu_tasks": (
+            ", ".join(normalized_task_nodes) if normalized_task_nodes else "(none)"
+        ),
     }
-    return metrics, fields
+    return WorkloadAnalysis(
+        metrics=metrics,
+        fields=fields,
+        gpu_task_nodes=normalized_task_nodes,
+    )
+
+
+def stopped_gpu_tasks(
+    previous: Any,
+    current: dict[str, list[str]],
+) -> tuple[list[str], list[str]]:
+    if not isinstance(previous, dict):
+        return [], []
+    stopped: list[str] = []
+    details: list[str] = []
+    for task, raw_nodes in sorted(previous.items()):
+        if not isinstance(raw_nodes, list):
+            continue
+        prior_nodes = {str(node) for node in raw_nodes}
+        current_nodes = {str(node) for node in current.get(str(task), [])}
+        lost_nodes = sorted(prior_nodes - current_nodes)
+        if not lost_nodes:
+            continue
+        stopped.append(str(task))
+        details.append(f"{task} (-{', -'.join(lost_nodes)})")
+    return stopped, details
 
 
 class KubernetesCollector:
@@ -286,10 +328,26 @@ class KubernetesCollector:
             ),
             "job",
         )
-        metrics, fields = analyze_workloads(
+        analysis = analyze_workloads(
             pods,
             jobs,
             gpu_resource=self.gpu_resource,
+        )
+        metrics = analysis.metrics
+        fields = analysis.fields
+        previous_task_nodes = (
+            previous.get("gpu_task_nodes") if isinstance(previous, dict) else None
+        )
+        stopped_tasks, stopped_details = stopped_gpu_tasks(
+            previous_task_nodes,
+            analysis.gpu_task_nodes,
+        )
+        metrics["k8s/stopped_task_count"] = float(len(stopped_tasks))
+        fields["k8s_stopped_tasks"] = (
+            ", ".join(stopped_tasks) if stopped_tasks else "(none)"
+        )
+        fields["k8s_stopped_task_details"] = (
+            "; ".join(stopped_details) if stopped_details else "(none)"
         )
         fields.update(
             {
@@ -327,5 +385,6 @@ class KubernetesCollector:
             "at": now,
             "metrics": metrics,
             "fields": fields,
+            "gpu_task_nodes": analysis.gpu_task_nodes,
         }
         return CollectorResult(metrics=metrics, fields=fields, state=state)

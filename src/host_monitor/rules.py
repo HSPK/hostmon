@@ -88,10 +88,10 @@ DEFAULT_RULES: list[dict[str, Any]] = [
         "enabled": True,
     },
     {
-        "alert": "k8s-task-or-node-problem",
+        "alert": "k8s-gpu-node-drop",
         "expr": (
-            "k8s.failed_task_count > 0 or "
-            "k8s.occupied_gpu_nodes < k8s.quota_nodes"
+            "k8s.occupied_gpu_nodes < k8s.quota_nodes and "
+            "diff(k8s.occupied_gpu_nodes[2]) < 0"
         ),
         "level": "warning",
         "title": (
@@ -99,14 +99,14 @@ DEFAULT_RULES: list[dict[str, Any]] = [
             "{k8s_quota_nodes:.0f} | {k8s_namespace}"
         ),
         "message": (
-            "Failed tasks: {k8s_failed_tasks}\n"
-            "Details: {k8s_failed_task_details}\n"
+            "Stopped or reduced tasks: {k8s_stopped_tasks}\n"
+            "Lost nodes: {k8s_stopped_task_details}\n"
             "Condition: {expr}"
         ),
         "for": 1,
-        "mode": "level",
-        "cooldown": 3600,
-        "notify_recovery": True,
+        "mode": "edge",
+        "cooldown": 0,
+        "notify_recovery": False,
         "enabled": True,
     },
 ]

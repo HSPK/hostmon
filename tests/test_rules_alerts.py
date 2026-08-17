@@ -107,36 +107,90 @@ class RuleEvaluationTests(unittest.TestCase):
 
         self.assertEqual(len(present.alerts), 1)
 
-    def test_k8s_alert_renders_node_ratio_and_failed_task_names(self):
+    def test_k8s_alert_only_fires_on_gpu_node_drop(self):
         rule = AlertRule.from_dict(
             {
-                "alert": "k8s",
-                "expr": "k8s.failed_task_count > 0",
+                "alert": "k8s-node-drop",
+                "expr": (
+                    "k8s.occupied_gpu_nodes < k8s.quota_nodes and "
+                    "diff(k8s.occupied_gpu_nodes[2]) < 0"
+                ),
                 "title": (
                     "K8s 节点 {k8s_occupied_gpu_nodes:.0f}/"
                     "{k8s_quota_nodes:.0f}"
                 ),
-                "message": "挂掉的任务：{k8s_failed_tasks}",
+                "message": "停止的任务：{k8s_stopped_tasks}",
                 "for": 1,
+                "mode": "edge",
+                "notify_recovery": False,
             }
         )
 
-        result = evaluate_rules(
+        state = {}
+        initial = evaluate_rules(
+            [rule],
+            {
+                "k8s/failed_task_count": 0,
+                "k8s/occupied_gpu_nodes": 7,
+                "k8s/quota_nodes": 7,
+            },
+            state,
+            fields={"k8s_stopped_tasks": "(none)"},
+            hostname="localhost",
+            history_size=10,
+            now=1,
+        )
+        self.assertEqual(initial.alerts, [])
+        state = next_state(state, initial)
+
+        failed_only = evaluate_rules(
+            [rule],
+            {
+                "k8s/failed_task_count": 1,
+                "k8s/occupied_gpu_nodes": 7,
+                "k8s/quota_nodes": 7,
+            },
+            state,
+            fields={"k8s_stopped_tasks": "(none)"},
+            hostname="localhost",
+            history_size=10,
+            now=2,
+        )
+        self.assertEqual(failed_only.alerts, [])
+        state = next_state(state, failed_only)
+
+        dropped = evaluate_rules(
             [rule],
             {
                 "k8s/failed_task_count": 1,
                 "k8s/occupied_gpu_nodes": 6,
                 "k8s/quota_nodes": 7,
             },
-            {},
-            fields={"k8s_failed_tasks": "job-a"},
+            state,
+            fields={"k8s_stopped_tasks": "job-a"},
             hostname="localhost",
             history_size=10,
-            now=1,
+            now=3,
         )
 
-        self.assertEqual(result.alerts[0].message.title, "K8s 节点 6/7")
-        self.assertEqual(result.alerts[0].message.text, "挂掉的任务：job-a")
+        self.assertEqual(dropped.alerts[0].message.title, "K8s 节点 6/7")
+        self.assertEqual(dropped.alerts[0].message.text, "停止的任务：job-a")
+        state = next_state(state, dropped)
+
+        steady = evaluate_rules(
+            [rule],
+            {
+                "k8s/failed_task_count": 1,
+                "k8s/occupied_gpu_nodes": 6,
+                "k8s/quota_nodes": 7,
+            },
+            state,
+            fields={"k8s_stopped_tasks": "(none)"},
+            hostname="localhost",
+            history_size=10,
+            now=4,
+        )
+        self.assertEqual(steady.alerts, [])
 
     def test_permission_alert_only_fires_on_false_to_true_edge(self):
         rule = AlertRule.from_dict(

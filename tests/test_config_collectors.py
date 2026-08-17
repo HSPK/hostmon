@@ -11,6 +11,7 @@ from host_monitor.collectors.gpu import parse_gpu_rows
 from host_monitor.collectors.kubernetes import (
     KubernetesCollector,
     analyze_workloads,
+    stopped_gpu_tasks,
 )
 from host_monitor.collectors.memory import MemoryCollector, parse_meminfo
 from host_monitor.collectors.network import NetworkCollector, parse_net_dev
@@ -207,14 +208,19 @@ class KubernetesCollectorTests(unittest.TestCase):
             },
         ]
 
-        metrics, fields = analyze_workloads(
+        analysis = analyze_workloads(
             pods,
             jobs,
             gpu_resource="nvidia.com/gpu",
         )
 
+        metrics, fields = analysis.metrics, analysis.fields
         self.assertEqual(metrics["k8s/failed_task_count"], 2)
         self.assertEqual(metrics["k8s/occupied_gpu_nodes"], 1)
+        self.assertEqual(
+            analysis.gpu_task_nodes,
+            {"training": ["gpu-1"]},
+        )
         self.assertEqual(fields["k8s_failed_tasks"], "failed-job, training")
         self.assertIn("BackoffLimitExceeded", fields["k8s_failed_task_details"])
         self.assertIn("CrashLoopBackOff", fields["k8s_failed_task_details"])
@@ -237,6 +243,23 @@ class KubernetesCollectorTests(unittest.TestCase):
         query.assert_not_called()
         self.assertEqual(result.metrics["k8s/failed_task_count"], 1)
         self.assertEqual(result.fields["k8s_failed_tasks"], "job-a")
+
+    def test_identifies_tasks_that_lost_gpu_nodes(self):
+        stopped, details = stopped_gpu_tasks(
+            {
+                "training-a": ["gpu-1", "gpu-2"],
+                "training-b": ["gpu-3"],
+            },
+            {
+                "training-a": ["gpu-1"],
+            },
+        )
+
+        self.assertEqual(stopped, ["training-a", "training-b"])
+        self.assertEqual(
+            details,
+            ["training-a (-gpu-2)", "training-b (-gpu-3)"],
+        )
 
 
 class KubernetesPermissionCollectorTests(unittest.TestCase):
