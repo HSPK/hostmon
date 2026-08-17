@@ -163,8 +163,8 @@ class KubernetesPermissionCollector:
                     f"{field_prefix}_context": check.context or "current",
                     f"{field_prefix}_namespace": check.namespace or "(cluster)",
                     f"{field_prefix}_resource": check.resource,
-                    f"{field_prefix}_granted_verbs": ", ".join(granted) or "(无)",
-                    f"{field_prefix}_missing_verbs": ", ".join(missing) or "(无)",
+                    f"{field_prefix}_granted_verbs": ", ".join(granted) or "(none)",
+                    f"{field_prefix}_missing_verbs": ", ".join(missing) or "(none)",
                 }
             )
         state = {"at": now, "metrics": metrics, "fields": fields}

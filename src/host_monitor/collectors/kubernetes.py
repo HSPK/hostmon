@@ -159,8 +159,8 @@ def analyze_workloads(
         "k8s/gpu_pod_count": float(gpu_pods),
     }
     fields = {
-        "k8s_failed_tasks": ", ".join(names) if names else "(无)",
-        "k8s_failed_task_details": "; ".join(details) if details else "(无)",
+        "k8s_failed_tasks": ", ".join(names) if names else "(none)",
+        "k8s_failed_task_details": "; ".join(details) if details else "(none)",
     }
     return metrics, fields
 

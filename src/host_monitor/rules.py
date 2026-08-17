@@ -30,8 +30,8 @@ DEFAULT_RULES: list[dict[str, Any]] = [
         "alert": "high-cpu",
         "expr": "cpu.percent >= 90",
         "level": "warning",
-        "title": "localhost CPU 使用率过高 | {host}",
-        "message": "CPU 使用率已持续超过阈值，{expr}",
+        "title": "High localhost CPU usage | {host}",
+        "message": "CPU usage remained above the configured threshold: {expr}",
         "for": 3,
         "mode": "level",
         "cooldown": 1800,
@@ -42,8 +42,8 @@ DEFAULT_RULES: list[dict[str, Any]] = [
         "alert": "high-memory",
         "expr": "memory.percent >= 90",
         "level": "warning",
-        "title": "localhost 内存使用率过高 | {host}",
-        "message": "内存使用率已持续超过阈值，{expr}",
+        "title": "High localhost memory usage | {host}",
+        "message": "Memory usage remained above the configured threshold: {expr}",
         "for": 3,
         "mode": "level",
         "cooldown": 1800,
@@ -54,8 +54,8 @@ DEFAULT_RULES: list[dict[str, Any]] = [
         "alert": "high-disk",
         "expr": "disk.percent >= 90",
         "level": "warning",
-        "title": "localhost 磁盘使用率过高 | {host}",
-        "message": "配置磁盘中的最高使用率已超过阈值，{expr}",
+        "title": "High localhost disk usage | {host}",
+        "message": "Disk usage remained above the configured threshold: {expr}",
         "for": 3,
         "mode": "level",
         "cooldown": 1800,
@@ -66,8 +66,8 @@ DEFAULT_RULES: list[dict[str, Any]] = [
         "alert": "high-network",
         "expr": "network.rx_mbps >= 1000 or network.tx_mbps >= 1000",
         "level": "warning",
-        "title": "localhost 网络流量过高 | {host}",
-        "message": "本机物理接口流量已持续超过阈值，{expr}",
+        "title": "High localhost network traffic | {host}",
+        "message": "Network traffic remained above the configured threshold: {expr}",
         "for": 3,
         "mode": "level",
         "cooldown": 1800,
@@ -78,8 +78,8 @@ DEFAULT_RULES: list[dict[str, Any]] = [
         "alert": "high-gpu-memory-or-temperature",
         "expr": "gpu.memory_percent >= 95 or gpu.temperature_c >= 85",
         "level": "warning",
-        "title": "localhost GPU 内存或温度过高 | {host}",
-        "message": "GPU 内存占用或温度已持续超过阈值，{expr}",
+        "title": "High localhost GPU memory or temperature | {host}",
+        "message": "GPU memory or temperature remained above threshold: {expr}",
         "for": 3,
         "mode": "level",
         "cooldown": 1800,
@@ -94,13 +94,13 @@ DEFAULT_RULES: list[dict[str, Any]] = [
         ),
         "level": "warning",
         "title": (
-            "K8s 节点 {k8s_occupied_gpu_nodes:.0f}/"
+            "Kubernetes GPU nodes {k8s_occupied_gpu_nodes:.0f}/"
             "{k8s_quota_nodes:.0f} | {k8s_namespace}"
         ),
         "message": (
-            "挂掉的任务：{k8s_failed_tasks}\n"
-            "详情：{k8s_failed_task_details}\n"
-            "条件：{expr}"
+            "Failed tasks: {k8s_failed_tasks}\n"
+            "Details: {k8s_failed_task_details}\n"
+            "Condition: {expr}"
         ),
         "for": 1,
         "mode": "level",

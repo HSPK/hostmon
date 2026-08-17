@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hostmon-thermal-example"
+version = "0.1.0"
+description = "Example thermal-zone collector plugin for hostmon"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+dependencies = ["hostmon>=0.1,<1"]
+
+[project.entry-points."host_monitor.collectors"]
+thermal = "hostmon_thermal:ThermalCollector"
+
+[tool.setuptools]
+py-modules = ["hostmon_thermal"]
