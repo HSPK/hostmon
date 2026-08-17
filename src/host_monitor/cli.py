@@ -7,6 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any, Sequence
 
+from . import __version__
 from .alerts import AlertSender
 from .collectors import build_collectors
 from .config import (
@@ -328,6 +329,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--config", help="path to config.toml")
     parser.add_argument("-v", "--verbose", action="store_true")
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
     commands = parser.add_subparsers(dest="command", required=True)
 
     config_parser = commands.add_parser("config", help="initialize or validate config")

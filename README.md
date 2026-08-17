@@ -1,5 +1,9 @@
 # hostmon
 
+[![CI](https://github.com/HSPK/hostmon/actions/workflows/ci.yml/badge.svg)](https://github.com/HSPK/hostmon/actions/workflows/ci.yml)
+[![PyPI](https://img.shields.io/pypi/v/hostmon.svg)](https://pypi.org/project/hostmon/)
+[![Python](https://img.shields.io/pypi/pyversions/hostmon.svg)](https://pypi.org/project/hostmon/)
+
 `hostmon` 是一个轻量、配置驱动的资源监控 Python package，主命令为 `hmon`。
 本机资源始终
 从 localhost 采集；可选 Kubernetes collector 只检查任务健康、GPU 节点占用和
@@ -247,3 +251,5 @@ cp k9s-plugin.yaml ~/.config/k9s/plugins/localhost-resource-monitor.yaml
 ```bash
 PYTHONPATH=src python3.11 -m unittest discover -s tests -v
 ```
+
+发布流程见 [`RELEASING.md`](RELEASING.md)。

@@ -87,6 +87,12 @@ class CLITests(unittest.TestCase):
         self.assertEqual(logging.getLogger("httpx").level, logging.WARNING)
         self.assertEqual(logging.getLogger("httpcore").level, logging.WARNING)
 
+    def test_version_flag_uses_short_cli_name(self):
+        with self.assertRaises(SystemExit) as exit_context:
+            self.invoke(["--version"])
+
+        self.assertEqual(exit_context.exception.code, 0)
+
 
 class RuntimeTests(unittest.TestCase):
     def test_cycle_evaluates_rules_and_persists_state(self):
