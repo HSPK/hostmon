@@ -131,9 +131,6 @@ class MonitorRuntime:
             "last_metrics": collection.metrics,
             "last_fields": collection.fields,
         }
-        if persist:
-            self.state_store.save(next_state)
-        self.state = next_state
 
         delivery = None
         if send_alerts:
@@ -245,11 +242,13 @@ class MonitorRuntime:
                         sort_keys=True,
                     ),
                 )
-            next_run += self.settings.interval_seconds
             current = self.monotonic()
-            if next_run <= current:
-                next_run = current + self.settings.interval_seconds
-            delay = next_run - current
+            next_run = advance_deadline(
+                next_run,
+                current,
+                self.settings.interval_seconds,
+            )
+            delay = max(0.0, next_run - current)
             if stop_event.wait(delay):
                 break
 
@@ -261,6 +260,13 @@ def install_signal_handlers(stop_event: threading.Event) -> None:
 
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
+
+
+def advance_deadline(previous: float, current: float, interval: float) -> float:
+    target = previous + interval
+    if target < current - interval:
+        return current
+    return target
 
 
 def run_daemon(settings: Settings) -> None:

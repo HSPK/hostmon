@@ -17,7 +17,7 @@ from host_monitor.config import AlertSettings, initialize_config, load_settings
 from host_monitor.errors import AlertError, CollectorError, MonitorError, RuleError
 from host_monitor.outbox import OutboxStore
 from host_monitor.rules import CapturedAlert, RuleStore, evaluate_rules, write_default_rules
-from host_monitor.runtime import MonitorRuntime
+from host_monitor.runtime import MonitorRuntime, advance_deadline
 from host_monitor.state import StateStore
 
 
@@ -288,6 +288,17 @@ class RuleCacheTests(unittest.TestCase):
 
 
 class RuntimeReliabilityTests(unittest.TestCase):
+    def test_slight_overrun_catches_up_without_extra_interval(self):
+        target = advance_deadline(0, 11, 10)
+
+        self.assertEqual(target, 10)
+        self.assertEqual(max(0, target - 11), 0)
+
+    def test_large_overrun_drops_backlog_without_busy_loop(self):
+        target = advance_deadline(0, 35, 10)
+
+        self.assertEqual(target, 35)
+
     def test_history_failure_does_not_block_alert_delivery(self):
         sink = []
         with tempfile.TemporaryDirectory() as directory:
@@ -343,13 +354,18 @@ class RuntimeReliabilityTests(unittest.TestCase):
                     runtime.history,
                     "append",
                     side_effect=MonitorError("disk full"),
-                ):
+                ), patch.object(
+                    runtime.state_store,
+                    "save",
+                    wraps=runtime.state_store.save,
+                ) as save:
                     try:
                         result = runtime.cycle()
                     finally:
                         runtime.close()
 
         self.assertEqual(len(sink), 1)
+        save.assert_called_once()
         self.assertTrue(
             any("history write failed" in warning for warning in result.warnings)
         )

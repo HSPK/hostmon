@@ -22,6 +22,8 @@ All notable changes to this project are documented here.
   transition.
 - Bounded default remote collector deadlines to half the collection interval,
   so slow Kubernetes API calls cannot create long gaps in localhost history.
+- Removed the duplicate state fsync and made the scheduler catch up after a
+  slight overrun instead of adding another full interval.
 
 ## [0.1.0] - 2026-08-17
 
