@@ -1,0 +1,11 @@
+plugins:
+  localhost-resource-monitor:
+    shortCut: Shift-M
+    description: Show localhost CPU/GPU/memory/disk/network
+    scopes:
+      - all
+    command: hmon
+    background: false
+    confirm: false
+    args:
+      - snapshot

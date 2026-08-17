@@ -1,0 +1,2 @@
+include CHANGELOG.md
+include k9s-plugin.yaml

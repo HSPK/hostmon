@@ -1,0 +1,72 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hostmon"
+version = "0.1.0"
+description = "Lightweight, config-driven localhost resource monitoring with Expr Tracker alerts"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [
+  { name = "HSPK" },
+]
+keywords = [
+  "monitoring",
+  "linux",
+  "kubernetes",
+  "gpu",
+  "alerts",
+  "cli",
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Operating System :: POSIX :: Linux",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: System :: Monitoring",
+  "Typing :: Typed",
+]
+dependencies = [
+  "expr-tracker>=0.2.3,<1",
+]
+
+[project.urls]
+Homepage = "https://github.com/HSPK/hostmon"
+Documentation = "https://github.com/HSPK/hostmon#readme"
+Repository = "https://github.com/HSPK/hostmon"
+Issues = "https://github.com/HSPK/hostmon/issues"
+Changelog = "https://github.com/HSPK/hostmon/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+  "build>=1.2",
+  "twine>=5",
+]
+
+[project.scripts]
+hmon = "host_monitor.cli:main"
+host-monitor = "host_monitor.cli:main"
+
+[project.entry-points."host_monitor.collectors"]
+cpu = "host_monitor.collectors.cpu:CPUCollector"
+memory = "host_monitor.collectors.memory:MemoryCollector"
+disk = "host_monitor.collectors.disk:DiskCollector"
+network = "host_monitor.collectors.network:NetworkCollector"
+gpu = "host_monitor.collectors.gpu:GPUCollector"
+pressure = "host_monitor.collectors.pressure:PressureCollector"
+kubernetes = "host_monitor.collectors.kubernetes:KubernetesCollector"
+kubernetes_permissions = "host_monitor.collectors.permissions:KubernetesPermissionCollector"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+host_monitor = ["py.typed"]
