@@ -145,7 +145,27 @@ function cell(value: string, className = ""): HTMLTableCellElement {
 
 function format(value: number, unit: string): string {
   if (!Number.isFinite(value)) return "--";
+  if (unit === "bytes") return formatBytes(value);
+  if (unit === "s" && value >= 120) return formatDuration(value);
   const magnitude = Math.abs(value);
   const decimals = magnitude >= 100 ? 0 : magnitude >= 10 ? 1 : 2;
   return `${value.toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
+}
+
+function formatBytes(value: number): string {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  let scaled = Math.abs(value);
+  let index = 0;
+  while (scaled >= 1024 && index < units.length - 1) {
+    scaled /= 1024;
+    index++;
+  }
+  const sign = value < 0 ? "-" : "";
+  return `${sign}${scaled.toFixed(scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2)} ${units[index]}`;
+}
+
+function formatDuration(value: number): string {
+  if (value >= 86400) return `${(value / 86400).toFixed(1)} d`;
+  if (value >= 3600) return `${(value / 3600).toFixed(1)} h`;
+  return `${(value / 60).toFixed(1)} min`;
 }

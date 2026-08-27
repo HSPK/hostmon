@@ -33,6 +33,7 @@ export class DashboardApp {
   private catalogCache: { loadedAt: number; entries: MetricCatalogEntry[] } | null =
     null;
   private updateQueued = false;
+  private renderGeneration = 0;
   private paused = false;
   private editingPanel: TimeSeriesPanelDefinition | null = null;
 
@@ -263,10 +264,16 @@ export class DashboardApp {
   }
 
   private renderPanels(): void {
+    const generation = ++this.renderGeneration;
     for (const panel of this.panels) panel.destroy();
     this.panels.length = 0;
-    const fragment = document.createDocumentFragment();
-    for (const definition of this.preferences.visiblePanels()) {
+    this.panelsRoot.replaceChildren();
+    const definitions = this.preferences.visiblePanels();
+    const renderNext = (index: number): void => {
+      if (generation !== this.renderGeneration || index >= definitions.length) {
+        return;
+      }
+      const definition = definitions[index]!;
       const panel = this.registry.create(definition, {
         store: this.store,
         actions: {
@@ -277,10 +284,13 @@ export class DashboardApp {
         },
       });
       this.panels.push(panel);
-      fragment.append(panel.element);
-    }
-    this.panelsRoot.replaceChildren(fragment);
-    this.queuePanelUpdate();
+      this.panelsRoot.append(panel.element);
+      panel.update();
+      if (index + 1 < definitions.length) {
+        requestAnimationFrame(() => renderNext(index + 1));
+      }
+    };
+    renderNext(0);
   }
 
   private queuePanelUpdate(): void {
