@@ -1,21 +1,22 @@
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import hashlib
 import importlib.resources
 import json
 import logging
 import math
-import queue
+import mimetypes
 import re
 import threading
 import time
 from dataclasses import dataclass
-from functools import lru_cache
-from http import HTTPStatus
-from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from pathlib import Path
-from typing import Any
-from urllib.parse import parse_qs, urlsplit
+from pathlib import Path, PurePosixPath
+from typing import Any, Awaitable, Callable
+from urllib.parse import urlsplit
+
+from aiohttp import WSMsgType, web
 
 from . import __version__
 from .config import PrometheusSettings
@@ -28,15 +29,6 @@ LOGGER = logging.getLogger("host_monitor.prometheus")
 INVALID_NAME = re.compile(r"[^a-zA-Z0-9_:]")
 
 
-@lru_cache(maxsize=1)
-def dashboard_html() -> bytes:
-    return (
-        importlib.resources.files("host_monitor")
-        .joinpath("static/dashboard.html")
-        .read_bytes()
-    )
-
-
 @dataclass(frozen=True)
 class StateSnapshot:
     host: str
@@ -47,9 +39,7 @@ class StateSnapshot:
 
 def _base_metric_name(source: str) -> str:
     normalized = INVALID_NAME.sub("_", source).strip("_")
-    if not normalized:
-        normalized = "metric"
-    return f"hostmon_{normalized}"
+    return f"hostmon_{normalized or 'metric'}"
 
 
 def prometheus_names(sources: list[str]) -> dict[str, str]:
@@ -75,6 +65,7 @@ def render_prometheus(
     snapshot: StateSnapshot,
     *,
     now: float | None = None,
+    websocket_clients: int = 0,
 ) -> str:
     now = time.time() if now is None else now
     lines = [
@@ -87,6 +78,9 @@ def render_prometheus(
         "# HELP hostmon_sample_age_seconds Age of the latest sample.",
         "# TYPE hostmon_sample_age_seconds gauge",
         f"hostmon_sample_age_seconds {max(0.0, now - snapshot.updated_at):.6f}",
+        "# HELP hostmon_dashboard_websocket_clients Connected dashboard clients.",
+        "# TYPE hostmon_dashboard_websocket_clients gauge",
+        f"hostmon_dashboard_websocket_clients {websocket_clients}",
     ]
     names = prometheus_names(list(snapshot.metrics))
     for source in sorted(snapshot.metrics):
@@ -133,219 +127,17 @@ class StateSnapshotReader:
         )
 
 
-class PrometheusHTTPServer(ThreadingHTTPServer):
-    daemon_threads = True
-    allow_reuse_address = True
-
-    def __init__(
-        self,
-        address: tuple[str, int],
-        reader: StateSnapshotReader,
-        dashboard: DashboardStore,
-        max_sample_age_seconds: float,
-    ):
-        super().__init__(address, PrometheusHandler)
-        self.reader = reader
-        self.dashboard = dashboard
-        self.max_sample_age_seconds = max_sample_age_seconds
-
-
-class PrometheusHandler(BaseHTTPRequestHandler):
-    server: PrometheusHTTPServer
-    protocol_version = "HTTP/1.1"
-
-    def _write(
-        self,
-        status: HTTPStatus,
-        body: bytes,
-        content_type: str,
-        cache_control: str = "no-store",
-    ) -> None:
-        self.send_response(status)
-        self.send_header("Content-Type", content_type)
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", cache_control)
-        self.send_header("X-Content-Type-Options", "nosniff")
-        self.end_headers()
-        if self.command != "HEAD":
-            self.wfile.write(body)
-
-    def _snapshot(self) -> StateSnapshot | None:
-        latest = self.server.dashboard.latest()
-        if latest is not None:
-            return StateSnapshot(
-                host=latest.host,
-                updated_at=latest.timestamp,
-                metrics=latest.metrics,
-                fields=latest.fields,
-            )
-        try:
-            return self.server.reader.read()
-        except MonitorError as error:
-            self._write(
-                HTTPStatus.SERVICE_UNAVAILABLE,
-                f"{error}\n".encode("utf-8"),
-                "text/plain; charset=utf-8",
-            )
-            return None
-
-    @staticmethod
-    def _event_payload(snapshot: DashboardSnapshot) -> bytes:
-        return json.dumps(
-            {
-                "timestamp": snapshot.timestamp,
-                "host": snapshot.host,
-                "metrics": snapshot.metrics,
-                "fields": snapshot.fields,
-            },
-            ensure_ascii=False,
-            separators=(",", ":"),
-        ).encode("utf-8")
-
-    def _stream(self) -> None:
-        subscriber = self.server.dashboard.subscribe()
-        self.send_response(HTTPStatus.OK)
-        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
-        self.send_header("Cache-Control", "no-store")
-        self.send_header("Connection", "keep-alive")
-        self.send_header("X-Accel-Buffering", "no")
-        self.end_headers()
-        try:
-            while True:
-                try:
-                    snapshot = subscriber.get(timeout=15)
-                    payload = self._event_payload(snapshot)
-                    self.wfile.write(b"data: " + payload + b"\n\n")
-                except queue.Empty:
-                    self.wfile.write(b": keepalive\n\n")
-                self.wfile.flush()
-        except (BrokenPipeError, ConnectionResetError, OSError):
-            return
-        finally:
-            self.server.dashboard.unsubscribe(subscriber)
-
-    def _history(self, query: str) -> None:
-        parameters = parse_qs(query)
-        try:
-            seconds = float(parameters.get("seconds", ["3600"])[0])
-            maximum = int(parameters.get("max_points", ["1800"])[0])
-        except ValueError:
-            self._write(
-                HTTPStatus.BAD_REQUEST,
-                b"seconds and max_points must be numeric\n",
-                "text/plain; charset=utf-8",
-            )
-            return
-        if not 10 <= seconds <= 21600 or not 2 <= maximum <= 5000:
-            self._write(
-                HTTPStatus.BAD_REQUEST,
-                b"seconds must be 10..21600 and max_points must be 2..5000\n",
-                "text/plain; charset=utf-8",
-            )
-            return
-        raw_metrics = parameters.get("metrics", [None])[0]
-        metrics = (
-            [item for item in raw_metrics.split(",") if item]
-            if raw_metrics
-            else None
-        )
-        try:
-            payload = self.server.dashboard.history(
-                now=time.time(),
-                seconds=seconds,
-                maximum_points=maximum,
-                metrics=metrics,
-            )
-        except ValueError as error:
-            self._write(
-                HTTPStatus.BAD_REQUEST,
-                f"{error}\n".encode("utf-8"),
-                "text/plain; charset=utf-8",
-            )
-            return
-        self._write(
-            HTTPStatus.OK,
-            json.dumps(
-                payload,
-                ensure_ascii=False,
-                separators=(",", ":"),
-            ).encode("utf-8"),
-            "application/json; charset=utf-8",
-        )
-
-    def do_GET(self) -> None:
-        parsed = urlsplit(self.path)
-        if parsed.path in {"/", "/dashboard"}:
-            self._write(
-                HTTPStatus.OK,
-                dashboard_html(),
-                "text/html; charset=utf-8",
-                "public, max-age=3600",
-            )
-            return
-        if parsed.path == "/api/stream":
-            self._stream()
-            return
-        if parsed.path == "/api/history":
-            self._history(parsed.query)
-            return
-        snapshot = self._snapshot()
-        if snapshot is None:
-            return
-        if parsed.path == "/metrics":
-            body = render_prometheus(snapshot).encode("utf-8")
-            self._write(
-                HTTPStatus.OK,
-                body,
-                "text/plain; version=0.0.4; charset=utf-8",
-            )
-            return
-        if parsed.path == "/healthz":
-            age = max(0.0, time.time() - snapshot.updated_at)
-            healthy = age <= self.server.max_sample_age_seconds
-            self._write(
-                HTTPStatus.OK if healthy else HTTPStatus.SERVICE_UNAVAILABLE,
-                ("ok\n" if healthy else f"stale sample age={age:.3f}s\n").encode(
-                    "utf-8"
-                ),
-                "text/plain; charset=utf-8",
-            )
-            return
-        if parsed.path == "/api/status":
-            body = json.dumps(
-                {
-                    "host": snapshot.host,
-                    "updated_at": snapshot.updated_at,
-                    "metrics": snapshot.metrics,
-                    "fields": snapshot.fields,
-                },
-                ensure_ascii=False,
-                sort_keys=True,
-            ).encode("utf-8")
-            self._write(
-                HTTPStatus.OK,
-                body,
-                "application/json; charset=utf-8",
-            )
-            return
-        self._write(
-            HTTPStatus.NOT_FOUND,
-            b"not found\n",
-            "text/plain; charset=utf-8",
-        )
-
-    def do_HEAD(self) -> None:
-        if urlsplit(self.path).path == "/api/stream":
-            self._write(
-                HTTPStatus.METHOD_NOT_ALLOWED,
-                b"",
-                "text/plain; charset=utf-8",
-            )
-            return
-        self.do_GET()
-
-    def log_message(self, format: str, *args: Any) -> None:
-        LOGGER.debug("%s - %s", self.client_address[0], format % args)
+def _event_payload(snapshot: DashboardSnapshot) -> str:
+    return json.dumps(
+        {
+            "timestamp": snapshot.timestamp,
+            "host": snapshot.host,
+            "metrics": snapshot.metrics,
+            "fields": snapshot.fields,
+        },
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
 
 
 class PrometheusExporter:
@@ -358,15 +150,300 @@ class PrometheusExporter:
         self.state_file = state_file
         self.reader = StateSnapshotReader(state_file)
         self.dashboard = DashboardStore()
-        self.server: PrometheusHTTPServer | None = None
         self.thread: threading.Thread | None = None
+        self.loop: asyncio.AbstractEventLoop | None = None
+        self._stop_event: asyncio.Event | None = None
+        self._ready = threading.Event()
+        self._startup_error: BaseException | None = None
+        self._address: tuple[str, int] | None = None
+        self._clients: dict[
+            web.WebSocketResponse, asyncio.Queue[str]
+        ] = {}
+        self._runner: web.AppRunner | None = None
 
     @property
     def address(self) -> tuple[str, int] | None:
-        if self.server is None:
-            return None
-        host, port = self.server.server_address[:2]
-        return str(host), int(port)
+        return self._address
+
+    def _snapshot(self) -> StateSnapshot:
+        latest = self.dashboard.latest()
+        if latest is not None:
+            return StateSnapshot(
+                host=latest.host,
+                updated_at=latest.timestamp,
+                metrics=latest.metrics,
+                fields=latest.fields,
+            )
+        return self.reader.read()
+
+    @staticmethod
+    def _json_response(payload: Any, status: int = 200) -> web.Response:
+        response = web.Response(
+            text=json.dumps(
+                payload,
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ),
+            status=status,
+            content_type="application/json",
+            charset="utf-8",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+        response.enable_compression()
+        return response
+
+    @staticmethod
+    def _error(error: MonitorError) -> web.Response:
+        return web.Response(
+            text=f"{error}\n",
+            status=503,
+            content_type="text/plain",
+            charset="utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _metrics(self, request: web.Request) -> web.Response:
+        try:
+            snapshot = self._snapshot()
+        except MonitorError as error:
+            return self._error(error)
+        response = web.Response(
+            text=render_prometheus(
+                snapshot,
+                websocket_clients=len(self._clients),
+            ),
+            content_type="text/plain",
+            charset="utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
+        response.enable_compression()
+        return response
+
+    async def _health(self, request: web.Request) -> web.Response:
+        try:
+            snapshot = self._snapshot()
+        except MonitorError as error:
+            return self._error(error)
+        age = max(0.0, time.time() - snapshot.updated_at)
+        healthy = age <= self.settings.max_sample_age_seconds
+        return web.Response(
+            text="ok\n" if healthy else f"stale sample age={age:.3f}s\n",
+            status=200 if healthy else 503,
+            content_type="text/plain",
+            charset="utf-8",
+            headers={"Cache-Control": "no-store"},
+        )
+
+    async def _status(self, request: web.Request) -> web.Response:
+        try:
+            snapshot = self._snapshot()
+        except MonitorError as error:
+            return self._error(error)
+        return self._json_response(
+            {
+                "host": snapshot.host,
+                "updated_at": snapshot.updated_at,
+                "metrics": snapshot.metrics,
+                "fields": snapshot.fields,
+                "websocket_clients": len(self._clients),
+            }
+        )
+
+    async def _history(self, request: web.Request) -> web.Response:
+        try:
+            seconds = float(request.query.get("seconds", "3600"))
+            maximum = int(request.query.get("max_points", "1800"))
+        except ValueError:
+            return web.Response(
+                text="seconds and max_points must be numeric\n",
+                status=400,
+                content_type="text/plain",
+            )
+        if not 10 <= seconds <= 21600 or not 2 <= maximum <= 5000:
+            return web.Response(
+                text="seconds must be 10..21600 and max_points must be 2..5000\n",
+                status=400,
+                content_type="text/plain",
+            )
+        raw_metrics = request.query.get("metrics")
+        metrics = (
+            [item for item in raw_metrics.split(",") if item]
+            if raw_metrics
+            else None
+        )
+        try:
+            payload = self.dashboard.history(
+                now=time.time(),
+                seconds=seconds,
+                maximum_points=maximum,
+                metrics=metrics,
+            )
+        except ValueError as error:
+            return web.Response(
+                text=f"{error}\n",
+                status=400,
+                content_type="text/plain",
+            )
+        return self._json_response(payload)
+
+    async def _websocket(self, request: web.Request) -> web.StreamResponse:
+        origin = request.headers.get("Origin")
+        if origin and urlsplit(origin).netloc != request.host:
+            raise web.HTTPForbidden(text="WebSocket origin is not allowed\n")
+        socket = web.WebSocketResponse(
+            heartbeat=20,
+            receive_timeout=None,
+            max_msg_size=64 * 1024,
+            compress=True,
+        )
+        await socket.prepare(request)
+        messages: asyncio.Queue[str] = asyncio.Queue(maxsize=1)
+        self._clients[socket] = messages
+        sender = asyncio.create_task(self._websocket_sender(socket, messages))
+        latest = self.dashboard.latest()
+        if latest is not None:
+            messages.put_nowait(_event_payload(latest))
+        try:
+            async for message in socket:
+                if message.type == WSMsgType.TEXT and message.data == "ping":
+                    self._enqueue_latest(messages, '{"type":"pong"}')
+                elif message.type in {
+                    WSMsgType.ERROR,
+                    WSMsgType.CLOSE,
+                    WSMsgType.CLOSED,
+                }:
+                    break
+        finally:
+            self._clients.pop(socket, None)
+            sender.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await sender
+        return socket
+
+    @staticmethod
+    async def _websocket_sender(
+        socket: web.WebSocketResponse,
+        messages: asyncio.Queue[str],
+    ) -> None:
+        try:
+            while not socket.closed:
+                await socket.send_str(await messages.get())
+        except (ConnectionError, RuntimeError):
+            return
+
+    @staticmethod
+    def _static_root() -> Any:
+        return importlib.resources.files("host_monitor").joinpath("static/dashboard")
+
+    async def _asset(self, request: web.Request) -> web.Response:
+        requested = request.match_info.get("path", "") or "index.html"
+        if requested.startswith("api/"):
+            raise web.HTTPNotFound()
+        path = PurePosixPath(requested)
+        if path.is_absolute() or ".." in path.parts:
+            raise web.HTTPNotFound()
+        root = self._static_root()
+        asset = root.joinpath(*path.parts)
+        if not asset.is_file():
+            asset = root.joinpath("index.html")
+        try:
+            body = asset.read_bytes()
+        except OSError as error:
+            raise web.HTTPNotFound() from error
+        content_type, _ = mimetypes.guess_type(asset.name)
+        immutable = "/assets/" in f"/{requested}"
+        response = web.Response(
+            body=body,
+            content_type=content_type or "application/octet-stream",
+            headers={
+                "Cache-Control": (
+                    "public, max-age=31536000, immutable"
+                    if immutable
+                    else "no-cache"
+                ),
+                "X-Content-Type-Options": "nosniff",
+            },
+        )
+        if (content_type or "").startswith(("text/", "application/javascript")):
+            response.enable_compression()
+        return response
+
+    @web.middleware
+    async def _security_headers(
+        self,
+        request: web.Request,
+        handler: Callable[[web.Request], Awaitable[web.StreamResponse]],
+    ) -> web.StreamResponse:
+        response = await handler(request)
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; connect-src 'self' ws: wss:; "
+            "script-src 'self'; style-src 'self' 'unsafe-inline'; "
+            "img-src 'self' data:; frame-ancestors 'none'"
+        )
+        return response
+
+    def _application(self) -> web.Application:
+        application = web.Application(
+            client_max_size=128 * 1024,
+            middlewares=[self._security_headers],
+        )
+        application.add_routes(
+            [
+                web.get("/metrics", self._metrics),
+                web.get("/healthz", self._health),
+                web.get("/api/status", self._status),
+                web.get("/api/history", self._history),
+                web.get("/api/ws", self._websocket),
+                web.get("/{path:.*}", self._asset),
+            ]
+        )
+        return application
+
+    async def _serve(self) -> None:
+        self.loop = asyncio.get_running_loop()
+        self._stop_event = asyncio.Event()
+        self._runner = web.AppRunner(
+            self._application(),
+            access_log=None,
+            keepalive_timeout=75,
+            shutdown_timeout=2,
+        )
+        try:
+            await self._runner.setup()
+            site = web.TCPSite(
+                self._runner,
+                self.settings.host,
+                self.settings.port,
+            )
+            await site.start()
+            addresses = self._runner.addresses
+            if not addresses:
+                raise MonitorError("Prometheus server did not expose an address")
+            host, port = addresses[0][:2]
+            self._address = str(host), int(port)
+            self._ready.set()
+            await self._stop_event.wait()
+        except Exception as error:
+            self._startup_error = error
+            if self._ready.is_set():
+                LOGGER.exception("hostmon web server stopped unexpectedly")
+            self._ready.set()
+        finally:
+            for socket in tuple(self._clients):
+                await socket.close(code=1001, message=b"server shutdown")
+            self._clients.clear()
+            if self._runner is not None:
+                await self._runner.cleanup()
+            self._runner = None
+
+    def _thread_main(self) -> None:
+        asyncio.run(self._serve())
 
     def start(self) -> None:
         if not self.settings.enabled:
@@ -375,28 +452,41 @@ class PrometheusExporter:
             self.dashboard.seed(self.reader.store.load())
         except MonitorError as error:
             LOGGER.warning("could not seed dashboard history: %s", error)
-        try:
-            self.server = PrometheusHTTPServer(
-                (self.settings.host, self.settings.port),
-                self.reader,
-                self.dashboard,
-                self.settings.max_sample_age_seconds,
-            )
-        except OSError as error:
+        self._ready.clear()
+        self._startup_error = None
+        self.thread = threading.Thread(
+            target=self._thread_main,
+            name="hostmon-web",
+            daemon=True,
+        )
+        self.thread.start()
+        if not self._ready.wait(timeout=10):
+            self.close()
+            raise MonitorError("timed out while starting the hostmon HTTP server")
+        if self._startup_error is not None:
+            error = self._startup_error
+            self.close()
             raise MonitorError(
                 f"cannot listen on Prometheus endpoint "
                 f"{self.settings.host}:{self.settings.port}: {error}"
             ) from error
-        self.thread = threading.Thread(
-            target=self.server.serve_forever,
-            name="hostmon-prometheus",
-            daemon=True,
-        )
-        self.thread.start()
         LOGGER.info(
-            "Prometheus exporter listening on http://%s:%s",
+            "hostmon web server listening on http://%s:%s",
             *self.address,
         )
+
+    def _schedule_broadcast(self, snapshot: DashboardSnapshot) -> None:
+        payload = _event_payload(snapshot)
+        for messages in tuple(self._clients.values()):
+            self._enqueue_latest(messages, payload)
+
+    @staticmethod
+    def _enqueue_latest(messages: asyncio.Queue[str], payload: str) -> None:
+        if messages.full():
+            with contextlib.suppress(asyncio.QueueEmpty):
+                messages.get_nowait()
+        with contextlib.suppress(asyncio.QueueFull):
+            messages.put_nowait(payload)
 
     def publish(
         self,
@@ -405,15 +495,27 @@ class PrometheusExporter:
         metrics: dict[str, Any],
         fields: dict[str, Any],
     ) -> None:
-        if self.settings.enabled:
-            self.dashboard.publish(timestamp, host, metrics, fields)
+        if not self.settings.enabled:
+            return
+        self.dashboard.publish(timestamp, host, metrics, fields)
+        snapshot = self.dashboard.latest()
+        loop = self.loop
+        if snapshot is not None and loop is not None and loop.is_running():
+            try:
+                loop.call_soon_threadsafe(self._schedule_broadcast, snapshot)
+            except RuntimeError:
+                LOGGER.warning("dashboard WebSocket loop stopped before publish")
 
     def close(self) -> None:
-        if self.server is None:
-            return
-        self.server.shutdown()
-        self.server.server_close()
+        loop = self.loop
+        stop_event = self._stop_event
+        if loop is not None and stop_event is not None and loop.is_running():
+            loop.call_soon_threadsafe(stop_event.set)
         if self.thread is not None:
-            self.thread.join(timeout=2)
+            self.thread.join(timeout=5)
+            if self.thread.is_alive():
+                LOGGER.error("hostmon web server did not stop within 5 seconds")
         self.thread = None
-        self.server = None
+        self.loop = None
+        self._stop_event = None
+        self._address = None

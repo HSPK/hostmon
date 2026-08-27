@@ -9,6 +9,7 @@ description = "Lightweight, config-driven localhost resource monitoring with Exp
 readme = "README.md"
 requires-python = ">=3.11"
 license = "MIT"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [
   { name = "HSPK" },
 ]
@@ -32,6 +33,7 @@ classifiers = [
   "Typing :: Typed",
 ]
 dependencies = [
+  "aiohttp>=3.12,<4",
   "expr-tracker>=0.2.3,<0.3",
 ]
 
@@ -72,4 +74,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-host_monitor = ["py.typed", "static/*.html"]
+host_monitor = ["py.typed", "static/dashboard/**/*"]

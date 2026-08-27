@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import math
-import queue
 import threading
 from collections import deque
 from dataclasses import dataclass
@@ -74,7 +73,6 @@ class DashboardStore:
             name: deque(maxlen=self.capacity) for name in DASHBOARD_SERIES
         }
         self._latest: DashboardSnapshot | None = None
-        self._subscribers: set[queue.Queue[DashboardSnapshot]] = set()
         self._lock = threading.RLock()
 
     def seed(self, state: dict[str, Any]) -> None:
@@ -133,18 +131,6 @@ class DashboardStore:
         with self._lock:
             self._append(snapshot.timestamp, numeric)
             self._latest = snapshot
-            for subscriber in tuple(self._subscribers):
-                try:
-                    subscriber.put_nowait(snapshot)
-                except queue.Full:
-                    try:
-                        subscriber.get_nowait()
-                    except queue.Empty:
-                        pass
-                    try:
-                        subscriber.put_nowait(snapshot)
-                    except queue.Full:
-                        pass
 
     def latest(self) -> DashboardSnapshot | None:
         with self._lock:
@@ -192,15 +178,3 @@ class DashboardStore:
                 name: DASHBOARD_SERIES[name] for name in selected
             },
         }
-
-    def subscribe(self) -> queue.Queue[DashboardSnapshot]:
-        subscriber: queue.Queue[DashboardSnapshot] = queue.Queue(maxsize=1)
-        with self._lock:
-            self._subscribers.add(subscriber)
-            if self._latest is not None:
-                subscriber.put_nowait(self._latest)
-        return subscriber
-
-    def unsubscribe(self, subscriber: queue.Queue[DashboardSnapshot]) -> None:
-        with self._lock:
-            self._subscribers.discard(subscriber)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import asyncio
+import re
 import socket
 import tempfile
 import time
@@ -8,6 +10,8 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+
+from aiohttp import ClientSession, WSMsgType, WSServerHandshakeError
 
 from host_monitor.config import PrometheusSettings
 from host_monitor.dashboard import DashboardStore
@@ -121,7 +125,7 @@ class PrometheusHTTPTests(unittest.TestCase):
         self.assertEqual(status["host"], "host-a")
         self.assertEqual(status["fields"]["task"], "training-a")
 
-    def test_serves_dashboard_history_and_live_stream(self):
+    def test_serves_dashboard_history_and_websocket(self):
         self.save_state(time.time())
         self.exporter.start()
         self.exporter.publish(
@@ -138,24 +142,83 @@ class PrometheusHTTPTests(unittest.TestCase):
             timeout=5,
         ) as response:
             history = json.load(response)
-        stream = urllib.request.urlopen(self.url("/api/stream"), timeout=5)
-        try:
-            event = stream.readline().decode()
-        finally:
-            stream.close()
-            self.exporter.publish(
-                time.time() + 2,
-                "host-a",
-                {"cpu/percent": 44},
-                {},
-            )
+        script_path = re.search(r'src="([^"]+\.js)"', dashboard)
+        self.assertIsNotNone(script_path)
+        with urllib.request.urlopen(
+            self.url(script_path.group(1)),
+            timeout=5,
+        ) as response:
+            script = response.read().decode()
+        event = asyncio.run(self.websocket_event())
 
-        self.assertIn("hostmon live", dashboard)
-        self.assertIn("requestAnimationFrame", dashboard)
-        self.assertIn("EventSource", dashboard)
+        self.assertIn("hostmon operations dashboard", dashboard)
+        self.assertIn("requestAnimationFrame", script)
+        self.assertIn("WebSocket", script)
         self.assertNotIn("https://", dashboard)
         self.assertEqual(history["series"]["cpu/percent"][-1], 43)
-        self.assertTrue(event.startswith("data: "))
+        self.assertEqual(event["metrics"]["cpu/percent"], 43)
+
+    async def websocket_event(self):
+        address = self.exporter.address
+        self.assertIsNotNone(address)
+        host, port = address
+        async with ClientSession() as session:
+            async with session.ws_connect(f"http://{host}:{port}/api/ws") as socket:
+                message = await socket.receive(timeout=5)
+                self.assertEqual(message.type, WSMsgType.TEXT)
+                return json.loads(message.data)
+
+    async def websocket_broadcast(self, count: int):
+        address = self.exporter.address
+        self.assertIsNotNone(address)
+        host, port = address
+        async with ClientSession() as session:
+            sockets = [
+                await session.ws_connect(f"http://{host}:{port}/api/ws")
+                for _ in range(count)
+            ]
+            try:
+                await asyncio.gather(
+                    *(socket.receive(timeout=5) for socket in sockets)
+                )
+                self.exporter.publish(
+                    time.time() + 1,
+                    "host-a",
+                    {"cpu/percent": 99},
+                    {},
+                )
+                messages = await asyncio.gather(
+                    *(socket.receive(timeout=5) for socket in sockets)
+                )
+                return [
+                    json.loads(message.data)["metrics"]["cpu/percent"]
+                    for message in messages
+                ]
+            finally:
+                await asyncio.gather(*(socket.close() for socket in sockets))
+
+    async def cross_origin_websocket_status(self):
+        address = self.exporter.address
+        self.assertIsNotNone(address)
+        host, port = address
+        async with ClientSession() as session:
+            try:
+                await session.ws_connect(
+                    f"http://{host}:{port}/api/ws",
+                    origin="https://attacker.invalid",
+                )
+            except WSServerHandshakeError as error:
+                return error.status
+        return 101
+
+    def test_backpressure_queue_keeps_only_latest_payload(self):
+        async def exercise():
+            messages = asyncio.Queue(maxsize=1)
+            self.exporter._enqueue_latest(messages, "one")
+            self.exporter._enqueue_latest(messages, "two")
+            return messages.get_nowait()
+
+        self.assertEqual(asyncio.run(exercise()), "two")
 
     def test_stale_sample_returns_unhealthy(self):
         self.save_state(time.time() - 60)
@@ -165,6 +228,22 @@ class PrometheusHTTPTests(unittest.TestCase):
             urllib.request.urlopen(self.url("/healthz"), timeout=5)
 
         self.assertEqual(context.exception.code, 503)
+
+    def test_multiple_websocket_clients_receive_broadcast(self):
+        self.save_state(time.time())
+        self.exporter.start()
+
+        received = asyncio.run(self.websocket_broadcast(20))
+
+        self.assertEqual(received, [99] * 20)
+
+    def test_websocket_rejects_cross_origin_client(self):
+        self.save_state(time.time())
+        self.exporter.start()
+
+        status = asyncio.run(self.cross_origin_websocket_status())
+
+        self.assertEqual(status, 403)
 
     def test_bind_failure_is_reported(self):
         blocker = socket.socket()

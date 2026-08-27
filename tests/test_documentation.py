@@ -15,6 +15,7 @@ DOCS = [
     ROOT / "docs" / "plugins.md",
     ROOT / "docs" / "prometheus.md",
     ROOT / "examples" / "thermal-plugin" / "README.md",
+    ROOT / "web" / "README.md",
 ]
 FENCE_RE = re.compile(r"```(?P<language>\w+)\n(?P<body>.*?)```", re.DOTALL)
 LINK_RE = re.compile(r"\[[^\]]+\]\((?!https?://|#)([^)]+)\)")

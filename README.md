@@ -49,8 +49,9 @@ xdg-open http://127.0.0.1:9108/
 curl http://127.0.0.1:9108/metrics
 ```
 
-The built-in dashboard uses a bounded in-memory columnar history, server-sent
-events, and Canvas animation. It does not require Prometheus or Grafana.
+The built-in dashboard uses a bounded in-memory columnar history, WebSocket
+updates, and high-performance uPlot Canvas charts. It does not require
+Prometheus or Grafana.
 
 Manage it without stopping host monitoring:
 
@@ -62,6 +63,10 @@ hmon exporter start --host 127.0.0.1 --port 9108 --max-sample-age 30
 
 See [`docs/prometheus.md`](docs/prometheus.md) for scrape configuration,
 Grafana metric names, health checks, and remote-access guidance.
+
+The dashboard is a separate TypeScript/Vite application with a panel renderer
+registry and browser-persisted layout customization. See
+[`web/README.md`](web/README.md).
 
 For Lark, the initializer has a convenience option:
 
