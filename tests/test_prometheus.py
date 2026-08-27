@@ -120,6 +120,9 @@ class PrometheusRenderingTests(unittest.TestCase):
         self.assertIs(first, second)
         self.assertIsNot(first, third)
         self.assertEqual(third[0]["current"], 20)
+        revision, snapshot = store.catalog_snapshot(now=3, seconds=60)
+        self.assertGreater(revision, 0)
+        self.assertIs(snapshot, third)
 
     def test_loads_recent_history_from_end_of_segmented_files(self):
         with tempfile.TemporaryDirectory() as directory:

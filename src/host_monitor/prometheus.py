@@ -170,6 +170,9 @@ class PrometheusExporter:
             web.WebSocketResponse, asyncio.Queue[str]
         ] = {}
         self._runner: web.AppRunner | None = None
+        self._catalog_responses: dict[
+            float, tuple[int, bytes]
+        ] = {}
 
     @property
     def address(self) -> tuple[str, int] | None:
@@ -312,14 +315,31 @@ class PrometheusExporter:
                 status=400,
                 content_type="text/plain",
             )
-        return self._json_response(
-            {
-                "seconds": seconds,
-                "metrics": self.dashboard.catalog(
-                    now=time.time(),
-                    seconds=seconds,
-                ),
-            }
+        revision, entries = self.dashboard.catalog_snapshot(
+            now=time.time(),
+            seconds=seconds,
+        )
+        cache_key = round(seconds, 3)
+        cached = self._catalog_responses.get(cache_key)
+        if cached is None or cached[0] != revision:
+            body = json.dumps(
+                {"seconds": seconds, "metrics": entries},
+                ensure_ascii=False,
+                separators=(",", ":"),
+            ).encode("utf-8")
+            if len(self._catalog_responses) >= 16:
+                self._catalog_responses.clear()
+            self._catalog_responses[cache_key] = (revision, body)
+        else:
+            body = cached[1]
+        return web.Response(
+            body=body,
+            content_type="application/json",
+            charset="utf-8",
+            headers={
+                "Cache-Control": "no-store",
+                "X-Content-Type-Options": "nosniff",
+            },
         )
 
     async def _plugin_document(self, request: web.Request) -> web.Response:

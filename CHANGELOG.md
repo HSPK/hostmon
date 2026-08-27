@@ -42,6 +42,8 @@ All notable changes to this project are documented here.
 - Cached metric catalog statistics by data revision and time window to prevent
   repeated aggregate work from blocking the async HTTP loop.
 - Added domain-aware labels and units for cluster GPU capacity metrics.
+- Cached encoded catalog responses by dashboard revision to keep the async
+  event loop responsive under concurrent metric-explorer requests.
 
 ## [0.1.0] - 2026-08-17
 

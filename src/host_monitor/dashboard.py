@@ -275,12 +275,20 @@ class DashboardStore:
         }
 
     def catalog(self, *, now: float, seconds: float) -> list[dict[str, Any]]:
+        return self.catalog_snapshot(now=now, seconds=seconds)[1]
+
+    def catalog_snapshot(
+        self,
+        *,
+        now: float,
+        seconds: float,
+    ) -> tuple[int, list[dict[str, Any]]]:
         cache_key = round(seconds, 3)
         cutoff = now - seconds
         with self._lock:
             cached = self._catalog_cache.get(cache_key)
             if cached is not None and cached[0] == self._revision:
-                return cached[1]
+                return cached
             timestamps = list(self._timestamps)
             first = bisect_left(timestamps, cutoff)
             current = self._latest.metrics if self._latest is not None else {}
@@ -313,7 +321,7 @@ class DashboardStore:
             if len(self._catalog_cache) >= 16:
                 self._catalog_cache.clear()
             self._catalog_cache[cache_key] = (self._revision, entries)
-            return entries
+            return self._revision, entries
 
 
 def _reverse_lines(path: Path, block_size: int = 64 * 1024):
