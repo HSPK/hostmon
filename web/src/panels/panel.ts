@@ -3,6 +3,7 @@ import type {
   ClusterGPUReport,
   PanelDefinition,
   TimeSeriesPanelDefinition,
+  WorkloadSelection,
 } from "../domain/types";
 import type { TimeSeriesStore } from "../core/time-series-store";
 
@@ -11,6 +12,11 @@ export interface PanelContext {
   actions: {
     loadCatalog(): Promise<MetricCatalogEntry[]>;
     loadClusterGPU(): Promise<ClusterGPUReport>;
+    selectedWorkload(): WorkloadSelection | null;
+    selectWorkload(
+      selection: WorkloadSelection | null,
+      replace?: boolean,
+    ): void;
     createChart(metrics?: string[]): void;
     editChart(panel: TimeSeriesPanelDefinition): void;
     removeChart(panelId: string): void;

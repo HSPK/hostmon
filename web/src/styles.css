@@ -187,6 +187,8 @@ main { width: 100%; padding: 12px; }
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
   padding-bottom: 14px; border-bottom: 1px solid var(--border);
 }
+.workload-drawer > header > div { min-width: 0; }
+.workload-drawer > header .icon-button { flex: 0 0 auto; }
 .workload-drawer h2 {
   margin: 3px 0 0; font-size: 15px; overflow-wrap: anywhere;
 }

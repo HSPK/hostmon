@@ -56,6 +56,11 @@ export interface ClusterGPUWorkloadRow extends ClusterGPUUsageRow {
   status: "Running" | "Pending" | "Mixed";
 }
 
+export interface WorkloadSelection {
+  queue: string;
+  name: string;
+}
+
 export interface ClusterGPUCapacityRow {
   queue: string;
   capacity_gpus: number;

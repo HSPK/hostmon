@@ -2,6 +2,7 @@ import type {
   ClusterGPUReport,
   ClusterGPUWorkloadRow,
   GPUSubmittersPanelDefinition,
+  WorkloadSelection,
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
@@ -22,6 +23,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   private lastLoaded = 0;
   private loading = false;
   private page = 0;
+  private activeSelection: WorkloadSelection | null = null;
 
   constructor(
     definition: GPUSubmittersPanelDefinition,
@@ -118,6 +120,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
       );
       this.queue.value = queues.includes(selected) ? selected : "all";
       this.renderRows();
+      this.syncSelectedDetails();
     } finally {
       this.loading = false;
     }
@@ -159,7 +162,32 @@ export class GPUSubmittersPanel implements PanelRenderer {
     );
   }
 
-  private openDetails(row: ClusterGPUWorkloadRow): void {
+  private syncSelectedDetails(): void {
+    if (!this.report) return;
+    const selected = this.context.actions.selectedWorkload();
+    if (!selected) {
+      this.closeDetails(false);
+      return;
+    }
+    const row = (this.report.workloads ?? []).find(
+      item => item.queue === selected.queue && item.name === selected.name,
+    );
+    if (row) {
+      this.openDetails(row, false);
+      return;
+    }
+    this.closeDetails(false);
+    this.context.actions.selectWorkload(null, true);
+  }
+
+  private openDetails(
+    row: ClusterGPUWorkloadRow,
+    updateRoute = true,
+  ): void {
+    const selection = {queue: row.queue, name: row.name};
+    const changed =
+      this.activeSelection?.queue !== selection.queue ||
+      this.activeSelection.name !== selection.name;
     const header = document.createElement("header");
     const heading = document.createElement("div");
     const eyebrow = document.createElement("span");
@@ -190,13 +218,18 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.drawer.classList.add("open");
     this.drawer.setAttribute("aria-hidden", "false");
     this.backdrop.classList.add("open");
-    close.focus();
+    this.activeSelection = selection;
+    if (updateRoute) this.context.actions.selectWorkload(selection);
+    if (changed) close.focus();
   }
 
-  private closeDetails(): void {
+  private closeDetails(updateRoute = true): void {
+    if (!this.activeSelection && updateRoute) return;
     this.drawer.classList.remove("open");
     this.drawer.setAttribute("aria-hidden", "true");
     this.backdrop.classList.remove("open");
+    this.activeSelection = null;
+    if (updateRoute) this.context.actions.selectWorkload(null);
   }
 }
 

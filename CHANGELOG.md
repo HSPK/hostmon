@@ -57,6 +57,10 @@ All notable changes to this project are documented here.
   panel-local scrolling instead of destructive per-character wrapping.
 - Made dense table controls wrap within mobile panels so filters and pagination
   actions remain reachable at 390-pixel viewport widths.
+- Added queue-qualified workload deep links so individual run drawers can be
+  shared and restored with browser Back/Forward navigation.
+- Kept the workload drawer close action inside narrow viewports when long run
+  names exercise flexbox intrinsic sizing.
 
 ## [0.1.0] - 2026-08-17
 

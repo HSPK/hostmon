@@ -10,6 +10,7 @@ import type {
   PageId,
   PanelDefinition,
   TimeSeriesPanelDefinition,
+  WorkloadSelection,
 } from "./domain/types";
 import type { PanelRenderer } from "./panels/panel";
 import { createPanelRegistry } from "./panels/registry";
@@ -304,9 +305,45 @@ export class DashboardApp {
   private updatePageRoute(page: PageId, replace = false): void {
     const url = new URL(window.location.href);
     url.searchParams.set("page", page);
+    if (page !== "workloads") {
+      url.searchParams.delete("queue");
+      url.searchParams.delete("run");
+    }
+    this.commitRoute(url, {page}, replace);
+  }
+
+  private workloadFromLocation(): WorkloadSelection | null {
+    if (this.pageFromLocation() !== "workloads") return null;
+    const parameters = new URL(window.location.href).searchParams;
+    const queue = parameters.get("queue");
+    const name = parameters.get("run");
+    return queue && name ? {queue, name} : null;
+  }
+
+  private updateWorkloadRoute(
+    selection: WorkloadSelection | null,
+    replace = false,
+  ): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set("page", "workloads");
+    if (selection) {
+      url.searchParams.set("queue", selection.queue);
+      url.searchParams.set("run", selection.name);
+    } else {
+      url.searchParams.delete("queue");
+      url.searchParams.delete("run");
+    }
+    this.commitRoute(url, {page: "workloads", workload: selection}, replace);
+  }
+
+  private commitRoute(
+    url: URL,
+    state: Record<string, unknown>,
+    replace: boolean,
+  ): void {
     const target = `${url.pathname}${url.search}${url.hash}`;
-    if (replace) window.history.replaceState({page}, "", target);
-    else window.history.pushState({page}, "", target);
+    if (replace) window.history.replaceState(state, "", target);
+    else window.history.pushState(state, "", target);
   }
 
   private renderPanels(): void {
@@ -325,6 +362,9 @@ export class DashboardApp {
         actions: {
           loadCatalog: () => this.loadCatalog(),
           loadClusterGPU: () => this.loadClusterGPU(),
+          selectedWorkload: () => this.workloadFromLocation(),
+          selectWorkload: (selection, replace) =>
+            this.updateWorkloadRoute(selection, replace),
           createChart: metrics => this.openChartEditor(undefined, metrics),
           editChart: chart => this.openChartEditor(chart),
           removeChart: id => this.removeChart(id),

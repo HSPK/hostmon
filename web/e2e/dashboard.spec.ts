@@ -193,6 +193,9 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".submitter-table tbody tr")).toHaveCount(75);
   await expect(page.locator(".submitter-table")).toContainText("training-job-001");
   await page.getByRole("button", { name: "training-job-001" }).click();
+  await expect(page).toHaveURL(
+    /\?page=workloads&queue=queue-a&run=training-job-001$/,
+  );
   await expect(page.locator(".workload-drawer")).toContainText("user-a");
   await expect(page.locator(".workload-drawer")).toContainText("56");
   await page.getByRole("button", { name: "Close" }).click();
@@ -245,6 +248,25 @@ test("supports deep links and browser workspace history", async ({ page }) => {
   await page.goBack();
   await expect(page).toHaveURL(/\?page=workloads$/);
   await expect(page.locator("#page-title")).toHaveText("Workloads");
+
+  await page.getByRole("button", { name: "training-job-001" }).click();
+  await expect(page.locator(".workload-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "false",
+  );
+  await page.goBack();
+  await expect(page).toHaveURL(/\?page=workloads$/);
+  await expect(page.locator(".workload-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "true",
+  );
+
+  await page.goto(
+    "/?page=workloads&queue=queue-a&run=training-job-001",
+  );
+  await expect(page.locator(".workload-drawer")).toContainText(
+    "training-job-001",
+  );
 });
 
 test("remains responsive on narrow screens", async ({ page }) => {
@@ -270,6 +292,15 @@ test("remains responsive on narrow screens", async ({ page }) => {
     .locator("body")
     .evaluate(element => element.scrollWidth > element.clientWidth);
   expect(bodyHasHorizontalOverflow).toBe(false);
+
+  await page.getByRole("button", { name: "training-job-001" }).click();
+  const closeButton = page
+    .locator(".workload-drawer")
+    .getByRole("button", { name: "Close" });
+  await expect(closeButton).toBeInViewport({ ratio: 1 });
+  const closeBox = await closeButton.boundingBox();
+  expect(closeBox).not.toBeNull();
+  expect((closeBox?.x ?? 400) + (closeBox?.width ?? 0)).toBeLessThanOrEqual(390);
 });
 
 test("maintains smooth animation frame cadence", async ({ page }) => {
