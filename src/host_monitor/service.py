@@ -87,6 +87,12 @@ def stop_service() -> None:
     run_systemctl("stop", UNIT_NAME)
 
 
+def restart_service() -> None:
+    if not unit_path().exists():
+        raise ServiceError("service is not installed; run `hmon enable`")
+    run_systemctl("restart", UNIT_NAME)
+
+
 def disable_service(*, now: bool = False) -> None:
     arguments = ["disable"]
     if now:

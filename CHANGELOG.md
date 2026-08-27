@@ -26,6 +26,8 @@ All notable changes to this project are documented here.
   slight overrun instead of adding another full interval.
 - Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,
   and `/api/status` endpoints.
+- Added `hmon exporter start|stop|restart|status` for one-command exporter
+  configuration, systemd lifecycle, and readiness checks.
 
 ## [0.1.0] - 2026-08-17
 

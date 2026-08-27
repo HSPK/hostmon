@@ -81,6 +81,56 @@ class CLITests(unittest.TestCase):
         stop.assert_called_once()
         disable.assert_called_once_with(now=True)
 
+    def test_exporter_start_and_stop_update_config_and_restart_service(self):
+        with tempfile.TemporaryDirectory() as directory:
+            config = str(Path(directory) / "config.toml")
+            self.assertEqual(
+                self.invoke(["--config", config, "config", "init"])[0],
+                0,
+            )
+            with (
+                patch("host_monitor.cli.enable_service") as enable,
+                patch("host_monitor.cli.restart_service") as restart,
+                patch("host_monitor.cli.wait_for_exporter") as wait,
+            ):
+                code, output, _ = self.invoke(
+                    [
+                        "--config",
+                        config,
+                        "exporter",
+                        "start",
+                        "--host",
+                        "127.0.0.2",
+                        "--port",
+                        "9200",
+                    ]
+                )
+
+            self.assertEqual(code, 0)
+            self.assertIn("Prometheus exporter started", output)
+            settings = load_settings(config)
+            self.assertTrue(settings.prometheus.enabled)
+            self.assertEqual(settings.prometheus.port, 9200)
+            enable.assert_called_once()
+            restart.assert_called_once()
+            wait.assert_called_once()
+
+            with (
+                patch(
+                    "host_monitor.cli.service_status",
+                    return_value={"ActiveState": "active"},
+                ),
+                patch("host_monitor.cli.restart_service") as restart,
+            ):
+                code, output, _ = self.invoke(
+                    ["--config", config, "exporter", "stop"]
+                )
+
+            self.assertEqual(code, 0)
+            self.assertIn("host monitoring remains active", output)
+            self.assertFalse(load_settings(config).prometheus.enabled)
+            restart.assert_called_once()
+
     def test_http_client_logs_are_suppressed(self):
         configure_logging()
 

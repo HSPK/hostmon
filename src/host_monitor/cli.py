@@ -4,6 +4,9 @@ import argparse
 import json
 import logging
 import sys
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Any, Sequence
 
@@ -11,11 +14,13 @@ from . import __version__
 from .alerts import AlertSender
 from .collectors import build_collectors
 from .config import (
+    Settings,
     initialize_config,
     load_settings,
     resolve_config_path,
+    update_prometheus_config,
 )
-from .errors import MonitorError
+from .errors import MonitorError, ServiceError
 from .history import HistoryReader, HistoryWriter, migrate_rolling_state
 from .outbox import OutboxStore
 from .rules import RuleStore, inspect_rules, write_default_rules
@@ -24,6 +29,7 @@ from .service import (
     UNIT_NAME,
     disable_service,
     enable_service,
+    restart_service,
     service_status,
     start_service,
     stop_service,
@@ -341,6 +347,103 @@ def command_history(args: argparse.Namespace) -> int:
     raise MonitorError(f"unsupported history action: {action}")
 
 
+def prometheus_url(settings: Settings, path: str = "/healthz") -> str:
+    host = settings.prometheus.host
+    if host in {"0.0.0.0", "::", "[::]"}:
+        host = "127.0.0.1"
+    elif ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    return f"http://{host}:{settings.prometheus.port}{path}"
+
+
+def probe_exporter(settings: Settings, timeout: float = 2) -> tuple[bool, str]:
+    if not settings.prometheus.enabled:
+        return False, "disabled"
+    url = prometheus_url(settings)
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as response:
+            body = response.read().decode("utf-8", errors="replace").strip()
+    except urllib.error.HTTPError as error:
+        return False, f"HTTP {error.code}"
+    except (urllib.error.URLError, TimeoutError, OSError) as error:
+        return False, str(error)
+    return response.status == 200, body or f"HTTP {response.status}"
+
+
+def wait_for_exporter(settings: Settings, timeout: float) -> None:
+    if timeout <= 0:
+        raise ServiceError("exporter readiness timeout must be positive")
+    deadline = time.monotonic() + timeout
+    detail = "not ready"
+    while time.monotonic() < deadline:
+        healthy, detail = probe_exporter(settings, timeout=1)
+        if healthy:
+            return
+        time.sleep(0.2)
+    raise ServiceError(
+        f"Prometheus exporter did not become healthy within {timeout:g}s: {detail}"
+    )
+
+
+def command_exporter(args: argparse.Namespace) -> int:
+    action = args.exporter_action
+    if action == "status":
+        settings = load_settings(args.config)
+        service = service_status()
+        healthy, detail = probe_exporter(settings)
+        payload = {
+            "enabled": settings.prometheus.enabled,
+            "healthy": healthy,
+            "detail": detail,
+            "metrics_url": prometheus_url(settings, "/metrics"),
+            "health_url": prometheus_url(settings),
+            "service_active": service.get("ActiveState") == "active",
+        }
+        if args.json:
+            print_json(payload)
+        else:
+            print(
+                f"enabled={str(payload['enabled']).lower()} "
+                f"healthy={str(healthy).lower()} "
+                f"service_active={str(payload['service_active']).lower()}"
+            )
+            print(f"metrics={payload['metrics_url']}")
+            print(f"health={payload['health_url']} ({detail})")
+        return 0 if healthy or not settings.prometheus.enabled else 1
+
+    if action == "start":
+        settings = update_prometheus_config(
+            args.config,
+            enabled=True,
+            host=args.host,
+            port=args.port,
+            max_sample_age_seconds=args.max_sample_age,
+        )
+        enable_service(settings)
+        restart_service()
+        wait_for_exporter(settings, args.timeout)
+        print(f"Prometheus exporter started: {prometheus_url(settings, '/metrics')}")
+        return 0
+
+    settings = load_settings(args.config)
+    if action == "stop":
+        settings = update_prometheus_config(args.config, enabled=False)
+        if service_status().get("ActiveState") == "active":
+            restart_service()
+        print("Prometheus exporter stopped; host monitoring remains active")
+        return 0
+
+    if action == "restart":
+        if not settings.prometheus.enabled:
+            raise ServiceError("Prometheus exporter is disabled; run `hmon exporter start`")
+        enable_service(settings)
+        restart_service()
+        wait_for_exporter(settings, args.timeout)
+        print(f"Prometheus exporter restarted: {prometheus_url(settings, '/metrics')}")
+        return 0
+    raise MonitorError(f"unsupported exporter action: {action}")
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="hmon",
@@ -404,6 +507,25 @@ def build_parser() -> argparse.ArgumentParser:
     history_tail.add_argument("--json", action="store_true")
     history_actions.add_parser("migrate-state")
 
+    exporter_parser = commands.add_parser(
+        "exporter",
+        help="start and manage the Prometheus exporter",
+    )
+    exporter_actions = exporter_parser.add_subparsers(
+        dest="exporter_action",
+        required=True,
+    )
+    exporter_start = exporter_actions.add_parser("start")
+    exporter_start.add_argument("--host")
+    exporter_start.add_argument("--port", type=int)
+    exporter_start.add_argument("--max-sample-age", type=float)
+    exporter_start.add_argument("--timeout", type=float, default=15)
+    exporter_stop = exporter_actions.add_parser("stop")
+    exporter_restart = exporter_actions.add_parser("restart")
+    exporter_restart.add_argument("--timeout", type=float, default=15)
+    exporter_status = exporter_actions.add_parser("status")
+    exporter_status.add_argument("--json", action="store_true")
+
     alert_parser = commands.add_parser("alert", help="send a manual alert")
     alert_parser.add_argument("message")
     alert_parser.add_argument("--title", default="hostmon alert")
@@ -438,6 +560,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             return command_snapshot(args)
         if args.command == "history":
             return command_history(args)
+        if args.command == "exporter":
+            return command_exporter(args)
         if args.command == "alert":
             return command_alert(args)
         if args.command == "enable":

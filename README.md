@@ -42,16 +42,18 @@ hmon status
 
 Enable the loopback Prometheus endpoint:
 
-```toml
-[prometheus]
-enabled = true
-host = "127.0.0.1"
-port = 9108
-max_sample_age_seconds = 30
+```bash
+hmon exporter start
+hmon exporter status
+curl http://127.0.0.1:9108/metrics
 ```
 
+Manage it without stopping host monitoring:
+
 ```bash
-curl http://127.0.0.1:9108/metrics
+hmon exporter restart
+hmon exporter stop
+hmon exporter start --host 127.0.0.1 --port 9108 --max-sample-age 30
 ```
 
 See [`docs/prometheus.md`](docs/prometheus.md) for scrape configuration,
@@ -101,6 +103,12 @@ hmon config validate
 hmon snapshot --json
 hmon history list
 hmon history tail -n 20
+
+# Prometheus exporter
+hmon exporter start
+hmon exporter status
+hmon exporter restart
+hmon exporter stop
 
 # Rules
 hmon rules

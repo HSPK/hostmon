@@ -19,7 +19,12 @@ from host_monitor.collectors.permissions import (
     KubernetesPermissionCollector,
     parse_checks,
 )
-from host_monitor.config import initialize_config, load_settings
+from host_monitor.config import (
+    ConfigError,
+    initialize_config,
+    load_settings,
+    update_prometheus_config,
+)
 from host_monitor.rules import write_default_rules
 
 
@@ -49,6 +54,36 @@ class ConfigTests(unittest.TestCase):
                 disabled["kubernetes_permissions"].deadline_seconds,
                 5,
             )
+
+    def test_atomically_updates_prometheus_section(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            initialize_config(path)
+
+            settings = update_prometheus_config(
+                path,
+                enabled=True,
+                host="127.0.0.2",
+                port=9200,
+                max_sample_age_seconds=45,
+            )
+
+            self.assertTrue(settings.prometheus.enabled)
+            self.assertEqual(settings.prometheus.host, "127.0.0.2")
+            self.assertEqual(settings.prometheus.port, 9200)
+            self.assertEqual(settings.prometheus.max_sample_age_seconds, 45)
+            self.assertIn("[collectors.cpu]", path.read_text(encoding="utf-8"))
+
+    def test_invalid_prometheus_update_preserves_config(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            initialize_config(path)
+            before = path.read_text(encoding="utf-8")
+
+            with self.assertRaises(ConfigError):
+                update_prometheus_config(path, port=70000)
+
+            self.assertEqual(path.read_text(encoding="utf-8"), before)
 
 
 class CPUCollectorTests(unittest.TestCase):

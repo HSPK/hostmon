@@ -472,6 +472,100 @@ def atomic_write_text(path: Path, content: str, mode: int = 0o600) -> None:
         raise ConfigError(f"cannot write {path}: {error}") from error
 
 
+def _render_prometheus_section(settings: PrometheusSettings) -> str:
+    return "\n".join(
+        [
+            "[prometheus]",
+            f"enabled = {'true' if settings.enabled else 'false'}",
+            f"host = {json.dumps(settings.host)}",
+            f"port = {settings.port}",
+            f"max_sample_age_seconds = {settings.max_sample_age_seconds:g}",
+            "",
+        ]
+    )
+
+
+def _replace_toml_section(text: str, name: str, replacement: str) -> str:
+    lines = text.splitlines(keepends=True)
+    starts = [
+        index
+        for index, line in enumerate(lines)
+        if line.partition("#")[0].strip() == f"[{name}]"
+    ]
+    if len(starts) > 1:
+        raise ConfigError(f"configuration contains multiple [{name}] sections")
+    if not starts:
+        separator = "" if not text or text.endswith("\n\n") else "\n"
+        return f"{text}{separator}{replacement}"
+    start = starts[0]
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if lines[index].lstrip().startswith("["):
+            end = index
+            break
+    replacement_lines = replacement.splitlines(keepends=True)
+    return "".join(lines[:start] + replacement_lines + lines[end:])
+
+
+def update_prometheus_config(
+    path: str | Path | None = None,
+    *,
+    enabled: bool | None = None,
+    host: str | None = None,
+    port: int | None = None,
+    max_sample_age_seconds: float | None = None,
+) -> Settings:
+    settings = load_settings(path)
+    current = settings.prometheus
+    resolved_enabled = current.enabled if enabled is None else enabled
+    resolved_host = current.host if host is None else str(host).strip()
+    resolved_port = current.port if port is None else port
+    resolved_max_age = (
+        current.max_sample_age_seconds
+        if max_sample_age_seconds is None
+        else max_sample_age_seconds
+    )
+    if not isinstance(resolved_enabled, bool):
+        raise ConfigError("prometheus.enabled must be true or false")
+    if not resolved_host:
+        raise ConfigError("prometheus.host must be non-empty")
+    if (
+        isinstance(resolved_port, bool)
+        or not isinstance(resolved_port, int)
+        or not 1 <= resolved_port <= 65535
+    ):
+        raise ConfigError("prometheus.port must be between 1 and 65535")
+    if (
+        isinstance(resolved_max_age, bool)
+        or not isinstance(resolved_max_age, (int, float))
+        or resolved_max_age <= 0
+    ):
+        raise ConfigError("prometheus.max_sample_age_seconds must be positive")
+    updated = PrometheusSettings(
+        enabled=resolved_enabled,
+        host=resolved_host,
+        port=resolved_port,
+        max_sample_age_seconds=float(resolved_max_age),
+    )
+    try:
+        text = settings.config_file.read_text(encoding="utf-8")
+    except OSError as error:
+        raise ConfigError(
+        f"cannot read configuration {settings.config_file}: {error}"
+        ) from error
+    candidate = _replace_toml_section(
+        text,
+        "prometheus",
+        _render_prometheus_section(updated),
+    )
+    try:
+        tomllib.loads(candidate)
+    except tomllib.TOMLDecodeError as error:
+        raise ConfigError(f"updated configuration is invalid: {error}") from error
+    atomic_write_text(settings.config_file, candidate)
+    return load_settings(settings.config_file)
+
+
 def initialize_config(
     path: str | Path | None = None,
     *,

@@ -5,20 +5,22 @@ written runtime state. Scraping does not enter or block the collection loop.
 
 ## Enable the exporter
 
-```toml
-[prometheus]
-enabled = true
-host = "127.0.0.1"
-port = 9108
-max_sample_age_seconds = 30
+```bash
+hmon exporter start
+hmon exporter status
 ```
 
-Restart the service after changing TOML:
+`start` atomically enables the TOML section, installs/enables the user service
+if needed, restarts it, and waits for `/healthz`.
 
 ```bash
-hmon stop
-hmon start
+hmon exporter start --host 127.0.0.1 --port 9108 --max-sample-age 30
+hmon exporter restart
+hmon exporter stop
 ```
+
+`stop` disables only the exporter and restarts the daemon; host collection,
+history, rules, and alerts remain active.
 
 ## Endpoints
 
