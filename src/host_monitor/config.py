@@ -13,7 +13,7 @@ from .errors import ConfigError
 
 APP_NAME = "host-monitor"
 CONFIG_ENV = "HOST_MONITOR_CONFIG"
-KNOWN_TOP_LEVEL = {"monitor", "collectors", "alerts", "history"}
+KNOWN_TOP_LEVEL = {"monitor", "collectors", "alerts", "history", "prometheus"}
 KNOWN_MONITOR_KEYS = {
     "interval_seconds",
     "snapshot_seconds",
@@ -24,6 +24,7 @@ KNOWN_MONITOR_KEYS = {
 }
 KNOWN_ALERT_KEYS = {"enabled", "env_file", "env", "channels", "policy"}
 KNOWN_HISTORY_KEYS = {"enabled", "directory", "max_file_mb"}
+KNOWN_PROMETHEUS_KEYS = {"enabled", "host", "port", "max_sample_age_seconds"}
 REQUIRED_COLLECTORS = {"cpu", "memory", "disk", "network"}
 
 
@@ -54,6 +55,14 @@ class HistorySettings:
 
 
 @dataclass(frozen=True)
+class PrometheusSettings:
+    enabled: bool
+    host: str
+    port: int
+    max_sample_age_seconds: float
+
+
+@dataclass(frozen=True)
 class Settings:
     config_file: Path
     interval_seconds: float
@@ -65,6 +74,7 @@ class Settings:
     collectors: tuple[CollectorSettings, ...]
     alerts: AlertSettings
     history: HistorySettings
+    prometheus: PrometheusSettings
 
 
 def config_home() -> Path:
@@ -269,6 +279,29 @@ def load_settings(path: str | Path | None = None) -> Settings:
     )
     max_file_bytes = max(1, int(max_file_mb * 1024 * 1024))
 
+    raw_prometheus = _mapping("prometheus", payload.get("prometheus", {}))
+    unknown = set(raw_prometheus) - KNOWN_PROMETHEUS_KEYS
+    if unknown:
+        raise ConfigError(f"unknown prometheus options: {sorted(unknown)}")
+    prometheus_enabled = raw_prometheus.get("enabled", False)
+    if not isinstance(prometheus_enabled, bool):
+        raise ConfigError("prometheus.enabled must be true or false")
+    prometheus_host = str(raw_prometheus.get("host", "127.0.0.1")).strip()
+    if not prometheus_host:
+        raise ConfigError("prometheus.host must be non-empty")
+    prometheus_port = _positive_int(
+        "prometheus.port", raw_prometheus.get("port", 9108)
+    )
+    if prometheus_port > 65535:
+        raise ConfigError("prometheus.port must not exceed 65535")
+    max_sample_age = _positive_number(
+        "prometheus.max_sample_age_seconds",
+        raw_prometheus.get(
+            "max_sample_age_seconds",
+            max(30.0, interval * 3),
+        ),
+    )
+
     return Settings(
         config_file=config_file,
         interval_seconds=interval,
@@ -289,6 +322,12 @@ def load_settings(path: str | Path | None = None) -> Settings:
             enabled=history_enabled,
             directory=history_directory,
             max_file_bytes=max_file_bytes,
+        ),
+        prometheus=PrometheusSettings(
+            enabled=prometheus_enabled,
+            host=prometheus_host,
+            port=prometheus_port,
+            max_sample_age_seconds=max_sample_age,
         ),
     )
 
@@ -369,6 +408,12 @@ def render_default_config(
         "enabled = true",
         'directory = "~/.local/state/host-monitor/history"',
         "max_file_mb = 64",
+        "",
+        "[prometheus]",
+        "enabled = false",
+        'host = "127.0.0.1"',
+        "port = 9108",
+        "max_sample_age_seconds = 30",
         "",
         "[alerts]",
         f"enabled = {'true' if alert_enabled else 'false'}",

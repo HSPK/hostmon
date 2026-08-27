@@ -24,6 +24,8 @@ All notable changes to this project are documented here.
   so slow Kubernetes API calls cannot create long gaps in localhost history.
 - Removed the duplicate state fsync and made the scheduler catch up after a
   slight overrun instead of adding another full interval.
+- Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,
+  and `/api/status` endpoints.
 
 ## [0.1.0] - 2026-08-17
 

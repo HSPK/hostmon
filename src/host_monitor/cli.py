@@ -94,6 +94,14 @@ def command_config(args: argparse.Namespace) -> int:
                     "directory": str(settings.history.directory),
                     "max_file_bytes": settings.history.max_file_bytes,
                 },
+                "prometheus": {
+                    "enabled": settings.prometheus.enabled,
+                    "host": settings.prometheus.host,
+                    "port": settings.prometheus.port,
+                    "max_sample_age_seconds": (
+                        settings.prometheus.max_sample_age_seconds
+                    ),
+                },
             }
         )
         return 0

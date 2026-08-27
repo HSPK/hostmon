@@ -20,6 +20,7 @@ node metrics.
 - Lark, Slack, DingTalk, WeCom, generic webhook, and email alerts.
 - Persistent rule state with cooldown and recovery notifications.
 - Full JSONL history rotated by UTC date and maximum file size.
+- Built-in Prometheus HTTP exporter for Grafana and other monitoring systems.
 - Extensible collectors discovered through Python entry points.
 - User-level systemd lifecycle and an optional K9s shortcut.
 
@@ -38,6 +39,23 @@ hmon enable
 hmon start
 hmon status
 ```
+
+Enable the loopback Prometheus endpoint:
+
+```toml
+[prometheus]
+enabled = true
+host = "127.0.0.1"
+port = 9108
+max_sample_age_seconds = 30
+```
+
+```bash
+curl http://127.0.0.1:9108/metrics
+```
+
+See [`docs/prometheus.md`](docs/prometheus.md) for scrape configuration,
+Grafana metric names, health checks, and remote-access guidance.
 
 For Lark, the initializer has a convenience option:
 

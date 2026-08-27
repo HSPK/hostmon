@@ -40,6 +40,9 @@ class ConfigTests(unittest.TestCase):
             self.assertFalse(settings.alerts.enabled)
             self.assertTrue(settings.history.enabled)
             self.assertEqual(settings.history.max_file_bytes, 64 * 1024 * 1024)
+            self.assertFalse(settings.prometheus.enabled)
+            self.assertEqual(settings.prometheus.host, "127.0.0.1")
+            self.assertEqual(settings.prometheus.port, 9108)
             disabled = {item.name: item for item in settings.collectors}
             self.assertEqual(disabled["kubernetes"].deadline_seconds, 5)
             self.assertEqual(

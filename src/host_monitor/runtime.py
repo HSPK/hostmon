@@ -15,6 +15,7 @@ from .config import Settings
 from .errors import MonitorError
 from .history import HistoryWriter
 from .outbox import OutboxStore
+from .prometheus import PrometheusExporter
 from .rules import RuleEvaluation, RuleStore, evaluate_rules
 from .state import StateStore
 
@@ -59,8 +60,20 @@ class MonitorRuntime:
         )
         self.state = self.state_store.load()
         self.hostname = local_hostname(settings)
+        self.prometheus = PrometheusExporter(
+            settings.prometheus,
+            settings.state_file,
+        )
+        try:
+            self.prometheus.start()
+        except MonitorError:
+            self.outbox.close()
+            self.alerts.close()
+            self.collectors.close()
+            raise
 
     def close(self) -> None:
+        self.prometheus.close()
         self.collectors.close()
         self.alerts.close()
         self.outbox.close()
