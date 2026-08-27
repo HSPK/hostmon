@@ -6,6 +6,7 @@ import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
 
 type SortKey = "name" | "current" | "average" | "p95" | "maximum";
+const PAGE_SIZE = 75;
 
 export class MetricExplorerPanel implements PanelRenderer {
   readonly element: HTMLElement;
@@ -14,10 +15,13 @@ export class MetricExplorerPanel implements PanelRenderer {
   private readonly sort: HTMLSelectElement;
   private readonly create: HTMLButtonElement;
   private readonly count: HTMLElement;
+  private readonly previous: HTMLButtonElement;
+  private readonly next: HTMLButtonElement;
   private catalog: MetricCatalogEntry[] = [];
   private readonly selected = new Set<string>();
   private lastLoaded = 0;
   private loading = false;
+  private page = 0;
 
   constructor(
     definition: MetricsPanelDefinition,
@@ -31,7 +35,10 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.search.type = "search";
     this.search.placeholder = "Filter metrics";
     this.search.autocomplete = "off";
-    this.search.addEventListener("input", () => this.render());
+    this.search.addEventListener("input", () => {
+      this.page = 0;
+      this.render();
+    });
     this.sort = document.createElement("select");
     const sortOptions: Array<[SortKey, string]> = [
       ["name", "Name"],
@@ -46,7 +53,10 @@ export class MetricExplorerPanel implements PanelRenderer {
       option.textContent = `Sort: ${label}`;
       this.sort.append(option);
     }
-    this.sort.addEventListener("change", () => this.render());
+    this.sort.addEventListener("change", () => {
+      this.page = 0;
+      this.render();
+    });
     this.create = document.createElement("button");
     this.create.type = "button";
     this.create.className = "button button-primary";
@@ -57,7 +67,22 @@ export class MetricExplorerPanel implements PanelRenderer {
     );
     this.count = document.createElement("span");
     this.count.className = "table-count";
-    controls.append(this.search, this.sort, this.count, this.create);
+    this.previous = pageButton("Previous", () => {
+      this.page = Math.max(0, this.page - 1);
+      this.render();
+    });
+    this.next = pageButton("Next", () => {
+      this.page++;
+      this.render();
+    });
+    controls.append(
+      this.search,
+      this.sort,
+      this.count,
+      this.previous,
+      this.next,
+      this.create,
+    );
 
     const wrapper = document.createElement("div");
     wrapper.className = "table-scroll";
@@ -103,9 +128,18 @@ export class MetricExplorerPanel implements PanelRenderer {
           ? left.name.localeCompare(right.name)
           : right[sort] - left[sort],
       );
-    this.count.textContent = `${filtered.length} / ${this.catalog.length}`;
+    const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    this.page = Math.min(this.page, pages - 1);
+    const pageRows = filtered.slice(
+      this.page * PAGE_SIZE,
+      (this.page + 1) * PAGE_SIZE,
+    );
+    this.count.textContent =
+      `${filtered.length} / ${this.catalog.length} | ${this.page + 1}/${pages}`;
+    this.previous.disabled = this.page === 0;
+    this.next.disabled = this.page >= pages - 1;
     const fragment = document.createDocumentFragment();
-    for (const item of filtered) {
+    for (const item of pageRows) {
       const row = document.createElement("tr");
       const selectCell = document.createElement("td");
       const checkbox = document.createElement("input");
@@ -132,8 +166,18 @@ export class MetricExplorerPanel implements PanelRenderer {
       );
       fragment.append(row);
     }
+
     this.tableBody.replaceChildren(fragment);
   }
+}
+
+function pageButton(label: string, action: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "table-action";
+  button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
 }
 
 function cell(value: string, className = ""): HTMLTableCellElement {
