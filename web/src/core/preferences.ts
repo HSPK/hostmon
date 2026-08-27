@@ -2,9 +2,11 @@ import type {
   DashboardDefinition,
   DashboardPreferences,
   PanelDefinition,
+  PageId,
+  TimeSeriesPanelDefinition,
 } from "../domain/types";
 
-const STORAGE_KEY = "hostmon.dashboard.preferences.v1";
+const STORAGE_KEY = "hostmon.dashboard.preferences.v2";
 
 export class PreferenceStore {
   private value: DashboardPreferences;
@@ -18,18 +20,24 @@ export class PreferenceStore {
       hiddenPanels: [...this.value.hiddenPanels],
       panelOrder: [...this.value.panelOrder],
       windowSeconds: this.value.windowSeconds,
+      activePage: this.value.activePage,
+      customPanels: this.value.customPanels.map(panel => ({...panel})),
     };
   }
 
-  visiblePanels(): PanelDefinition[] {
-    const panels = new Map(this.definition.panels.map(panel => [panel.id, panel]));
+  visiblePanels(page: PageId = this.value.activePage): PanelDefinition[] {
+    const definitions = [...this.definition.panels, ...this.value.customPanels];
+    const panels = new Map(definitions.map(panel => [panel.id, panel]));
     const ordered = this.value.panelOrder
       .map(id => panels.get(id))
       .filter((panel): panel is PanelDefinition => panel !== undefined);
-    for (const panel of this.definition.panels) {
+    for (const panel of definitions) {
       if (!ordered.some(item => item.id === panel.id)) ordered.push(panel);
     }
-    return ordered.filter(panel => !this.value.hiddenPanels.includes(panel.id));
+    return ordered.filter(
+      panel =>
+        panel.page === page && !this.value.hiddenPanels.includes(panel.id),
+    );
   }
 
   setVisible(panelId: string, visible: boolean): void {
@@ -55,6 +63,30 @@ export class PreferenceStore {
     this.save();
   }
 
+  setActivePage(page: PageId): void {
+    this.value.activePage = page;
+    this.save();
+  }
+
+  saveCustomPanel(panel: TimeSeriesPanelDefinition): void {
+    const index = this.value.customPanels.findIndex(item => item.id === panel.id);
+    if (index >= 0) this.value.customPanels[index] = panel;
+    else {
+      this.value.customPanels.push(panel);
+      this.value.panelOrder.push(panel.id);
+    }
+    this.save();
+  }
+
+  removeCustomPanel(panelId: string): void {
+    this.value.customPanels = this.value.customPanels.filter(
+      panel => panel.id !== panelId,
+    );
+    this.value.panelOrder = this.value.panelOrder.filter(id => id !== panelId);
+    this.value.hiddenPanels = this.value.hiddenPanels.filter(id => id !== panelId);
+    this.save();
+  }
+
   reset(): void {
     this.value = this.defaults();
     this.save();
@@ -65,6 +97,8 @@ export class PreferenceStore {
       hiddenPanels: [],
       panelOrder: this.definition.panels.map(panel => panel.id),
       windowSeconds: this.definition.defaultWindowSeconds,
+      activePage: "overview",
+      customPanels: [],
     };
   }
 
@@ -84,6 +118,12 @@ export class PreferenceStore {
           typeof parsed.windowSeconds === "number"
             ? parsed.windowSeconds
             : this.definition.defaultWindowSeconds,
+        activePage: isPageId(parsed.activePage)
+          ? parsed.activePage
+          : "overview",
+        customPanels: Array.isArray(parsed.customPanels)
+          ? parsed.customPanels.filter(isCustomPanel)
+          : [],
       };
     } catch {
       return this.defaults();
@@ -97,4 +137,24 @@ export class PreferenceStore {
       // Storage can be unavailable in hardened/private browser contexts.
     }
   }
+
+}
+
+function isPageId(value: unknown): value is PageId {
+  return ["overview", "metrics", "collectors", "kubernetes", "system"].includes(
+    String(value),
+  );
+}
+
+function isCustomPanel(value: unknown): value is TimeSeriesPanelDefinition {
+  if (!value || typeof value !== "object") return false;
+  const panel = value as Partial<TimeSeriesPanelDefinition>;
+  return (
+    typeof panel.id === "string" &&
+    typeof panel.title === "string" &&
+    panel.type === "timeseries" &&
+    panel.page === "metrics" &&
+    Array.isArray(panel.metrics) &&
+    panel.metrics.every(metric => typeof metric === "string")
+  );
 }

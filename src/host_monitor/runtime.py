@@ -63,6 +63,7 @@ class MonitorRuntime:
         self.prometheus = PrometheusExporter(
             settings.prometheus,
             settings.state_file,
+            settings.history.directory if settings.history.enabled else None,
         )
         try:
             self.prometheus.start()

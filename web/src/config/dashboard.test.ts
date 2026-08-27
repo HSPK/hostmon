@@ -5,10 +5,22 @@ import { DASHBOARD } from "./dashboard";
 describe("dashboard definition", () => {
   it("has unique panel IDs and registered panel types", () => {
     const ids = DASHBOARD.panels.map(panel => panel.id);
-    const supported = new Set(["stats", "timeseries", "collectors", "tasks"]);
+    const supported = new Set([
+      "stats",
+      "timeseries",
+      "collectors",
+      "tasks",
+      "metrics",
+      "system",
+    ]);
 
     expect(new Set(ids).size).toBe(ids.length);
     expect(DASHBOARD.panels.every(panel => supported.has(panel.type))).toBe(true);
+    expect(
+      new Set(DASHBOARD.panels.map(panel => panel.page)),
+    ).toEqual(
+      new Set(["overview", "metrics", "collectors", "kubernetes", "system"]),
+    );
   });
 
   it("uses valid time-series metric lists", () => {

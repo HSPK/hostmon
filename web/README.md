@@ -26,7 +26,6 @@ Important modules:
 | `core/api-client.ts` | Initial status and compact history requests |
 | `core/websocket-client.ts` | WebSocket lifecycle and jittered reconnect |
 | `core/time-series-store.ts` | Bounded aligned columnar data |
-| `core/frame-scheduler.ts` | One animation clock shared by every chart |
 | `core/preferences.ts` | Browser-local layout preferences |
 | `panels/panel.ts` | Renderer interface and registry |
 | `panels/timeseries-panel.ts` | uPlot adapter |
@@ -37,8 +36,8 @@ Important modules:
 
 - No framework virtual DOM.
 - One WebSocket connection per browser tab.
-- One shared animation frame scheduler for every chart.
-- Updates are coalesced to one browser frame.
+- Store updates are coalesced to one browser frame.
+- Charts redraw only when data, layout, or time range changes.
 - History is aligned and columnar rather than object-per-point.
 - Server history is bounded and downsampled before serialization.
 - Hashed Vite assets use immutable HTTP caching.
@@ -49,8 +48,14 @@ The production bundle budget is below 100 KiB compressed.
 
 ## Customize the dashboard
 
-Users can open **Customize** to show, hide, and reorder panels. Preferences are
+Users can open **Layout** to show, hide, and reorder panels. Preferences are
 stored in browser local storage and do not affect other users.
+
+The **Metrics** page searches every metric exposed by hostmon and shows
+current, minimum, average, p95, maximum, and sample count. Select any metrics
+to create line or area charts with custom titles, fixed/automatic axes, and
+one- or two-column layouts. Custom charts can be edited or deleted without
+rebuilding the frontend.
 
 The default layout is declarative:
 
@@ -90,6 +95,7 @@ application orchestration do not need to change.
 npm ci
 npm run typecheck
 npm run test
+npm run test:e2e
 npm run dev
 npm run build
 ```

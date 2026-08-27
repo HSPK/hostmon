@@ -61,4 +61,25 @@ describe("PreferenceStore", () => {
       DASHBOARD.panels.map(panel => panel.id),
     );
   });
+
+  it("persists and removes custom charts", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    preferences.saveCustomPanel({
+      id: "custom-latency",
+      type: "timeseries",
+      page: "metrics",
+      title: "Latency",
+      metrics: ["custom/latency_ms"],
+      custom: true,
+    });
+
+    const restored = new PreferenceStore(DASHBOARD);
+    expect(restored.get().customPanels).toHaveLength(1);
+    expect(restored.visiblePanels("metrics").some(
+      panel => panel.id === "custom-latency",
+    )).toBe(true);
+
+    restored.removeCustomPanel("custom-latency");
+    expect(restored.get().customPanels).toHaveLength(0);
+  });
 });

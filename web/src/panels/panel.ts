@@ -1,10 +1,18 @@
-import type { PanelDefinition } from "../domain/types";
-import type { FrameScheduler } from "../core/frame-scheduler";
+import type {
+  MetricCatalogEntry,
+  PanelDefinition,
+  TimeSeriesPanelDefinition,
+} from "../domain/types";
 import type { TimeSeriesStore } from "../core/time-series-store";
 
 export interface PanelContext {
   store: TimeSeriesStore;
-  frames: FrameScheduler;
+  actions: {
+    loadCatalog(): Promise<MetricCatalogEntry[]>;
+    createChart(metrics?: string[]): void;
+    editChart(panel: TimeSeriesPanelDefinition): void;
+    removeChart(panelId: string): void;
+  };
 }
 
 export interface PanelRenderer {
@@ -42,7 +50,7 @@ export class PanelRegistry {
 export function panelShell(
   definition: PanelDefinition,
   className = "",
-): { element: HTMLElement; body: HTMLElement } {
+): { element: HTMLElement; header: HTMLElement; body: HTMLElement } {
   const element = document.createElement("section");
   element.className = `panel ${className}`.trim();
   element.dataset.panelId = definition.id;
@@ -57,5 +65,5 @@ export function panelShell(
   const body = document.createElement("div");
   body.className = "panel-body";
   element.append(header, body);
-  return { element, body };
+  return { element, header, body };
 }

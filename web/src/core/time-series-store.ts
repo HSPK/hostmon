@@ -14,6 +14,7 @@ export class TimeSeriesStore {
   latestMetrics: Record<string, number> = {};
   latestFields: Record<string, string | number | boolean | null> = {};
   host = "";
+  version = "";
   latestTimestamp = 0;
   windowSeconds = 3600;
   private readonly listeners = new Set<StoreListener>();
@@ -32,6 +33,21 @@ export class TimeSeriesStore {
     return () => this.listeners.delete(listener);
   }
 
+  track(metrics: string[]): void {
+    for (const metric of metrics) {
+      if (this.trackedMetrics.has(metric)) continue;
+      this.trackedMetrics.add(metric);
+      this.series.set(
+        metric,
+        Array(this.timestamps.length).fill(null) as Array<number | null>,
+      );
+    }
+  }
+
+  tracked(): string[] {
+    return [...this.trackedMetrics];
+  }
+
   replaceHistory(history: HistoryResponse): void {
     this.timestamps.splice(0, this.timestamps.length, ...history.timestamps);
     this.series.clear();
@@ -47,6 +63,7 @@ export class TimeSeriesStore {
 
   applyStatus(status: StatusResponse): void {
     this.host = status.host;
+    this.version = status.version;
     this.latestTimestamp = status.updated_at;
     this.latestMetrics = status.metrics;
     this.latestFields = status.fields;

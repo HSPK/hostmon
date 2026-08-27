@@ -21,7 +21,12 @@ from aiohttp import WSMsgType, web
 
 from . import __version__
 from .config import PrometheusSettings
-from .dashboard import DashboardSnapshot, DashboardStore
+from .dashboard import (
+    DASHBOARD_CAPACITY,
+    DashboardSnapshot,
+    DashboardStore,
+    load_recent_history,
+)
 from .errors import MonitorError
 from .state import StateStore
 
@@ -147,9 +152,11 @@ class PrometheusExporter:
         self,
         settings: PrometheusSettings,
         state_file: Path,
+        history_directory: Path | None = None,
     ):
         self.settings = settings
         self.state_file = state_file
+        self.history_directory = history_directory
         self.reader = StateSnapshotReader(state_file)
         self.dashboard = DashboardStore()
         self.thread: threading.Thread | None = None
@@ -244,6 +251,7 @@ class PrometheusExporter:
         return self._json_response(
             {
                 "host": snapshot.host,
+                "version": __version__,
                 "updated_at": snapshot.updated_at,
                 "metrics": snapshot.metrics,
                 "fields": snapshot.fields,
@@ -287,6 +295,31 @@ class PrometheusExporter:
                 content_type="text/plain",
             )
         return self._json_response(payload)
+
+    async def _catalog(self, request: web.Request) -> web.Response:
+        try:
+            seconds = float(request.query.get("seconds", "3600"))
+        except ValueError:
+            return web.Response(
+                text="seconds must be numeric\n",
+                status=400,
+                content_type="text/plain",
+            )
+        if not 10 <= seconds <= 21600:
+            return web.Response(
+                text="seconds must be 10..21600\n",
+                status=400,
+                content_type="text/plain",
+            )
+        return self._json_response(
+            {
+                "seconds": seconds,
+                "metrics": self.dashboard.catalog(
+                    now=time.time(),
+                    seconds=seconds,
+                ),
+            }
+        )
 
     async def _websocket(self, request: web.Request) -> web.StreamResponse:
         origin = request.headers.get("Origin")
@@ -398,6 +431,7 @@ class PrometheusExporter:
                 web.get("/healthz", self._health),
                 web.get("/api/status", self._status),
                 web.get("/api/history", self._history),
+                web.get("/api/catalog", self._catalog),
                 web.get("/api/ws", self._websocket),
                 web.get("/{path:.*}", self._asset),
             ]
@@ -454,6 +488,13 @@ class PrometheusExporter:
         if not self.settings.enabled:
             return
         try:
+            if self.history_directory is not None:
+                self.dashboard.seed_records(
+                    load_recent_history(
+                        self.history_directory,
+                        DASHBOARD_CAPACITY,
+                    )
+                )
             self.dashboard.seed(self.reader.store.load())
         except MonitorError as error:
             LOGGER.warning("could not seed dashboard history: %s", error)

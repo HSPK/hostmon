@@ -11,7 +11,6 @@ export class TimeSeriesPanel implements PanelRenderer {
   readonly element: HTMLElement;
   private readonly chartHost: HTMLElement;
   private readonly resizeObserver: ResizeObserver;
-  private readonly removeFrame: () => void;
   private plot: uPlot;
 
   constructor(
@@ -29,7 +28,17 @@ export class TimeSeriesPanel implements PanelRenderer {
       item.style.setProperty("--series-color", metadata?.color ?? "#7dd3fc");
       legend.append(item);
     }
-    shell.element.querySelector(".panel-header")?.append(legend);
+    shell.header.append(legend);
+    if (definition.custom) {
+      const actions = document.createElement("div");
+      actions.className = "panel-actions";
+      const edit = actionButton("Edit", () => context.actions.editChart(definition));
+      const remove = actionButton("Delete", () =>
+        context.actions.removeChart(definition.id),
+      );
+      actions.append(edit, remove);
+      shell.header.append(actions);
+    }
     this.chartHost = document.createElement("div");
     this.chartHost.className = "chart-host";
     shell.body.append(this.chartHost);
@@ -46,15 +55,20 @@ export class TimeSeriesPanel implements PanelRenderer {
       this.plot.setSize({ width, height });
     });
     this.resizeObserver.observe(this.chartHost);
-    this.removeFrame = context.frames.add(now => this.animate(now));
+    this.update();
   }
 
   update(): void {
     this.plot.setData(this.data(), false);
+    const latest =
+      this.context.store.latestTimestamp || Date.now() / 1000;
+    this.plot.setScale("x", {
+      min: latest - this.context.store.windowSeconds,
+      max: latest,
+    });
   }
 
   destroy(): void {
-    this.removeFrame();
     this.resizeObserver.disconnect();
     this.plot.destroy();
   }
@@ -63,11 +77,6 @@ export class TimeSeriesPanel implements PanelRenderer {
     return this.context.store.alignedData(
       this.definition.metrics,
     ) as uPlot.AlignedData;
-  }
-
-  private animate(now: number): void {
-    const seconds = this.context.store.windowSeconds;
-    this.plot.setScale("x", { min: now - seconds, max: now });
   }
 
   private options(): uPlot.Options {
@@ -104,15 +113,28 @@ export class TimeSeriesPanel implements PanelRenderer {
         {},
         ...this.definition.metrics.map(metric => {
           const metadata = this.context.store.metadata.get(metric);
-          return {
+          const series: uPlot.Series = {
             label: metadata?.label ?? metric,
             stroke: metadata?.color ?? "#7dd3fc",
             width: 1.5,
             spanGaps: true,
             points: { show: false },
           };
+          if (this.definition.style === "area" && metadata?.color) {
+            series.fill = `${metadata.color}24`;
+          }
+          return series;
         }),
       ],
     };
   }
+}
+
+function actionButton(label: string, action: () => void): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "table-action";
+  button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
 }

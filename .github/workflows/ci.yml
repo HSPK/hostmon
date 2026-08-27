@@ -20,6 +20,8 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - run: npm ci --prefix web
       - run: npm run check --prefix web
+      - run: npx --prefix web playwright install --with-deps chromium
+      - run: npm run test:e2e --prefix web
       - run: git diff --exit-code -- src/host_monitor/static/dashboard
 
   test:

@@ -9,6 +9,7 @@ export interface MetricSnapshot {
 
 export interface StatusResponse {
   host: string;
+  version: string;
   updated_at: number;
   metrics: Record<MetricName, number>;
   fields: Record<string, string | number | boolean | null>;
@@ -21,6 +22,22 @@ export interface HistoryResponse {
   timestamps: number[];
   series: Record<MetricName, Array<number | null>>;
   metadata: Record<MetricName, MetricMetadata>;
+}
+
+export interface MetricCatalogEntry {
+  name: MetricName;
+  metadata: MetricMetadata;
+  current: number;
+  minimum: number;
+  maximum: number;
+  average: number;
+  p95: number;
+  samples: number;
+}
+
+export interface MetricCatalogResponse {
+  seconds: number;
+  metrics: MetricCatalogEntry[];
 }
 
 export interface MetricMetadata {
@@ -47,7 +64,9 @@ export interface BasePanelDefinition {
   id: string;
   title: string;
   type: string;
+  page: PageId;
   columnSpan?: 1 | 2;
+  custom?: boolean;
 }
 
 export interface StatPanelDefinition extends BasePanelDefinition {
@@ -59,6 +78,8 @@ export interface TimeSeriesPanelDefinition extends BasePanelDefinition {
   type: "timeseries";
   metrics: MetricName[];
   range?: [number, number];
+  style?: "line" | "area";
+  lineWidth?: number;
 }
 
 export interface CollectorPanelDefinition extends BasePanelDefinition {
@@ -69,11 +90,28 @@ export interface TasksPanelDefinition extends BasePanelDefinition {
   type: "tasks";
 }
 
+export interface MetricsPanelDefinition extends BasePanelDefinition {
+  type: "metrics";
+}
+
+export interface SystemPanelDefinition extends BasePanelDefinition {
+  type: "system";
+}
+
 export type PanelDefinition =
   | StatPanelDefinition
   | TimeSeriesPanelDefinition
   | CollectorPanelDefinition
-  | TasksPanelDefinition;
+  | TasksPanelDefinition
+  | MetricsPanelDefinition
+  | SystemPanelDefinition;
+
+export type PageId =
+  | "overview"
+  | "metrics"
+  | "collectors"
+  | "kubernetes"
+  | "system";
 
 export interface DashboardDefinition {
   title: string;
@@ -85,4 +123,6 @@ export interface DashboardPreferences {
   hiddenPanels: string[];
   panelOrder: string[];
   windowSeconds: number;
+  activePage: PageId;
+  customPanels: TimeSeriesPanelDefinition[];
 }

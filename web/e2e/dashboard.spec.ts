@@ -1,0 +1,172 @@
+import { expect, test } from "@playwright/test";
+
+const now = Date.now() / 1000;
+const metrics = {
+  "cpu/percent": 42,
+  "memory/percent": 51,
+  "disk/percent": 37,
+  "gpu/percent": 78,
+  "gpu/memory_percent": 64,
+  "gpu/temperature_c": 71,
+  "network/rx_mbps": 12,
+  "network/tx_mbps": 3,
+  "k8s/occupied_gpu_nodes": 7,
+  "k8s/quota_nodes": 7,
+  "custom/latency_ms": 18,
+  "monitor/collector/cpu/up": 1,
+  "monitor/collector/cpu/stale": 0,
+  "monitor/collector/cpu/failures_total": 0,
+  "monitor/collector/cpu/duration_ms": 1,
+  "monitor/outbox/pending": 0,
+};
+
+const fields = {
+  k8s_stopped_tasks: "(none)",
+  k8s_stopped_task_details: "(none)",
+  k8s_failed_tasks: "(none)",
+};
+
+test.beforeEach(async ({ page }) => {
+  const timestamps = Array.from({ length: 60 }, (_, index) => now - 590 + index * 10);
+  const metadata = Object.fromEntries(
+    Object.keys(metrics).map(name => [
+      name,
+      { label: name, unit: name.endsWith("percent") ? "%" : "", color: "#4ea1d3" },
+    ]),
+  );
+  await page.route("**/api/status", route =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        host: "test-host",
+        version: "0.1.1.dev0",
+        updated_at: now,
+        metrics,
+        fields,
+        websocket_clients: 1,
+      }),
+    }),
+  );
+  await page.route("**/api/history?*", route => {
+    const requested = new URL(route.request().url()).searchParams.get("metrics");
+    const names = requested?.split(",") ?? Object.keys(metrics);
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        from: timestamps[0],
+        to: timestamps.at(-1),
+        timestamps,
+        series: Object.fromEntries(
+          names.map(name => [
+            name,
+            timestamps.map((_, index) => (metrics[name as keyof typeof metrics] ?? 0) + index / 100),
+          ]),
+        ),
+        metadata: Object.fromEntries(names.map(name => [name, metadata[name]])),
+      }),
+    });
+  });
+  await page.route("**/api/catalog?*", route =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        seconds: 3600,
+        metrics: Object.entries(metrics).map(([name, value]) => ({
+          name,
+          metadata: metadata[name],
+          current: value,
+          minimum: value - 1,
+          maximum: value + 1,
+          average: value,
+          p95: value + 0.8,
+          samples: 60,
+        })),
+      }),
+    }),
+  );
+  await page.routeWebSocket("**/api/ws", socket => {
+    socket.send(
+      JSON.stringify({
+        timestamp: now + 10,
+        host: "test-host",
+        metrics: { ...metrics, "cpu/percent": 43 },
+        fields,
+      }),
+    );
+  });
+});
+
+test("navigates operations pages and renders live charts", async ({ page }) => {
+  await page.goto("/");
+
+  await expect(page.locator("#page-title")).toHaveText("Overview");
+  await expect(page.locator(".stat-card")).toHaveCount(8);
+  await expect(page.locator(".uplot")).toHaveCount(4);
+  await expect(page.locator("#connection-text")).toHaveText("connected");
+
+  await page.getByRole("button", { name: "Collectors" }).click();
+  await expect(page.locator("#page-title")).toHaveText("Collectors");
+  await expect(page.locator(".health-table tbody tr")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Kubernetes" }).click();
+  await expect(page.locator("#page-title")).toHaveText("Kubernetes");
+  await expect(page.locator(".task-grid")).toContainText("7 / 7");
+
+  await page.getByRole("button", { name: "System" }).click();
+  await expect(page.locator(".system-grid")).toContainText("/api/ws");
+});
+
+test("searches metrics and persists a custom chart", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Metrics" }).click();
+  await expect(page.locator(".metric-table tbody tr")).toHaveCount(
+    Object.keys(metrics).length,
+  );
+
+  await page.getByRole("button", { name: "Add chart" }).click();
+  await page.locator("#chart-metric-filter").fill("custom/latency");
+  await page.locator(".metric-option").filter({ hasText: "custom/latency_ms" }).click();
+  await page.locator("#chart-title").fill("Request latency");
+  await page.locator("#chart-style").selectOption("area");
+  await page.getByRole("button", { name: "Save chart" }).click();
+
+  await expect(page.locator('[data-panel-id^="custom-"]')).toContainText(
+    "Request latency",
+  );
+  await page.reload();
+  await expect(page.locator("#page-title")).toHaveText("Metrics");
+  await expect(page.locator('[data-panel-id^="custom-"]')).toContainText(
+    "Request latency",
+  );
+});
+
+test("remains responsive on narrow screens", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Menu" }).click();
+  await expect(page.locator(".sidebar")).toHaveClass(/open/);
+  await page.getByRole("button", { name: "Metrics" }).click();
+  await expect(page.locator("#page-title")).toHaveText("Metrics");
+});
+
+test("maintains smooth animation frame cadence", async ({ page }) => {
+  await page.goto("/");
+  const frameDurations = await page.evaluate(
+    () =>
+      new Promise<number[]>(resolve => {
+        const durations: number[] = [];
+        let previous = performance.now();
+        const sample = (current: number) => {
+          durations.push(current - previous);
+          previous = current;
+          if (durations.length >= 60) resolve(durations.slice(1));
+          else requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      }),
+  );
+  frameDurations.sort((left, right) => left - right);
+  const p95 = frameDurations[Math.floor(frameDurations.length * 0.95)] ?? 100;
+  expect(p95).toBeLessThan(35);
+});

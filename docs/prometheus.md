@@ -31,6 +31,7 @@ history, rules, and alerts remain active.
 | `/healthz` | HTTP 200 for a fresh sample, HTTP 503 for a stale/unavailable sample |
 | `/api/status` | Latest metrics and non-numeric template fields as JSON |
 | `/api/history` | Compact columnar history, bounded and downsampled in memory |
+| `/api/catalog` | Current/min/average/p95/max statistics for every metric |
 | `/api/ws` | WebSocket stream for live updates |
 
 ```bash

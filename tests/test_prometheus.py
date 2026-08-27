@@ -15,6 +15,7 @@ from aiohttp import ClientSession, WSMsgType, WSServerHandshakeError
 
 from host_monitor.config import PrometheusSettings
 from host_monitor.dashboard import DashboardStore
+from host_monitor.dashboard import load_recent_history
 from host_monitor.errors import MonitorError
 from host_monitor.prometheus import (
     PrometheusExporter,
@@ -73,6 +74,52 @@ class PrometheusRenderingTests(unittest.TestCase):
         self.assertEqual(history["timestamps"][-1], 29)
         self.assertEqual(history["series"]["cpu/percent"][-1], 29)
 
+    def test_dashboard_supports_custom_metrics_and_catalog_statistics(self):
+        store = DashboardStore(capacity=20)
+        for index in range(1, 6):
+            store.publish(
+                float(index),
+                "host-a",
+                {"custom/latency_ms": float(index * 10)},
+                {},
+            )
+
+        history = store.history(
+            now=5,
+            seconds=10,
+            maximum_points=20,
+            metrics=["custom/latency_ms"],
+        )
+        catalog = store.catalog(now=5, seconds=10)
+
+        self.assertEqual(
+            history["series"]["custom/latency_ms"],
+            [10, 20, 30, 40, 50],
+        )
+        self.assertEqual(catalog[0]["average"], 30)
+        self.assertEqual(catalog[0]["p95"], 50)
+        self.assertEqual(catalog[0]["metadata"]["unit"], "ms")
+
+    def test_loads_recent_history_from_end_of_segmented_files(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for part, values in enumerate(([1, 2], [3, 4]), start=1):
+                path = root / f"metrics-2026-08-27-{part:04d}.jsonl"
+                path.write_text(
+                    "".join(
+                        json.dumps(
+                            {"_time": value, "metrics": {"custom/value": value}}
+                        )
+                        + "\n"
+                        for value in values
+                    ),
+                    encoding="utf-8",
+                )
+
+            records = load_recent_history(root, 3)
+
+        self.assertEqual([record["_time"] for record in records], [2, 3, 4])
+
 
 class PrometheusHTTPTests(unittest.TestCase):
     def setUp(self):
@@ -119,11 +166,18 @@ class PrometheusHTTPTests(unittest.TestCase):
             health = response.read().decode()
         with urllib.request.urlopen(self.url("/api/status"), timeout=5) as response:
             status = json.load(response)
+        with urllib.request.urlopen(
+            self.url("/api/catalog?seconds=3600"),
+            timeout=5,
+        ) as response:
+            catalog = json.load(response)
 
         self.assertIn("hostmon_cpu_percent 42.0", metrics)
         self.assertEqual(health, "ok\n")
         self.assertEqual(status["host"], "host-a")
+        self.assertEqual(status["version"], "0.1.1.dev0")
         self.assertEqual(status["fields"]["task"], "training-a")
+        self.assertEqual(catalog["metrics"][0]["name"], "cpu/percent")
 
     def test_serves_dashboard_history_and_websocket(self):
         self.save_state(time.time())

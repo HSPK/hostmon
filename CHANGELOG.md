@@ -29,9 +29,12 @@ All notable changes to this project are documented here.
 - Added `hmon exporter start|stop|restart|status` for one-command exporter
   configuration, systemd lifecycle, and readiness checks.
 - Added a modular TypeScript/Vite/uPlot dashboard with an in-memory columnar
-  ring, shared animation scheduler, and aiohttp WebSocket backend.
+  ring, frame-coalesced updates, and aiohttp WebSocket backend.
 - Bounded web compression workers and kept hot JSON/Prometheus responses
   uncompressed to reduce latency and thread growth under concurrent load.
+- Added operations-console navigation, a complete metric catalog with
+  statistics, configurable custom charts, panel persistence, CSV export, and
+  real-browser responsiveness tests.
 
 ## [0.1.0] - 2026-08-17
 

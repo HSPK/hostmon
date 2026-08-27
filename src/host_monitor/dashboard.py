@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import math
+import json
 import threading
+from bisect import bisect_left
 from collections import deque
+from colorsys import hls_to_rgb
 from dataclasses import dataclass
+from hashlib import sha1
 from typing import Any
+from pathlib import Path
 
 
 DASHBOARD_CAPACITY = 2160
-DASHBOARD_SERIES: dict[str, dict[str, str]] = {
+MAX_DASHBOARD_METRICS = 512
+DEFAULT_DASHBOARD_SERIES: dict[str, dict[str, str]] = {
     "cpu/percent": {"label": "CPU", "unit": "%", "color": "#66d9ef"},
     "memory/percent": {"label": "Memory", "unit": "%", "color": "#a6e22e"},
     "disk/percent": {"label": "Disk", "unit": "%", "color": "#fd971f"},
@@ -65,13 +71,43 @@ def _uniform_indices(length: int, maximum: int) -> list[int]:
     return indices
 
 
+def infer_metric_metadata(name: str) -> dict[str, str]:
+    if name in DEFAULT_DASHBOARD_SERIES:
+        return dict(DEFAULT_DASHBOARD_SERIES[name])
+    final = name.rsplit("/", 1)[-1]
+    unit = ""
+    for suffix, candidate in (
+        ("_percent", "%"),
+        ("_bytes", "bytes"),
+        ("_mbps", "Mbps"),
+        ("_seconds", "s"),
+        ("_ms", "ms"),
+        ("_c", "C"),
+        ("_watts", "W"),
+        ("_cores", "cores"),
+        ("_count", "count"),
+    ):
+        if final.endswith(suffix):
+            unit = candidate
+            break
+    label = name.replace("/", " / ").replace("_", " ")
+    hue = int(sha1(name.encode("utf-8")).hexdigest()[:6], 16) % 360
+    red, green, blue = hls_to_rgb(hue / 360, 0.64, 0.72)
+    color = f"#{round(red * 255):02x}{round(green * 255):02x}{round(blue * 255):02x}"
+    return {"label": label, "unit": unit, "color": color}
+
+
 class DashboardStore:
-    def __init__(self, capacity: int = DASHBOARD_CAPACITY):
+    def __init__(
+        self,
+        capacity: int = DASHBOARD_CAPACITY,
+        metric_limit: int = MAX_DASHBOARD_METRICS,
+    ):
         self.capacity = max(2, int(capacity))
+        self.metric_limit = max(1, int(metric_limit))
         self._timestamps: deque[float] = deque(maxlen=self.capacity)
-        self._series: dict[str, deque[float | None]] = {
-            name: deque(maxlen=self.capacity) for name in DASHBOARD_SERIES
-        }
+        self._series: dict[str, deque[float | None]] = {}
+        self._metadata: dict[str, dict[str, str]] = {}
         self._latest: DashboardSnapshot | None = None
         self._lock = threading.RLock()
 
@@ -99,9 +135,21 @@ class DashboardStore:
                 fields,
             )
 
+    def seed_records(self, records: list[dict[str, Any]]) -> None:
+        with self._lock:
+            for record in sorted(
+                records,
+                key=lambda item: float(item.get("_time", 0)),
+            ):
+                timestamp = record.get("_time")
+                metrics = record.get("metrics")
+                if isinstance(timestamp, (int, float)) and isinstance(metrics, dict):
+                    self._append(float(timestamp), metrics)
+
     def _append(self, timestamp: float, metrics: dict[str, Any]) -> None:
         if self._timestamps and timestamp <= self._timestamps[-1]:
             return
+        self._ensure_metrics(metrics)
         self._timestamps.append(timestamp)
         for name, values in self._series.items():
             raw = metrics.get(name)
@@ -109,6 +157,24 @@ class DashboardStore:
                 values.append(float(raw))
             else:
                 values.append(None)
+
+    def _ensure_metrics(self, metrics: dict[str, Any]) -> None:
+        previous_length = len(self._timestamps)
+        available = self.metric_limit - len(self._series)
+        if available <= 0:
+            return
+        new_names = [
+            name
+            for name, value in sorted(metrics.items())
+            if name not in self._series
+            and isinstance(value, (int, float))
+            and math.isfinite(float(value))
+        ][:available]
+        for name in new_names:
+            values: deque[float | None] = deque(maxlen=self.capacity)
+            values.extend([None] * previous_length)
+            self._series[name] = values
+            self._metadata[name] = infer_metric_metadata(name)
 
     def publish(
         self,
@@ -152,17 +218,20 @@ class DashboardStore:
         maximum_points: int,
         metrics: list[str] | None = None,
     ) -> dict[str, Any]:
-        selected = metrics or list(DASHBOARD_SERIES)
-        unknown = sorted(set(selected) - set(DASHBOARD_SERIES))
-        if unknown:
-            raise ValueError(f"unknown dashboard metrics: {unknown}")
         with self._lock:
+            selected = metrics or [
+                name
+                for name in DEFAULT_DASHBOARD_SERIES
+                if name in self._series
+            ]
+            unknown = sorted(set(selected) - set(self._series))
+            if unknown:
+                raise ValueError(f"unknown dashboard metrics: {unknown}")
             timestamps = list(self._timestamps)
             values = {name: list(self._series[name]) for name in selected}
+            metadata = {name: dict(self._metadata[name]) for name in selected}
         cutoff = now - seconds
-        first = 0
-        while first < len(timestamps) and timestamps[first] < cutoff:
-            first += 1
+        first = bisect_left(timestamps, cutoff)
         timestamps = timestamps[first:]
         values = {name: points[first:] for name, points in values.items()}
         indices = _uniform_indices(len(timestamps), maximum_points)
@@ -174,7 +243,79 @@ class DashboardStore:
                 name: [points[index] for index in indices]
                 for name, points in values.items()
             },
-            "metadata": {
-                name: DASHBOARD_SERIES[name] for name in selected
-            },
+            "metadata": metadata,
         }
+
+    def catalog(self, *, now: float, seconds: float) -> list[dict[str, Any]]:
+        cutoff = now - seconds
+        with self._lock:
+            timestamps = list(self._timestamps)
+            first = bisect_left(timestamps, cutoff)
+            current = self._latest.metrics if self._latest is not None else {}
+            entries: list[dict[str, Any]] = []
+            for name in sorted(self._series):
+                values = [
+                    value
+                    for value in list(self._series[name])[first:]
+                    if value is not None
+                ]
+                if not values:
+                    continue
+                ordered = sorted(values)
+                p95_index = min(
+                    len(ordered) - 1,
+                    max(0, math.ceil(len(ordered) * 0.95) - 1),
+                )
+                entries.append(
+                    {
+                        "name": name,
+                        "metadata": dict(self._metadata[name]),
+                        "current": current.get(name, values[-1]),
+                        "minimum": min(values),
+                        "maximum": max(values),
+                        "average": math.fsum(values) / len(values),
+                        "p95": ordered[p95_index],
+                        "samples": len(values),
+                    }
+                )
+            return entries
+
+
+def _reverse_lines(path: Path, block_size: int = 64 * 1024):
+    with path.open("rb") as handle:
+        handle.seek(0, 2)
+        position = handle.tell()
+        buffer = b""
+        while position:
+            size = min(block_size, position)
+            position -= size
+            handle.seek(position)
+            buffer = handle.read(size) + buffer
+            lines = buffer.split(b"\n")
+            buffer = lines[0]
+            for line in reversed(lines[1:]):
+                if line:
+                    yield line
+        if buffer:
+            yield buffer
+
+
+def load_recent_history(directory: Path, count: int) -> list[dict[str, Any]]:
+    if count < 1 or not directory.exists():
+        return []
+    records: list[dict[str, Any]] = []
+    for path in reversed(sorted(directory.glob("metrics-*.jsonl"))):
+        try:
+            lines = _reverse_lines(path)
+            for line in lines:
+                try:
+                    record = json.loads(line)
+                except (UnicodeDecodeError, json.JSONDecodeError):
+                    continue
+                if isinstance(record, dict):
+                    records.append(record)
+                if len(records) >= count:
+                    return list(reversed(records))
+        except OSError:
+            continue
+    return list(reversed(records))

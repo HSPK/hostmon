@@ -64,8 +64,12 @@ hmon exporter start --host 127.0.0.1 --port 9108 --max-sample-age 30
 See [`docs/prometheus.md`](docs/prometheus.md) for scrape configuration,
 Grafana metric names, health checks, and remote-access guidance.
 
-The dashboard is a separate TypeScript/Vite application with a panel renderer
-registry and browser-persisted layout customization. See
+The dashboard is a separate TypeScript/Vite application with Overview,
+Metrics, Collectors, Kubernetes, and System pages. It includes a searchable
+metric catalog, current/min/average/p95/max statistics, arbitrary custom
+charts, CSV export, and browser-persisted layout customization. Its panel
+renderer registry keeps new display types independent from transport and
+storage. See
 [`web/README.md`](web/README.md).
 
 For Lark, the initializer has a convenience option:

@@ -1,6 +1,9 @@
 import { defineConfig } from "vite";
 
 export default defineConfig({
+  test: {
+    exclude: ["e2e/**", "node_modules/**"],
+  },
   build: {
     target: "es2022",
     outDir: "../src/host_monitor/static/dashboard",
