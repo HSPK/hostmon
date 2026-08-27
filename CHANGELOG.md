@@ -39,6 +39,8 @@ All notable changes to this project are documented here.
   pending demand, no-job node equivalents, and submitter workload breakdowns.
 - Added GPU Fleet and Workloads workspace views backed by generic plugin
   document APIs.
+- Cached metric catalog statistics by data revision and time window to prevent
+  repeated aggregate work from blocking the async HTTP loop.
 
 ## [0.1.0] - 2026-08-17
 

@@ -109,6 +109,10 @@ class DashboardStore:
         self._series: dict[str, deque[float | None]] = {}
         self._metadata: dict[str, dict[str, str]] = {}
         self._latest: DashboardSnapshot | None = None
+        self._revision = 0
+        self._catalog_cache: dict[
+            float, tuple[int, list[dict[str, Any]]]
+        ] = {}
         self._lock = threading.RLock()
 
     def seed(self, state: dict[str, Any]) -> None:
@@ -146,9 +150,9 @@ class DashboardStore:
                 if isinstance(timestamp, (int, float)) and isinstance(metrics, dict):
                     self._append(float(timestamp), metrics)
 
-    def _append(self, timestamp: float, metrics: dict[str, Any]) -> None:
+    def _append(self, timestamp: float, metrics: dict[str, Any]) -> bool:
         if self._timestamps and timestamp <= self._timestamps[-1]:
-            return
+            return False
         self._ensure_metrics(metrics)
         self._timestamps.append(timestamp)
         for name, values in self._series.items():
@@ -157,6 +161,7 @@ class DashboardStore:
                 values.append(float(raw))
             else:
                 values.append(None)
+        return True
 
     def _ensure_metrics(self, metrics: dict[str, Any]) -> None:
         previous_length = len(self._timestamps)
@@ -195,8 +200,11 @@ class DashboardStore:
             fields=dict(fields),
         )
         with self._lock:
-            self._append(snapshot.timestamp, numeric)
+            appended = self._append(snapshot.timestamp, numeric)
             self._latest = snapshot
+            if appended:
+                self._revision += 1
+                self._catalog_cache.clear()
 
     def latest(self) -> DashboardSnapshot | None:
         with self._lock:
@@ -247,8 +255,12 @@ class DashboardStore:
         }
 
     def catalog(self, *, now: float, seconds: float) -> list[dict[str, Any]]:
+        cache_key = round(seconds, 3)
         cutoff = now - seconds
         with self._lock:
+            cached = self._catalog_cache.get(cache_key)
+            if cached is not None and cached[0] == self._revision:
+                return cached[1]
             timestamps = list(self._timestamps)
             first = bisect_left(timestamps, cutoff)
             current = self._latest.metrics if self._latest is not None else {}
@@ -278,6 +290,9 @@ class DashboardStore:
                         "samples": len(values),
                     }
                 )
+            if len(self._catalog_cache) >= 16:
+                self._catalog_cache.clear()
+            self._catalog_cache[cache_key] = (self._revision, entries)
             return entries
 
 

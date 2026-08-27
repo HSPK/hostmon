@@ -100,6 +100,19 @@ class PrometheusRenderingTests(unittest.TestCase):
         self.assertEqual(catalog[0]["p95"], 50)
         self.assertEqual(catalog[0]["metadata"]["unit"], "ms")
 
+    def test_catalog_cache_is_invalidated_by_new_sample(self):
+        store = DashboardStore()
+        store.publish(1, "host-a", {"cpu/percent": 10}, {})
+
+        first = store.catalog(now=1, seconds=60)
+        second = store.catalog(now=2, seconds=60)
+        store.publish(3, "host-a", {"cpu/percent": 20}, {})
+        third = store.catalog(now=3, seconds=60)
+
+        self.assertIs(first, second)
+        self.assertIsNot(first, third)
+        self.assertEqual(third[0]["current"], 20)
+
     def test_loads_recent_history_from_end_of_segmented_files(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
