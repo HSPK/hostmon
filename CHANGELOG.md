@@ -46,6 +46,7 @@ All notable changes to this project are documented here.
   event loop responsive under concurrent metric-explorer requests.
 - Split GPU capacity and availability/demand charts so low-volume pending and
   no-job signals retain useful visual scale.
+- Increased chart value-axis width for untruncated multi-digit capacity labels.
 
 ## [0.1.0] - 2026-08-17
 

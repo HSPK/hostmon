@@ -106,7 +106,7 @@ export class TimeSeriesPanel implements PanelRenderer {
           grid: { stroke: "#273241", width: 1 },
           ticks: { stroke: "#273241" },
           font: "11px ui-monospace, monospace",
-          size: 48,
+          size: 64,
         },
       ],
       series: [
