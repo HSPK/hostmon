@@ -30,6 +30,8 @@ All notable changes to this project are documented here.
   configuration, systemd lifecycle, and readiness checks.
 - Added a modular TypeScript/Vite/uPlot dashboard with an in-memory columnar
   ring, shared animation scheduler, and aiohttp WebSocket backend.
+- Bounded web compression workers and kept hot JSON/Prometheus responses
+  uncompressed to reduce latency and thread growth under concurrent load.
 
 ## [0.1.0] - 2026-08-17
 

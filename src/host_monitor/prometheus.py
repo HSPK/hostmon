@@ -11,6 +11,7 @@ import mimetypes
 import re
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 from typing import Any, Awaitable, Callable
@@ -27,6 +28,7 @@ from .state import StateStore
 
 LOGGER = logging.getLogger("host_monitor.prometheus")
 INVALID_NAME = re.compile(r"[^a-zA-Z0-9_:]")
+WEB_EXECUTOR_WORKERS = 4
 
 
 @dataclass(frozen=True)
@@ -192,7 +194,6 @@ class PrometheusExporter:
                 "X-Content-Type-Options": "nosniff",
             },
         )
-        response.enable_compression()
         return response
 
     @staticmethod
@@ -210,7 +211,7 @@ class PrometheusExporter:
             snapshot = self._snapshot()
         except MonitorError as error:
             return self._error(error)
-        response = web.Response(
+        return web.Response(
             text=render_prometheus(
                 snapshot,
                 websocket_clients=len(self._clients),
@@ -219,8 +220,6 @@ class PrometheusExporter:
             charset="utf-8",
             headers={"Cache-Control": "no-store"},
         )
-        response.enable_compression()
-        return response
 
     async def _health(self, request: web.Request) -> web.Response:
         try:
@@ -407,6 +406,12 @@ class PrometheusExporter:
 
     async def _serve(self) -> None:
         self.loop = asyncio.get_running_loop()
+        self.loop.set_default_executor(
+            ThreadPoolExecutor(
+                max_workers=WEB_EXECUTOR_WORKERS,
+                thread_name_prefix="hostmon-web",
+            )
+        )
         self._stop_event = asyncio.Event()
         self._runner = web.AppRunner(
             self._application(),
