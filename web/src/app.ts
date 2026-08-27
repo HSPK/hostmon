@@ -39,6 +39,9 @@ export class DashboardApp {
   private renderGeneration = 0;
   private paused = false;
   private editingPanel: TimeSeriesPanelDefinition | null = null;
+  private readonly handlePopState = (): void => {
+    this.navigate(this.pageFromLocation() ?? "overview", false);
+  };
 
   constructor(root: HTMLElement) {
     this.root = root;
@@ -61,6 +64,12 @@ export class DashboardApp {
 
   async start(): Promise<void> {
     this.buildShell();
+    const routedPage = this.pageFromLocation();
+    if (routedPage) {
+      this.preferences.setActivePage(routedPage);
+    } else {
+      this.updatePageRoute(this.preferences.get().activePage, true);
+    }
     const preferences = this.preferences.get();
     this.store.setWindow(preferences.windowSeconds);
     this.bindControls();
@@ -70,6 +79,7 @@ export class DashboardApp {
     this.renderPanels();
     this.realtime.start();
     window.setInterval(() => this.updateSampleAge(), 1000);
+    window.addEventListener("popstate", this.handlePopState);
     window.addEventListener("beforeunload", () => this.destroy(), { once: true });
   }
 
@@ -277,11 +287,26 @@ export class DashboardApp {
     this.required("page-title").textContent = current?.label ?? "Overview";
   }
 
-  private navigate(page: PageId): void {
+  private navigate(page: PageId, updateHistory = true): void {
+    const changed = this.preferences.get().activePage !== page;
     this.preferences.setActivePage(page);
+    if (updateHistory && changed) this.updatePageRoute(page);
     this.renderNavigation();
     this.renderPanels();
     document.querySelector(".sidebar")?.classList.remove("open");
+  }
+
+  private pageFromLocation(): PageId | null {
+    const requested = new URL(window.location.href).searchParams.get("page");
+    return NAVIGATION.find(item => item.id === requested)?.id ?? null;
+  }
+
+  private updatePageRoute(page: PageId, replace = false): void {
+    const url = new URL(window.location.href);
+    url.searchParams.set("page", page);
+    const target = `${url.pathname}${url.search}${url.hash}`;
+    if (replace) window.history.replaceState({page}, "", target);
+    else window.history.pushState({page}, "", target);
   }
 
   private renderPanels(): void {
@@ -529,6 +554,7 @@ export class DashboardApp {
   private destroy(): void {
     this.refreshController?.abort();
     this.realtime.stop();
+    window.removeEventListener("popstate", this.handlePopState);
     for (const panel of this.panels) panel.destroy();
   }
 }

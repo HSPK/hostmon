@@ -51,6 +51,12 @@ All notable changes to this project are documented here.
   drawer while keeping high-cardinality records out of metric history.
 - Paginated workload rendering with shared table controls to bound DOM work for
   clusters with hundreds of active runs.
+- Added shareable page routes and browser Back/Forward navigation for stable
+  workspace deep links while retaining the last page as the local default.
+- Preserved readable fleet and workload column widths on narrow screens with
+  panel-local scrolling instead of destructive per-character wrapping.
+- Made dense table controls wrap within mobile panels so filters and pagination
+  actions remain reachable at 390-pixel viewport widths.
 
 ## [0.1.0] - 2026-08-17
 

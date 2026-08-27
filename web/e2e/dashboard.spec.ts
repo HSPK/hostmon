@@ -233,6 +233,20 @@ test("searches metrics and persists a custom chart", async ({ page }) => {
   );
 });
 
+test("supports deep links and browser workspace history", async ({ page }) => {
+  await page.goto("/?page=workloads");
+  await expect(page.locator("#page-title")).toHaveText("Workloads");
+  await expect(page.locator(".submitter-table tbody tr")).toHaveCount(75);
+
+  await page.getByRole("button", { name: "GPU Fleet" }).click();
+  await expect(page).toHaveURL(/\?page=gpu-fleet$/);
+  await expect(page.locator("#page-title")).toHaveText("GPU Fleet");
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\?page=workloads$/);
+  await expect(page.locator("#page-title")).toHaveText("Workloads");
+});
+
 test("remains responsive on narrow screens", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
@@ -241,6 +255,21 @@ test("remains responsive on narrow screens", async ({ page }) => {
   await expect(page.locator(".sidebar")).toHaveClass(/open/);
   await page.getByRole("button", { name: "Metrics" }).click();
   await expect(page.locator("#page-title")).toHaveText("Metrics");
+
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Workloads" }).click();
+  const tableScrollsInsidePanel = await page
+    .locator(".gpu-submitters-panel .table-scroll")
+    .evaluate(element => element.scrollWidth > element.clientWidth);
+  expect(tableScrollsInsidePanel).toBe(true);
+  const controlsFitPanel = await page
+    .locator(".gpu-submitters-panel .table-controls")
+    .evaluate(element => element.scrollWidth <= element.clientWidth);
+  expect(controlsFitPanel).toBe(true);
+  const bodyHasHorizontalOverflow = await page
+    .locator("body")
+    .evaluate(element => element.scrollWidth > element.clientWidth);
+  expect(bodyHasHorizontalOverflow).toBe(false);
 });
 
 test("maintains smooth animation frame cadence", async ({ page }) => {

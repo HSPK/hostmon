@@ -165,6 +165,8 @@ main { width: 100%; padding: 12px; }
 .fleet-summary span { display: block; color: var(--muted); font-size: 10px; }
 .fleet-summary strong { display: block; margin-top: 4px; font: 600 16px ui-monospace, monospace; }
 .fleet-table-scroll { max-height: none; }
+.fleet-table { min-width: 980px; }
+.submitter-table { min-width: 1040px; }
 .fleet-table th:first-child, .fleet-table td:first-child,
 .submitter-table th:nth-child(-n+4), .submitter-table td:nth-child(-n+4) {
   text-align: left;
@@ -265,6 +267,9 @@ main { width: 100%; padding: 12px; }
 @media (max-width: 560px) {
   .toolbar { position: static; flex-direction: column; }
   .toolbar-actions { max-width: none; justify-content: flex-start; }
+  .table-controls { flex-wrap: wrap; }
+  .table-controls input[type="search"] { flex: 1 1 180px; width: auto; }
+  .table-count { margin-left: 0; }
   .stat-grid { grid-template-columns: repeat(2, minmax(90px, 1fr)); }
   .task-grid, .system-grid, .metric-picker { grid-template-columns: 1fr; }
   .fleet-summary { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
