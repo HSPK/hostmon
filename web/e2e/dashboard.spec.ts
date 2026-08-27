@@ -66,6 +66,32 @@ const clusterGPUReport = {
       pending_gpus: 8,
     },
   ],
+  workloads: [
+    {
+      queue: "queue-a",
+      name: "training-job-001",
+      status: "Mixed",
+      submitter: "training-run",
+      creator_id: "user-a",
+      running_pods: 7,
+      running_gpus: 56,
+      running_gpu_nodes: 7,
+      pending_pods: 1,
+      pending_gpus: 8,
+    },
+    ...Array.from({ length: 80 }, (_, index) => ({
+      queue: "queue-a",
+      name: `batch-job-${String(index).padStart(3, "0")}`,
+      status: "Running" as const,
+      submitter: "batch-run",
+      creator_id: "user-b",
+      running_pods: 1,
+      running_gpus: 1,
+      running_gpu_nodes: 1,
+      pending_pods: 0,
+      pending_gpus: 0,
+    })),
+  ],
 };
 
 test.beforeEach(async ({ page }) => {
@@ -164,7 +190,16 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".fleet-table")).toContainText("56 / 64");
 
   await page.getByRole("button", { name: "Workloads" }).click();
-  await expect(page.locator(".submitter-table")).toContainText("training-run");
+  await expect(page.locator(".submitter-table tbody tr")).toHaveCount(75);
+  await expect(page.locator(".submitter-table")).toContainText("training-job-001");
+  await page.getByRole("button", { name: "training-job-001" }).click();
+  await expect(page.locator(".workload-drawer")).toContainText("user-a");
+  await expect(page.locator(".workload-drawer")).toContainText("56");
+  await page.getByRole("button", { name: "Close" }).click();
+  await expect(page.locator(".workload-drawer")).toHaveAttribute(
+    "aria-hidden",
+    "true",
+  );
 
   await page.getByRole("button", { name: "Kubernetes" }).click();
   await expect(page.locator("#page-title")).toHaveText("Kubernetes");

@@ -4,9 +4,9 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
+import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
 
 type SortKey = "name" | "current" | "average" | "p95" | "maximum";
-const PAGE_SIZE = 75;
 
 export class MetricExplorerPanel implements PanelRenderer {
   readonly element: HTMLElement;
@@ -128,11 +128,11 @@ export class MetricExplorerPanel implements PanelRenderer {
           ? left.name.localeCompare(right.name)
           : right[sort] - left[sort],
       );
-    const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+    const pages = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
     this.page = Math.min(this.page, pages - 1);
     const pageRows = filtered.slice(
-      this.page * PAGE_SIZE,
-      (this.page + 1) * PAGE_SIZE,
+      this.page * TABLE_PAGE_SIZE,
+      (this.page + 1) * TABLE_PAGE_SIZE,
     );
     this.count.textContent =
       `${filtered.length} / ${this.catalog.length} | ${this.page + 1}/${pages}`;
@@ -169,15 +169,6 @@ export class MetricExplorerPanel implements PanelRenderer {
 
     this.tableBody.replaceChildren(fragment);
   }
-}
-
-function pageButton(label: string, action: () => void): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "table-action";
-  button.textContent = label;
-  button.addEventListener("click", action);
-  return button;
 }
 
 function cell(value: string, className = ""): HTMLTableCellElement {

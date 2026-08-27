@@ -47,6 +47,10 @@ All notable changes to this project are documented here.
 - Split GPU capacity and availability/demand charts so low-volume pending and
   no-job signals retain useful visual scale.
 - Increased chart value-axis width for untruncated multi-digit capacity labels.
+- Added run-level Volcano workload aggregation and a selectable workload detail
+  drawer while keeping high-cardinality records out of metric history.
+- Paginated workload rendering with shared table controls to bound DOM work for
+  clusters with hundreds of active runs.
 
 ## [0.1.0] - 2026-08-17
 

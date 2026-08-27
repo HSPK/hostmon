@@ -146,6 +146,7 @@ main { width: 100%; padding: 12px; }
 .state-up { color: var(--success); border: 1px solid #315b47; }
 .state-stale { color: var(--warning); border: 1px solid #63552f; }
 .state-down { color: var(--danger); border: 1px solid #6a3741; }
+.state-mixed { color: var(--accent); border: 1px solid #315a70; }
 
 .task-grid, .system-grid { display: grid; grid-template-columns: repeat(5, minmax(130px, 1fr)); gap: 1px; background: var(--border); }
 .task-grid > div, .system-card { min-width: 0; padding: 9px; background: var(--surface); }
@@ -165,9 +166,46 @@ main { width: 100%; padding: 12px; }
 .fleet-summary strong { display: block; margin-top: 4px; font: 600 16px ui-monospace, monospace; }
 .fleet-table-scroll { max-height: none; }
 .fleet-table th:first-child, .fleet-table td:first-child,
-.submitter-table th:nth-child(-n+3), .submitter-table td:nth-child(-n+3) {
+.submitter-table th:nth-child(-n+4), .submitter-table td:nth-child(-n+4) {
   text-align: left;
 }
+.workload-link {
+  max-width: 360px; padding: 0; color: #9bc8e3; border: 0; background: transparent;
+  text-align: left; cursor: pointer; overflow-wrap: anywhere;
+}
+.workload-link:hover { color: var(--text); text-decoration: underline; }
+
+.workload-drawer {
+  position: fixed; top: 0; right: 0; z-index: 50; width: min(480px, 94vw); height: 100vh;
+  padding: 14px; border-left: 1px solid var(--border); background: #0c1015;
+  transform: translateX(101%); transition: transform .15s linear; overflow-y: auto;
+}
+.workload-drawer.open { transform: translateX(0); }
+.workload-drawer > header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--border);
+}
+.workload-drawer h2 {
+  margin: 3px 0 0; font-size: 15px; overflow-wrap: anywhere;
+}
+.drawer-eyebrow {
+  color: var(--muted); font: 10px ui-monospace, monospace; text-transform: uppercase;
+}
+.workload-detail-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px; margin-top: 14px; background: var(--border);
+}
+.workload-detail-grid > div { min-width: 0; padding: 10px; background: var(--surface); }
+.workload-detail-grid span { display: block; color: var(--muted); font-size: 10px; }
+.workload-detail-grid strong {
+  display: block; margin-top: 4px; font: 600 13px ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
+.workload-backdrop {
+  position: fixed; inset: 0; z-index: 40; pointer-events: none;
+  background: rgba(0, 0, 0, .55); opacity: 0;
+}
+.workload-backdrop.open { pointer-events: auto; opacity: 1; }
 
 .settings-drawer {
   position: fixed; top: 0; right: 0; z-index: 50; width: min(420px, 94vw); height: 100vh;

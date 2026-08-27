@@ -5,7 +5,7 @@ import re
 from collections import defaultdict
 from dataclasses import dataclass, field
 from decimal import Decimal
-from typing import Any
+from typing import Any, Callable
 
 from .base import CollectorResult, reject_unknown_options
 from .kubectl_client import KubectlClient, parse_quantity
@@ -40,14 +40,36 @@ def _pod_gpu_request(pod: dict[str, Any], resource: str) -> Decimal:
     return total
 
 
-def aggregate_usage(
+def _submitter_identity(pod: dict[str, Any]) -> tuple[str, str]:
+    labels = (pod.get("metadata") or {}).get("labels") or {}
+    return (
+        str(
+            labels.get("created-by-name")
+            or labels.get("owner")
+            or "(unlabeled)"
+        ),
+        str(labels.get("created-by") or "-"),
+    )
+
+
+def _workload_name(pod: dict[str, Any]) -> str:
+    metadata = pod.get("metadata") or {}
+    labels = metadata.get("labels") or {}
+    if labels.get("volcano.sh/job-name"):
+        return str(labels["volcano.sh/job-name"])
+    for owner in metadata.get("ownerReferences") or []:
+        if owner.get("kind") == "Job" and owner.get("controller", True):
+            return str(owner.get("name") or metadata.get("name") or "(unknown)")
+    return str(metadata.get("name") or "(unknown)")
+
+
+def _aggregate_by(
     queue_pods: dict[str, list[dict[str, Any]]],
     *,
     gpu_resource: str,
-) -> dict[tuple[str, str, str], SubmitterUsage]:
-    usage: dict[tuple[str, str, str], SubmitterUsage] = defaultdict(
-        SubmitterUsage
-    )
+    identity: Callable[[str, dict[str, Any]], tuple[str, ...]],
+) -> dict[tuple[str, ...], SubmitterUsage]:
+    usage: dict[tuple[str, ...], SubmitterUsage] = defaultdict(SubmitterUsage)
     for queue, pods in queue_pods.items():
         for pod in pods:
             phase = str((pod.get("status") or {}).get("phase") or "")
@@ -56,15 +78,7 @@ def aggregate_usage(
             requested = _pod_gpu_request(pod, gpu_resource)
             if requested <= 0:
                 continue
-            metadata = pod.get("metadata") or {}
-            labels = metadata.get("labels") or {}
-            submitter = str(
-                labels.get("created-by-name")
-                or labels.get("owner")
-                or "(unlabeled)"
-            )
-            creator_id = str(labels.get("created-by") or "-")
-            item = usage[(queue, submitter, creator_id)]
+            item = usage[identity(queue, pod)]
             if phase == "Running":
                 item.running_pods += 1
                 item.running_gpus += requested
@@ -77,6 +91,34 @@ def aggregate_usage(
     return usage
 
 
+def aggregate_usage(
+    queue_pods: dict[str, list[dict[str, Any]]],
+    *,
+    gpu_resource: str,
+) -> dict[tuple[str, str, str], SubmitterUsage]:
+    return _aggregate_by(
+        queue_pods,
+        gpu_resource=gpu_resource,
+        identity=lambda queue, pod: (queue, *_submitter_identity(pod)),
+    )
+
+
+def aggregate_workloads(
+    queue_pods: dict[str, list[dict[str, Any]]],
+    *,
+    gpu_resource: str,
+) -> dict[tuple[str, str, str, str], SubmitterUsage]:
+    return _aggregate_by(
+        queue_pods,
+        gpu_resource=gpu_resource,
+        identity=lambda queue, pod: (
+            queue,
+            _workload_name(pod),
+            *_submitter_identity(pod),
+        ),
+    )
+
+
 def build_report(
     queues: list[str],
     queue_objects: list[dict[str, Any]],
@@ -84,6 +126,7 @@ def build_report(
     *,
     gpus_per_node: int,
     gpu_resource: str,
+    workloads: dict[tuple[str, str, str, str], SubmitterUsage] | None = None,
 ) -> dict[str, Any]:
     usage_rows = [
         {
@@ -167,9 +210,39 @@ def build_report(
     for key, value in tuple(total.items()):
         if isinstance(value, float) and value.is_integer():
             total[key] = int(value)
+    workload_rows = [
+        {
+            "queue": queue,
+            "name": name,
+            "submitter": submitter,
+            "creator_id": creator_id,
+            "status": (
+                "Mixed"
+                if item.running_pods and item.pending_pods
+                else "Running"
+                if item.running_pods
+                else "Pending"
+            ),
+            "running_pods": item.running_pods,
+            "running_gpus": _number(item.running_gpus),
+            "running_gpu_nodes": len(item.running_nodes),
+            "pending_pods": item.pending_pods,
+            "pending_gpus": _number(item.pending_gpus),
+        }
+        for (queue, name, submitter, creator_id), item in sorted(
+            (workloads or {}).items(),
+            key=lambda entry: (
+                entry[0][0],
+                -entry[1].running_gpus,
+                -entry[1].pending_gpus,
+                entry[0][1],
+            ),
+        )
+    ]
     return {
         "gpus_per_node": gpus_per_node,
         "usage": usage_rows,
+        "workloads": workload_rows,
         "capacity": capacity,
         "total_capacity": total,
     }
@@ -252,10 +325,13 @@ class ClusterGPUUsageCollector:
         if isinstance(previous, dict):
             at = previous.get("at")
             metrics = previous.get("metrics")
+            report = previous.get("report")
             if (
                 isinstance(at, (int, float))
                 and now - float(at) < self.poll_interval
                 and isinstance(metrics, dict)
+                and isinstance(report, dict)
+                and isinstance(report.get("workloads"), list)
             ):
                 return CollectorResult(
                     metrics={
@@ -293,12 +369,17 @@ class ClusterGPUUsageCollector:
             queue_pods,
             gpu_resource=self.gpu_resource,
         )
+        workloads = aggregate_workloads(
+            queue_pods,
+            gpu_resource=self.gpu_resource,
+        )
         report = build_report(
             self.queues,
             queue_objects,
             usage,
             gpus_per_node=self.gpus_per_node,
             gpu_resource=self.gpu_resource,
+            workloads=workloads,
         )
         metrics = report_metrics(report)
         return CollectorResult(

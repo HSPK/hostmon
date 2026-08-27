@@ -9,6 +9,7 @@ from host_monitor.collectors.cpu import CPUCollector, parse_cpu_line
 from host_monitor.collectors.cluster_gpu_usage import (
     ClusterGPUUsageCollector,
     aggregate_usage,
+    aggregate_workloads,
     build_report,
     report_metrics,
 )
@@ -400,6 +401,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
                         "labels": {
                             "created-by-name": "run-a",
                             "created-by": "user-a",
+                            "volcano.sh/job-name": "job-a",
                         }
                     },
                     "status": {"phase": "Running"},
@@ -419,6 +421,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
                         "labels": {
                             "owner": "run-a",
                             "created-by": "user-a",
+                            "volcano.sh/job-name": "job-a",
                         }
                     },
                     "status": {"phase": "Pending"},
@@ -435,6 +438,10 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
             ]
         }
         usage = aggregate_usage(pods, gpu_resource="nvidia.com/gpu")
+        workloads = aggregate_workloads(
+            pods,
+            gpu_resource="nvidia.com/gpu",
+        )
         queues = [
             {
                 "metadata": {"name": "queue-a"},
@@ -459,11 +466,15 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
             usage,
             gpus_per_node=8,
             gpu_resource="nvidia.com/gpu",
+            workloads=workloads,
         )
         metrics = report_metrics(report)
 
         self.assertEqual(report["usage"][0]["running_gpus"], 8)
         self.assertEqual(report["usage"][0]["pending_gpus"], 4)
+        self.assertEqual(len(report["workloads"]), 1)
+        self.assertEqual(report["workloads"][0]["name"], "job-a")
+        self.assertEqual(report["workloads"][0]["status"], "Mixed")
         self.assertEqual(report["capacity"][0]["no_job_gpus"], 4)
         self.assertEqual(report["capacity"][0]["no_job_node_equivalents"], 0)
         self.assertEqual(report["capacity"][0]["allocated_cpus"], 125.5)
@@ -482,7 +493,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
         previous = {
             "at": 100,
             "metrics": {"cluster_gpu/running_gpus": 8},
-            "report": {"usage": []},
+            "report": {"usage": [], "workloads": []},
         }
         with patch.object(collector, "_json") as query:
             result = collector.collect(previous, 120)

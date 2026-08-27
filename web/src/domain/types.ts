@@ -51,6 +51,11 @@ export interface ClusterGPUUsageRow {
   pending_gpus: number;
 }
 
+export interface ClusterGPUWorkloadRow extends ClusterGPUUsageRow {
+  name: string;
+  status: "Running" | "Pending" | "Mixed";
+}
+
 export interface ClusterGPUCapacityRow {
   queue: string;
   capacity_gpus: number;
@@ -67,6 +72,7 @@ export interface ClusterGPUCapacityRow {
 export interface ClusterGPUReport {
   gpus_per_node: number;
   usage: ClusterGPUUsageRow[];
+  workloads: ClusterGPUWorkloadRow[];
   capacity: ClusterGPUCapacityRow[];
   total_capacity: ClusterGPUCapacityRow;
 }

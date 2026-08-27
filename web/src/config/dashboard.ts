@@ -146,7 +146,7 @@ export const DASHBOARD: DashboardDefinition = {
       id: "gpu-submitters",
       type: "gpu-submitters",
       page: "workloads",
-      title: "GPU usage by submitter",
+      title: "GPU workloads",
       columnSpan: 2,
     },
     {
