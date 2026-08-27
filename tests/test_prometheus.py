@@ -14,7 +14,7 @@ from pathlib import Path
 from aiohttp import ClientSession, WSMsgType, WSServerHandshakeError
 
 from host_monitor.config import PrometheusSettings
-from host_monitor.dashboard import DashboardStore
+from host_monitor.dashboard import DashboardStore, infer_metric_metadata
 from host_monitor.dashboard import load_recent_history
 from host_monitor.errors import MonitorError
 from host_monitor.prometheus import (
@@ -52,6 +52,14 @@ class PrometheusRenderingTests(unittest.TestCase):
         self.assertNotEqual(names["metric/a-b"], names["metric/a_b"])
         self.assertTrue(names["metric/a-b"].startswith("hostmon_metric_a_b_"))
         self.assertEqual(names, prometheus_names(["metric/a_b", "metric/a-b"]))
+
+    def test_cluster_gpu_metadata_uses_business_labels_and_units(self):
+        metadata = infer_metric_metadata(
+            "cluster_gpu/queue/total/allocated_gpus"
+        )
+
+        self.assertEqual(metadata["label"], "Allocated GPUs")
+        self.assertEqual(metadata["unit"], "GPUs")
 
     def test_dashboard_history_is_bounded_and_columnar(self):
         store = DashboardStore(capacity=20)

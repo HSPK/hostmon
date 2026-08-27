@@ -41,6 +41,7 @@ All notable changes to this project are documented here.
   document APIs.
 - Cached metric catalog statistics by data revision and time window to prevent
   repeated aggregate work from blocking the async HTTP loop.
+- Added domain-aware labels and units for cluster GPU capacity metrics.
 
 ## [0.1.0] - 2026-08-17
 

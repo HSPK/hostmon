@@ -75,6 +75,17 @@ def infer_metric_metadata(name: str) -> dict[str, str]:
     if name in DEFAULT_DASHBOARD_SERIES:
         return dict(DEFAULT_DASHBOARD_SERIES[name])
     final = name.rsplit("/", 1)[-1]
+    business_labels = {
+        "capacity_gpus": "GPU capacity",
+        "allocated_gpus": "Allocated GPUs",
+        "pending_gpus": "Pending GPUs",
+        "unallocated_gpus": "Free GPUs",
+        "no_job_gpus": "No-job GPUs",
+        "no_job_node_equivalents": "No-job nodes",
+        "capacity_cpus": "CPU capacity",
+        "allocated_cpus": "Allocated CPUs",
+        "free_cpus": "Free CPUs",
+    }
     unit = ""
     for suffix, candidate in (
         ("_percent", "%"),
@@ -86,11 +97,20 @@ def infer_metric_metadata(name: str) -> dict[str, str]:
         ("_watts", "W"),
         ("_cores", "cores"),
         ("_count", "count"),
+        ("_gpus", "GPUs"),
+        ("_cpus", "CPUs"),
+        ("_nodes", "nodes"),
+        ("_pods", "pods"),
     ):
         if final.endswith(suffix):
             unit = candidate
             break
-    label = name.replace("/", " / ").replace("_", " ")
+    if name.startswith("cluster_gpu/queue/") and final in business_labels:
+        queue = name.split("/")[2]
+        base_label = business_labels[final]
+        label = base_label if queue == "total" else f"{queue}: {base_label}"
+    else:
+        label = name.replace("/", " / ").replace("_", " ")
     hue = int(sha1(name.encode("utf-8")).hexdigest()[:6], 16) % 360
     red, green, blue = hls_to_rgb(hue / 360, 0.64, 0.72)
     color = f"#{round(red * 255):02x}{round(green * 255):02x}{round(blue * 255):02x}"
