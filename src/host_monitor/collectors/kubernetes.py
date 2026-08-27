@@ -1,14 +1,12 @@
 from __future__ import annotations
 
-import json
-import shlex
-import subprocess
 from dataclasses import dataclass
-from decimal import Decimal, InvalidOperation, ROUND_CEILING
+from decimal import Decimal, ROUND_CEILING
 from typing import Any
 
 from ..errors import CollectorError
 from .base import CollectorResult, reject_unknown_options
+from .kubectl_client import KubectlClient, parse_quantity
 
 
 TERMINAL_PHASES = {"Succeeded", "Failed"}
@@ -21,32 +19,6 @@ PROBLEM_WAITING_REASONS = {
     "InvalidImageName",
     "RunContainerError",
 }
-QUANTITY_SUFFIXES = {
-    "": Decimal(1),
-    "m": Decimal("0.001"),
-    "k": Decimal("1000"),
-    "K": Decimal("1000"),
-    "M": Decimal("1000000"),
-    "G": Decimal("1000000000"),
-    "Ki": Decimal(1024),
-    "Mi": Decimal(1024**2),
-    "Gi": Decimal(1024**3),
-}
-
-
-def parse_quantity(value: Any) -> Decimal:
-    text = str(value).strip()
-    for suffix in sorted(QUANTITY_SUFFIXES, key=len, reverse=True):
-        if suffix and not text.endswith(suffix):
-            continue
-        number = text[: -len(suffix)] if suffix else text
-        try:
-            return Decimal(number) * QUANTITY_SUFFIXES[suffix]
-        except InvalidOperation:
-            continue
-    raise CollectorError(f"invalid Kubernetes quantity: {value!r}")
-
-
 def resource_quantity(container: dict[str, Any], resource: str) -> Decimal:
     resources = container.get("resources") or {}
     requests = resources.get("requests") or {}
@@ -239,52 +211,21 @@ class KubernetesCollector:
         self.poll_interval = float(options.get("poll_interval_seconds", 60))
         if self.poll_interval <= 0:
             raise ValueError("poll_interval_seconds must be positive")
-        kubectl = options.get("kubectl", "kubectl")
-        if not isinstance(kubectl, str) or not kubectl.strip():
-            raise ValueError("kubectl must be a non-empty command")
-        self.kubectl = shlex.split(kubectl)
         self.timeout = float(options.get("timeout_seconds", 30))
         if self.timeout <= 0:
             raise ValueError("timeout_seconds must be positive")
-
-    def _command(self, *arguments: str) -> list[str]:
-        command = list(self.kubectl)
-        if self.context:
-            command.extend(["--context", self.context])
-        command.extend(arguments)
-        return command
+        self.client = KubectlClient(
+            str(options.get("kubectl", "kubectl")),
+            context=self.context,
+            timeout_seconds=self.timeout,
+        )
 
     def _json(self, *arguments: str) -> dict[str, Any]:
-        command = self._command(*arguments)
-        try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=self.timeout,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired) as error:
-            raise CollectorError(f"cannot run {command[0]}: {error}") from error
-        if result.returncode != 0:
-            detail = result.stderr.strip() or result.stdout.strip()
-            raise CollectorError(f"kubectl failed: {detail}")
-        try:
-            payload = json.loads(result.stdout)
-        except json.JSONDecodeError as error:
-            raise CollectorError("kubectl returned invalid JSON") from error
-        if not isinstance(payload, dict):
-            raise CollectorError("kubectl returned a non-object JSON payload")
-        return payload
+        return self.client.json(*arguments)
 
     @staticmethod
     def _items(payload: dict[str, Any], kind: str) -> list[dict[str, Any]]:
-        items = payload.get("items")
-        if not isinstance(items, list) or not all(
-            isinstance(item, dict) for item in items
-        ):
-            raise CollectorError(f"kubectl returned an invalid {kind} list")
-        return items
+        return KubectlClient.items(payload, kind)
 
     def collect(
         self, previous: dict[str, Any] | None, now: float

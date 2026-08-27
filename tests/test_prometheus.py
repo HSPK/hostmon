@@ -283,6 +283,36 @@ class PrometheusHTTPTests(unittest.TestCase):
 
         self.assertEqual(context.exception.code, 503)
 
+    def test_serves_plugin_document(self):
+        StateStore(self.state_file).save(
+            {
+                "samples": [],
+                "rules": {},
+                "collectors": {
+                    "cluster_gpu_usage": {
+                        "_hostmon_envelope": 1,
+                        "plugin_state": {
+                            "at": 100,
+                            "report": {"usage": [{"submitter": "run-a"}]},
+                        },
+                    }
+                },
+                "updated_at": time.time(),
+                "host": "host-a",
+                "last_metrics": {"cpu/percent": 42},
+                "last_fields": {},
+            }
+        )
+        self.exporter.start()
+
+        with urllib.request.urlopen(
+            self.url("/api/plugins/cluster_gpu_usage"),
+            timeout=5,
+        ) as response:
+            document = json.load(response)
+
+        self.assertEqual(document["document"]["usage"][0]["submitter"], "run-a")
+
     def test_multiple_websocket_clients_receive_broadcast(self):
         self.save_state(time.time())
         self.exporter.start()

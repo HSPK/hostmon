@@ -40,6 +40,43 @@ export interface MetricCatalogResponse {
   metrics: MetricCatalogEntry[];
 }
 
+export interface ClusterGPUUsageRow {
+  queue: string;
+  submitter: string;
+  creator_id: string;
+  running_pods: number;
+  running_gpus: number;
+  running_gpu_nodes: number;
+  pending_pods: number;
+  pending_gpus: number;
+}
+
+export interface ClusterGPUCapacityRow {
+  queue: string;
+  capacity_gpus: number;
+  allocated_gpus: number;
+  pending_gpus: number;
+  unallocated_gpus: number;
+  no_job_gpus: number;
+  no_job_node_equivalents: number;
+  capacity_cpus: number;
+  allocated_cpus: number;
+  free_cpus: number;
+}
+
+export interface ClusterGPUReport {
+  gpus_per_node: number;
+  usage: ClusterGPUUsageRow[];
+  capacity: ClusterGPUCapacityRow[];
+  total_capacity: ClusterGPUCapacityRow;
+}
+
+export interface PluginDocument<T> {
+  name: string;
+  updated_at: number;
+  document: T;
+}
+
 export interface MetricMetadata {
   label: string;
   unit: string;
@@ -98,16 +135,28 @@ export interface SystemPanelDefinition extends BasePanelDefinition {
   type: "system";
 }
 
+export interface GPUFleetPanelDefinition extends BasePanelDefinition {
+  type: "gpu-fleet";
+}
+
+export interface GPUSubmittersPanelDefinition extends BasePanelDefinition {
+  type: "gpu-submitters";
+}
+
 export type PanelDefinition =
   | StatPanelDefinition
   | TimeSeriesPanelDefinition
   | CollectorPanelDefinition
   | TasksPanelDefinition
   | MetricsPanelDefinition
-  | SystemPanelDefinition;
+  | SystemPanelDefinition
+  | GPUFleetPanelDefinition
+  | GPUSubmittersPanelDefinition;
 
 export type PageId =
   | "overview"
+  | "gpu-fleet"
+  | "workloads"
   | "metrics"
   | "collectors"
   | "kubernetes"

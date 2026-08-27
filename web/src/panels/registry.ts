@@ -1,6 +1,8 @@
 import type {
   CollectorPanelDefinition,
   MetricsPanelDefinition,
+  GPUFleetPanelDefinition,
+  GPUSubmittersPanelDefinition,
   StatPanelDefinition,
   TasksPanelDefinition,
   TimeSeriesPanelDefinition,
@@ -9,6 +11,8 @@ import type {
 import { CollectorPanel } from "./collector-panel";
 import { PanelRegistry } from "./panel";
 import { MetricExplorerPanel } from "./metric-explorer-panel";
+import { GPUFleetPanel } from "./gpu-fleet-panel";
+import { GPUSubmittersPanel } from "./gpu-submitters-panel";
 import { StatPanel } from "./stat-panel";
 import { TasksPanel } from "./tasks-panel";
 import { TimeSeriesPanel } from "./timeseries-panel";
@@ -45,5 +49,18 @@ export function createPanelRegistry(): PanelRegistry {
       "system",
       (definition, context) =>
         new SystemPanel(definition as SystemPanelDefinition, context),
+    )
+    .register(
+      "gpu-fleet",
+      (definition, context) =>
+        new GPUFleetPanel(definition as GPUFleetPanelDefinition, context),
+    )
+    .register(
+      "gpu-submitters",
+      (definition, context) =>
+        new GPUSubmittersPanel(
+          definition as GPUSubmittersPanelDefinition,
+          context,
+        ),
     );
 }

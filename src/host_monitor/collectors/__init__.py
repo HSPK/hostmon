@@ -11,6 +11,7 @@ from typing import Any
 from ..config import CollectorSettings
 from ..errors import CollectorError, ConfigError
 from .base import Collection, Collector, CollectorResult
+from .cluster_gpu_usage import ClusterGPUUsageCollector
 from .cpu import CPUCollector
 from .disk import DiskCollector
 from .gpu import GPUCollector
@@ -31,6 +32,7 @@ BUILTIN_COLLECTORS: dict[str, type[Collector]] = {
     "pressure": PressureCollector,
     "kubernetes": KubernetesCollector,
     "kubernetes_permissions": KubernetesPermissionCollector,
+    "cluster_gpu_usage": ClusterGPUUsageCollector,
 }
 
 

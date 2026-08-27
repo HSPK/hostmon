@@ -14,6 +14,7 @@ DOCS = [
     ROOT / "docs" / "alerts.md",
     ROOT / "docs" / "plugins.md",
     ROOT / "docs" / "prometheus.md",
+    ROOT / "docs" / "cluster-gpu.md",
     ROOT / "examples" / "thermal-plugin" / "README.md",
     ROOT / "web" / "README.md",
 ]

@@ -1,5 +1,6 @@
 import type {
   HistoryResponse,
+  PluginDocument,
   MetricCatalogResponse,
   StatusResponse,
 } from "../domain/types";
@@ -29,6 +30,16 @@ export class ApiClient {
   ): Promise<MetricCatalogResponse> {
     const query = new URLSearchParams({seconds: String(seconds)});
     return this.getJson<MetricCatalogResponse>(`/api/catalog?${query}`, signal);
+  }
+
+  async plugin<T>(
+    name: string,
+    signal?: AbortSignal,
+  ): Promise<PluginDocument<T>> {
+    return this.getJson<PluginDocument<T>>(
+      `/api/plugins/${encodeURIComponent(name)}`,
+      signal,
+    );
   }
 
   private async getJson<T>(url: string, signal?: AbortSignal): Promise<T> {

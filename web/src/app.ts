@@ -5,6 +5,7 @@ import { TimeSeriesStore } from "./core/time-series-store";
 import { RealtimeClient } from "./core/websocket-client";
 import type {
   ConnectionState,
+  ClusterGPUReport,
   MetricCatalogEntry,
   PageId,
   PanelDefinition,
@@ -32,6 +33,8 @@ export class DashboardApp {
   private refreshController: AbortController | null = null;
   private catalogCache: { loadedAt: number; entries: MetricCatalogEntry[] } | null =
     null;
+  private clusterGPUCache: { loadedAt: number; report: ClusterGPUReport } | null =
+    null;
   private updateQueued = false;
   private renderGeneration = 0;
   private paused = false;
@@ -50,6 +53,7 @@ export class DashboardApp {
       onSnapshot: snapshot => {
         this.store.append(snapshot);
         this.catalogCache = null;
+        this.clusterGPUCache = null;
       },
       onState: state => this.setConnectionState(state),
     });
@@ -238,6 +242,23 @@ export class DashboardApp {
     return response.metrics;
   }
 
+  private async loadClusterGPU(): Promise<ClusterGPUReport> {
+    if (
+      this.clusterGPUCache &&
+      Date.now() - this.clusterGPUCache.loadedAt < 5000
+    ) {
+      return this.clusterGPUCache.report;
+    }
+    const response = await this.api.plugin<ClusterGPUReport>(
+      "cluster_gpu_usage",
+    );
+    this.clusterGPUCache = {
+      loadedAt: Date.now(),
+      report: response.document,
+    };
+    return response.document;
+  }
+
   private renderNavigation(): void {
     const active = this.preferences.get().activePage;
     const root = this.required("navigation");
@@ -278,6 +299,7 @@ export class DashboardApp {
         store: this.store,
         actions: {
           loadCatalog: () => this.loadCatalog(),
+          loadClusterGPU: () => this.loadClusterGPU(),
           createChart: metrics => this.openChartEditor(undefined, metrics),
           editChart: chart => this.openChartEditor(chart),
           removeChart: id => this.removeChart(id),

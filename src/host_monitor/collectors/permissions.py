@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import re
-import shlex
-import subprocess
 from dataclasses import dataclass
 from typing import Any
 
 from ..errors import CollectorError
 from .base import CollectorResult, reject_unknown_options
+from .kubectl_client import KubectlClient
 
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -91,39 +90,20 @@ class KubernetesPermissionCollector:
         self.poll_interval = float(options.get("poll_interval_seconds", 60))
         if self.poll_interval <= 0:
             raise ValueError("poll_interval_seconds must be positive")
-        kubectl = options.get("kubectl", "kubectl")
-        if not isinstance(kubectl, str) or not kubectl.strip():
-            raise ValueError("kubectl must be a non-empty command")
-        self.kubectl = shlex.split(kubectl)
         self.timeout = float(options.get("timeout_seconds", 15))
         if self.timeout <= 0:
             raise ValueError("timeout_seconds must be positive")
+        self.client = KubectlClient(
+            str(options.get("kubectl", "kubectl")),
+            timeout_seconds=self.timeout,
+        )
 
     def _allowed(self, check: PermissionCheck, verb: str) -> bool:
-        command = list(self.kubectl)
-        if check.context:
-            command.extend(["--context", check.context])
-        command.extend(["auth", "can-i", verb, check.resource])
-        if check.namespace:
-            command.extend(["--namespace", check.namespace])
-        try:
-            result = subprocess.run(
-                command,
-                capture_output=True,
-                check=False,
-                text=True,
-                timeout=self.timeout,
-            )
-        except (FileNotFoundError, subprocess.TimeoutExpired) as error:
-            raise CollectorError(f"cannot run {command[0]}: {error}") from error
-        answer = result.stdout.strip().casefold()
-        if answer == "yes":
-            return True
-        if answer == "no":
-            return False
-        detail = result.stderr.strip() or result.stdout.strip()
-        raise CollectorError(
-            f"kubectl auth can-i failed for {verb} {check.resource}: {detail}"
+        return self.client.can_i(
+            verb,
+            check.resource,
+            context=check.context,
+            namespace=check.namespace,
         )
 
     def collect(

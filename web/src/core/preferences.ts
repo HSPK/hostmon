@@ -141,9 +141,15 @@ export class PreferenceStore {
 }
 
 function isPageId(value: unknown): value is PageId {
-  return ["overview", "metrics", "collectors", "kubernetes", "system"].includes(
-    String(value),
-  );
+  return [
+    "overview",
+    "gpu-fleet",
+    "workloads",
+    "metrics",
+    "collectors",
+    "kubernetes",
+    "system",
+  ].includes(String(value));
 }
 
 function isCustomPanel(value: unknown): value is TimeSeriesPanelDefinition {

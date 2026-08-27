@@ -26,6 +26,48 @@ const fields = {
   k8s_failed_tasks: "(none)",
 };
 
+const clusterGPUReport = {
+  gpus_per_node: 8,
+  capacity: [
+    {
+      queue: "queue-a",
+      capacity_gpus: 64,
+      allocated_gpus: 56,
+      pending_gpus: 8,
+      unallocated_gpus: 8,
+      no_job_gpus: 0,
+      no_job_node_equivalents: 0,
+      capacity_cpus: 880,
+      allocated_cpus: 700,
+      free_cpus: 180,
+    },
+  ],
+  total_capacity: {
+    queue: "TOTAL",
+    capacity_gpus: 64,
+    allocated_gpus: 56,
+    pending_gpus: 8,
+    unallocated_gpus: 8,
+    no_job_gpus: 0,
+    no_job_node_equivalents: 0,
+    capacity_cpus: 880,
+    allocated_cpus: 700,
+    free_cpus: 180,
+  },
+  usage: [
+    {
+      queue: "queue-a",
+      submitter: "training-run",
+      creator_id: "user-a",
+      running_pods: 7,
+      running_gpus: 56,
+      running_gpu_nodes: 7,
+      pending_pods: 1,
+      pending_gpus: 8,
+    },
+  ],
+};
+
 test.beforeEach(async ({ page }) => {
   const timestamps = Array.from({ length: 60 }, (_, index) => now - 590 + index * 10);
   const metadata = Object.fromEntries(
@@ -84,6 +126,16 @@ test.beforeEach(async ({ page }) => {
       }),
     }),
   );
+  await page.route("**/api/plugins/cluster_gpu_usage", route =>
+    route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        name: "cluster_gpu_usage",
+        updated_at: now,
+        document: clusterGPUReport,
+      }),
+    }),
+  );
   await page.routeWebSocket("**/api/ws", socket => {
     socket.send(
       JSON.stringify({
@@ -107,6 +159,12 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await page.getByRole("button", { name: "Collectors" }).click();
   await expect(page.locator("#page-title")).toHaveText("Collectors");
   await expect(page.locator(".health-table tbody tr")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "GPU Fleet" }).click();
+  await expect(page.locator(".fleet-table")).toContainText("56 / 64");
+
+  await page.getByRole("button", { name: "Workloads" }).click();
+  await expect(page.locator(".submitter-table")).toContainText("training-run");
 
   await page.getByRole("button", { name: "Kubernetes" }).click();
   await expect(page.locator("#page-title")).toHaveText("Kubernetes");

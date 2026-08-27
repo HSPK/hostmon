@@ -32,6 +32,7 @@ history, rules, and alerts remain active.
 | `/api/status` | Latest metrics and non-numeric template fields as JSON |
 | `/api/history` | Compact columnar history, bounded and downsampled in memory |
 | `/api/catalog` | Current/min/average/p95/max statistics for every metric |
+| `/api/plugins/{name}` | Latest structured document exported by a collector plugin |
 | `/api/ws` | WebSocket stream for live updates |
 
 ```bash

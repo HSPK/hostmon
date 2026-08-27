@@ -35,6 +35,10 @@ All notable changes to this project are documented here.
 - Added operations-console navigation, a complete metric catalog with
   statistics, configurable custom charts, panel persistence, CSV export, and
   real-browser responsiveness tests.
+- Added a cluster GPU usage collector with queue CPU/GPU capacity, allocation,
+  pending demand, no-job node equivalents, and submitter workload breakdowns.
+- Added GPU Fleet and Workloads workspace views backed by generic plugin
+  document APIs.
 
 ## [0.1.0] - 2026-08-17
 

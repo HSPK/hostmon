@@ -2,6 +2,8 @@ import type { DashboardDefinition } from "../domain/types";
 
 export const NAVIGATION = [
   {id: "overview", label: "Overview"},
+  {id: "gpu-fleet", label: "GPU Fleet"},
+  {id: "workloads", label: "Workloads"},
   {id: "metrics", label: "Metrics"},
   {id: "collectors", label: "Collectors"},
   {id: "kubernetes", label: "Kubernetes"},
@@ -107,6 +109,34 @@ export const DASHBOARD: DashboardDefinition = {
       type: "tasks",
       page: "kubernetes",
       title: "Kubernetes task state",
+      columnSpan: 2,
+    },
+    {
+      id: "gpu-fleet",
+      type: "gpu-fleet",
+      page: "gpu-fleet",
+      title: "Queue capacity and allocation",
+      columnSpan: 2,
+    },
+    {
+      id: "gpu-capacity-history",
+      type: "timeseries",
+      page: "gpu-fleet",
+      title: "GPU capacity history",
+      columnSpan: 2,
+      metrics: [
+        "cluster_gpu/queue/total/capacity_gpus",
+        "cluster_gpu/queue/total/allocated_gpus",
+        "cluster_gpu/queue/total/pending_gpus",
+        "cluster_gpu/queue/total/no_job_gpus",
+      ],
+      range: [0, 4000],
+    },
+    {
+      id: "gpu-submitters",
+      type: "gpu-submitters",
+      page: "workloads",
+      title: "GPU usage by submitter",
       columnSpan: 2,
     },
     {

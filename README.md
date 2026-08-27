@@ -64,13 +64,17 @@ hmon exporter start --host 127.0.0.1 --port 9108 --max-sample-age 30
 See [`docs/prometheus.md`](docs/prometheus.md) for scrape configuration,
 Grafana metric names, health checks, and remote-access guidance.
 
-The dashboard is a separate TypeScript/Vite application with Overview,
-Metrics, Collectors, Kubernetes, and System pages. It includes a searchable
+The dashboard is a separate TypeScript/Vite application with Overview, GPU
+Fleet, Workloads, Metrics, Collectors, Kubernetes, and System pages. It includes a searchable
 metric catalog, current/min/average/p95/max statistics, arbitrary custom
 charts, CSV export, and browser-persisted layout customization. Its panel
 renderer registry keeps new display types independent from transport and
 storage. See
 [`web/README.md`](web/README.md).
+
+The optional cluster GPU plugin provides queue capacity, allocated/free CPU
+and GPU resources, pending demand, no-job node equivalents, and submitter
+usage. See [`docs/cluster-gpu.md`](docs/cluster-gpu.md).
 
 For Lark, the initializer has a convenience option:
 
@@ -97,6 +101,7 @@ channels can be configured directly in TOML. See
 | `pressure` | `/proc/pressure` | CPU, memory, and I/O PSI |
 | `kubernetes` | `kubectl` | failed tasks, problem Pods, GPU nodes/quota |
 | `kubernetes_permissions` | `kubectl auth can-i` | named RBAC checks by verb |
+| `cluster_gpu_usage` | Pods and Volcano queues | queue capacity and submitter GPU usage |
 
 Metric names use `/`, while Expr Tracker expressions may use dots:
 

@@ -6,6 +6,12 @@ from pathlib import Path
 from unittest.mock import patch
 
 from host_monitor.collectors.cpu import CPUCollector, parse_cpu_line
+from host_monitor.collectors.cluster_gpu_usage import (
+    ClusterGPUUsageCollector,
+    aggregate_usage,
+    build_report,
+    report_metrics,
+)
 from host_monitor.collectors.disk import DiskCollector
 from host_monitor.collectors.gpu import parse_gpu_rows
 from host_monitor.collectors.kubernetes import (
@@ -383,6 +389,107 @@ class KubernetesPermissionCollectorTests(unittest.TestCase):
                     }
                 ]
             )
+
+
+class ClusterGPUUsageCollectorTests(unittest.TestCase):
+    def test_matches_submitter_and_queue_capacity_semantics(self):
+        pods = {
+            "queue-a": [
+                {
+                    "metadata": {
+                        "labels": {
+                            "created-by-name": "run-a",
+                            "created-by": "user-a",
+                        }
+                    },
+                    "status": {"phase": "Running"},
+                    "spec": {
+                        "nodeName": "gpu-1",
+                        "containers": [
+                            {
+                                "resources": {
+                                    "requests": {"nvidia.com/gpu": "8"}
+                                }
+                            }
+                        ],
+                    },
+                },
+                {
+                    "metadata": {
+                        "labels": {
+                            "owner": "run-a",
+                            "created-by": "user-a",
+                        }
+                    },
+                    "status": {"phase": "Pending"},
+                    "spec": {
+                        "containers": [
+                            {
+                                "resources": {
+                                    "requests": {"nvidia.com/gpu": "4"}
+                                }
+                            }
+                        ]
+                    },
+                },
+            ]
+        }
+        usage = aggregate_usage(pods, gpu_resource="nvidia.com/gpu")
+        queues = [
+            {
+                "metadata": {"name": "queue-a"},
+                "spec": {
+                    "capability": {
+                        "nvidia.com/gpu": "16",
+                        "cpu": "200",
+                    }
+                },
+                "status": {
+                    "allocated": {
+                        "nvidia.com/gpu": "8",
+                        "cpu": "125500m",
+                    }
+                },
+            }
+        ]
+
+        report = build_report(
+            ["queue-a"],
+            queues,
+            usage,
+            gpus_per_node=8,
+            gpu_resource="nvidia.com/gpu",
+        )
+        metrics = report_metrics(report)
+
+        self.assertEqual(report["usage"][0]["running_gpus"], 8)
+        self.assertEqual(report["usage"][0]["pending_gpus"], 4)
+        self.assertEqual(report["capacity"][0]["no_job_gpus"], 4)
+        self.assertEqual(report["capacity"][0]["no_job_node_equivalents"], 0)
+        self.assertEqual(report["capacity"][0]["allocated_cpus"], 125.5)
+        self.assertEqual(
+            metrics["cluster_gpu/queue/queue_a/allocated_gpus"],
+            8,
+        )
+
+    def test_reuses_cached_cluster_report(self):
+        collector = ClusterGPUUsageCollector(
+            {
+                "queues": ["queue-a"],
+                "poll_interval_seconds": 60,
+            }
+        )
+        previous = {
+            "at": 100,
+            "metrics": {"cluster_gpu/running_gpus": 8},
+            "report": {"usage": []},
+        }
+        with patch.object(collector, "_json") as query:
+            result = collector.collect(previous, 120)
+
+        query.assert_not_called()
+        self.assertEqual(result.metrics["cluster_gpu/running_gpus"], 8)
+        self.assertIs(result.state, previous)
 
 
 if __name__ == "__main__":

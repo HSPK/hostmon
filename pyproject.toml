@@ -66,6 +66,7 @@ gpu = "host_monitor.collectors.gpu:GPUCollector"
 pressure = "host_monitor.collectors.pressure:PressureCollector"
 kubernetes = "host_monitor.collectors.kubernetes:KubernetesCollector"
 kubernetes_permissions = "host_monitor.collectors.permissions:KubernetesPermissionCollector"
+cluster_gpu_usage = "host_monitor.collectors.cluster_gpu_usage:ClusterGPUUsageCollector"
 
 [tool.setuptools]
 package-dir = {"" = "src"}

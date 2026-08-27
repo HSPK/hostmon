@@ -51,6 +51,17 @@ The production bundle budget is below 100 KiB compressed.
 Users can open **Layout** to show, hide, and reorder panels. Preferences are
 stored in browser local storage and do not affect other users.
 
+The navigation model separates operational workflows:
+
+- **Overview**: host resource summary and high-signal charts.
+- **GPU Fleet**: Volcano queue capacity, allocation, pending demand, and
+  no-job node equivalents.
+- **Workloads**: searchable GPU usage grouped by submitter and creator ID.
+- **Metrics**: complete metric catalog and custom chart builder.
+- **Collectors**: plugin health and stale/failure state.
+- **Kubernetes**: node and task state.
+- **System**: internal hostmon and API diagnostics.
+
 The **Metrics** page searches every metric exposed by hostmon and shows
 current, minimum, average, p95, maximum, and sample count. Select any metrics
 to create line or area charts with custom titles, fixed/automatic axes, and

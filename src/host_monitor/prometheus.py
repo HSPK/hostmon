@@ -33,6 +33,7 @@ from .state import StateStore
 
 LOGGER = logging.getLogger("host_monitor.prometheus")
 INVALID_NAME = re.compile(r"[^a-zA-Z0-9_:]")
+PLUGIN_NAME = re.compile(r"^[a-zA-Z0-9_]+$")
 WEB_EXECUTOR_WORKERS = 4
 
 
@@ -321,6 +322,35 @@ class PrometheusExporter:
             }
         )
 
+    async def _plugin_document(self, request: web.Request) -> web.Response:
+        name = request.match_info["name"]
+        if not PLUGIN_NAME.fullmatch(name):
+            raise web.HTTPNotFound()
+        try:
+            state = self.reader.store.load()
+        except MonitorError as error:
+            return self._error(error)
+        envelope = (state.get("collectors") or {}).get(name)
+        plugin_state = (
+            envelope.get("plugin_state")
+            if isinstance(envelope, dict)
+            else None
+        )
+        document = (
+            plugin_state.get("report")
+            if isinstance(plugin_state, dict)
+            else None
+        )
+        if document is None:
+            raise web.HTTPNotFound(text=f"plugin document not found: {name}\n")
+        return self._json_response(
+            {
+                "name": name,
+                "updated_at": plugin_state.get("at"),
+                "document": document,
+            }
+        )
+
     async def _websocket(self, request: web.Request) -> web.StreamResponse:
         origin = request.headers.get("Origin")
         if origin and urlsplit(origin).netloc != request.host:
@@ -432,6 +462,7 @@ class PrometheusExporter:
                 web.get("/api/status", self._status),
                 web.get("/api/history", self._history),
                 web.get("/api/catalog", self._catalog),
+                web.get("/api/plugins/{name}", self._plugin_document),
                 web.get("/api/ws", self._websocket),
                 web.get("/{path:.*}", self._asset),
             ]

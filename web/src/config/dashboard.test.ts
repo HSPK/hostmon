@@ -12,6 +12,8 @@ describe("dashboard definition", () => {
       "tasks",
       "metrics",
       "system",
+      "gpu-fleet",
+      "gpu-submitters",
     ]);
 
     expect(new Set(ids).size).toBe(ids.length);
@@ -19,7 +21,15 @@ describe("dashboard definition", () => {
     expect(
       new Set(DASHBOARD.panels.map(panel => panel.page)),
     ).toEqual(
-      new Set(["overview", "metrics", "collectors", "kubernetes", "system"]),
+      new Set([
+        "overview",
+        "gpu-fleet",
+        "workloads",
+        "metrics",
+        "collectors",
+        "kubernetes",
+        "system",
+      ]),
     );
   });
 

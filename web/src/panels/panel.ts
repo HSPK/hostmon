@@ -1,5 +1,6 @@
 import type {
   MetricCatalogEntry,
+  ClusterGPUReport,
   PanelDefinition,
   TimeSeriesPanelDefinition,
 } from "../domain/types";
@@ -9,6 +10,7 @@ export interface PanelContext {
   store: TimeSeriesStore;
   actions: {
     loadCatalog(): Promise<MetricCatalogEntry[]>;
+    loadClusterGPU(): Promise<ClusterGPUReport>;
     createChart(metrics?: string[]): void;
     editChart(panel: TimeSeriesPanelDefinition): void;
     removeChart(panelId: string): void;
