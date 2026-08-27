@@ -127,10 +127,20 @@ export const DASHBOARD: DashboardDefinition = {
       metrics: [
         "cluster_gpu/queue/total/capacity_gpus",
         "cluster_gpu/queue/total/allocated_gpus",
-        "cluster_gpu/queue/total/pending_gpus",
-        "cluster_gpu/queue/total/no_job_gpus",
       ],
-      range: [0, 4000],
+    },
+    {
+      id: "gpu-availability-history",
+      type: "timeseries",
+      page: "gpu-fleet",
+      title: "GPU availability and demand",
+      columnSpan: 2,
+      metrics: [
+        "cluster_gpu/queue/total/pending_gpus",
+        "cluster_gpu/queue/total/unallocated_gpus",
+        "cluster_gpu/queue/total/no_job_gpus",
+        "cluster_gpu/queue/total/no_job_node_equivalents",
+      ],
     },
     {
       id: "gpu-submitters",

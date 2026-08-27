@@ -44,6 +44,8 @@ All notable changes to this project are documented here.
 - Added domain-aware labels and units for cluster GPU capacity metrics.
 - Cached encoded catalog responses by dashboard revision to keep the async
   event loop responsive under concurrent metric-explorer requests.
+- Split GPU capacity and availability/demand charts so low-volume pending and
+  no-job signals retain useful visual scale.
 
 ## [0.1.0] - 2026-08-17
 
