@@ -179,6 +179,12 @@ class MonitorRuntime:
         if persist:
             self.state_store.save(next_state)
         self.state = next_state
+        self.prometheus.publish(
+            now,
+            self.hostname,
+            collection.metrics,
+            collection.fields,
+        )
         if send_alerts:
             self.outbox.prune_delivered(before=now - 7 * 86400)
         return CycleResult(

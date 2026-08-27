@@ -45,8 +45,12 @@ Enable the loopback Prometheus endpoint:
 ```bash
 hmon exporter start
 hmon exporter status
+xdg-open http://127.0.0.1:9108/
 curl http://127.0.0.1:9108/metrics
 ```
+
+The built-in dashboard uses a bounded in-memory columnar history, server-sent
+events, and Canvas animation. It does not require Prometheus or Grafana.
 
 Manage it without stopping host monitoring:
 

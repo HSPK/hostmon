@@ -28,6 +28,8 @@ All notable changes to this project are documented here.
   and `/api/status` endpoints.
 - Added `hmon exporter start|stop|restart|status` for one-command exporter
   configuration, systemd lifecycle, and readiness checks.
+- Added a built-in zero-dependency dashboard with an in-memory columnar ring,
+  SSE live updates, and requestAnimationFrame Canvas charts.
 
 ## [0.1.0] - 2026-08-17
 

@@ -396,6 +396,7 @@ def command_exporter(args: argparse.Namespace) -> int:
             "healthy": healthy,
             "detail": detail,
             "metrics_url": prometheus_url(settings, "/metrics"),
+            "dashboard_url": prometheus_url(settings, "/"),
             "health_url": prometheus_url(settings),
             "service_active": service.get("ActiveState") == "active",
         }
@@ -408,6 +409,7 @@ def command_exporter(args: argparse.Namespace) -> int:
                 f"service_active={str(payload['service_active']).lower()}"
             )
             print(f"metrics={payload['metrics_url']}")
+            print(f"dashboard={payload['dashboard_url']}")
             print(f"health={payload['health_url']} ({detail})")
         return 0 if healthy or not settings.prometheus.enabled else 1
 
@@ -422,7 +424,8 @@ def command_exporter(args: argparse.Namespace) -> int:
         enable_service(settings)
         restart_service()
         wait_for_exporter(settings, args.timeout)
-        print(f"Prometheus exporter started: {prometheus_url(settings, '/metrics')}")
+        print(f"Dashboard started: {prometheus_url(settings, '/')}")
+        print(f"Prometheus metrics: {prometheus_url(settings, '/metrics')}")
         return 0
 
     settings = load_settings(args.config)
@@ -439,7 +442,8 @@ def command_exporter(args: argparse.Namespace) -> int:
         enable_service(settings)
         restart_service()
         wait_for_exporter(settings, args.timeout)
-        print(f"Prometheus exporter restarted: {prometheus_url(settings, '/metrics')}")
+        print(f"Dashboard restarted: {prometheus_url(settings, '/')}")
+        print(f"Prometheus metrics: {prometheus_url(settings, '/metrics')}")
         return 0
     raise MonitorError(f"unsupported exporter action: {action}")
 

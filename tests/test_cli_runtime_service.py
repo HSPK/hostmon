@@ -107,7 +107,8 @@ class CLITests(unittest.TestCase):
                 )
 
             self.assertEqual(code, 0)
-            self.assertIn("Prometheus exporter started", output)
+            self.assertIn("Dashboard started", output)
+            self.assertIn("Prometheus metrics", output)
             settings = load_settings(config)
             self.assertTrue(settings.prometheus.enabled)
             self.assertEqual(settings.prometheus.port, 9200)

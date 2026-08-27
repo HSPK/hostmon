@@ -72,4 +72,4 @@ package-dir = {"" = "src"}
 where = ["src"]
 
 [tool.setuptools.package-data]
-host_monitor = ["py.typed"]
+host_monitor = ["py.typed", "static/*.html"]

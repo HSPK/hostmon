@@ -26,15 +26,22 @@ history, rules, and alerts remain active.
 
 | Endpoint | Response |
 | --- | --- |
+| `/` | Built-in live Canvas dashboard |
 | `/metrics` | Prometheus text exposition |
 | `/healthz` | HTTP 200 for a fresh sample, HTTP 503 for a stale/unavailable sample |
 | `/api/status` | Latest metrics and non-numeric template fields as JSON |
+| `/api/history` | Compact columnar history, bounded and downsampled in memory |
+| `/api/stream` | Server-sent event stream for live updates |
 
 ```bash
 curl http://127.0.0.1:9108/healthz
 curl http://127.0.0.1:9108/metrics
 curl http://127.0.0.1:9108/api/status
 ```
+
+Open <http://127.0.0.1:9108/> for a zero-configuration dashboard. It uses no
+external JavaScript or CSS, never scans long-term JSONL files in request
+handlers, and receives new points over SSE instead of polling.
 
 ## Prometheus scrape configuration
 

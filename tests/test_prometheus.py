@@ -10,6 +10,7 @@ import urllib.request
 from pathlib import Path
 
 from host_monitor.config import PrometheusSettings
+from host_monitor.dashboard import DashboardStore
 from host_monitor.errors import MonitorError
 from host_monitor.prometheus import (
     PrometheusExporter,
@@ -46,6 +47,27 @@ class PrometheusRenderingTests(unittest.TestCase):
         self.assertNotEqual(names["metric/a-b"], names["metric/a_b"])
         self.assertTrue(names["metric/a-b"].startswith("hostmon_metric_a_b_"))
         self.assertEqual(names, prometheus_names(["metric/a_b", "metric/a-b"]))
+
+    def test_dashboard_history_is_bounded_and_columnar(self):
+        store = DashboardStore(capacity=20)
+        for index in range(30):
+            store.publish(
+                float(index),
+                "host-a",
+                {"cpu/percent": float(index)},
+                {},
+            )
+
+        history = store.history(
+            now=29,
+            seconds=20,
+            maximum_points=5,
+            metrics=["cpu/percent"],
+        )
+
+        self.assertEqual(len(history["timestamps"]), 5)
+        self.assertEqual(history["timestamps"][-1], 29)
+        self.assertEqual(history["series"]["cpu/percent"][-1], 29)
 
 
 class PrometheusHTTPTests(unittest.TestCase):
@@ -98,6 +120,42 @@ class PrometheusHTTPTests(unittest.TestCase):
         self.assertEqual(health, "ok\n")
         self.assertEqual(status["host"], "host-a")
         self.assertEqual(status["fields"]["task"], "training-a")
+
+    def test_serves_dashboard_history_and_live_stream(self):
+        self.save_state(time.time())
+        self.exporter.start()
+        self.exporter.publish(
+            time.time() + 1,
+            "host-a",
+            {"cpu/percent": 43},
+            {"task": "training-b"},
+        )
+
+        with urllib.request.urlopen(self.url("/"), timeout=5) as response:
+            dashboard = response.read().decode()
+        with urllib.request.urlopen(
+            self.url("/api/history?seconds=3600&max_points=100"),
+            timeout=5,
+        ) as response:
+            history = json.load(response)
+        stream = urllib.request.urlopen(self.url("/api/stream"), timeout=5)
+        try:
+            event = stream.readline().decode()
+        finally:
+            stream.close()
+            self.exporter.publish(
+                time.time() + 2,
+                "host-a",
+                {"cpu/percent": 44},
+                {},
+            )
+
+        self.assertIn("hostmon live", dashboard)
+        self.assertIn("requestAnimationFrame", dashboard)
+        self.assertIn("EventSource", dashboard)
+        self.assertNotIn("https://", dashboard)
+        self.assertEqual(history["series"]["cpu/percent"][-1], 43)
+        self.assertTrue(event.startswith("data: "))
 
     def test_stale_sample_returns_unhealthy(self):
         self.save_state(time.time() - 60)
