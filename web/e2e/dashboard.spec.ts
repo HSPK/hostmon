@@ -278,6 +278,16 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
     "Tables",
     "Charts",
   ]);
+  const chartBoxes = await page
+    .locator('.panel-section[data-section="Charts"] .panel')
+    .evaluateAll(elements =>
+      elements.map(element => {
+        const box = element.getBoundingClientRect();
+        return {x: box.x, y: box.y};
+      }),
+    );
+  expect(chartBoxes[0]?.y).toBe(chartBoxes[1]?.y);
+  expect(chartBoxes[0]?.x).not.toBe(chartBoxes[1]?.x);
 
   await page.getByRole("button", { name: "Workloads" }).click();
   await expect(page.locator(".submitter-table tbody tr")).toHaveCount(75);
@@ -289,7 +299,10 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".workload-drawer")).toContainText("user-a");
   await expect(page.locator(".workload-drawer")).toContainText("56");
   await expect(page.locator(".workload-drawer")).toContainText("gpu-node-01");
-  await page.getByRole("button", { name: "Close" }).click();
+  await page
+    .locator(".workload-drawer")
+    .getByRole("button", { name: "Close" })
+    .click();
   await expect(page.locator(".workload-drawer")).toHaveAttribute(
     "aria-hidden",
     "true",
@@ -501,10 +514,14 @@ test("drags panels and edits built-in chart configuration", async ({ page }) => 
   await utilization.getByRole("button", { name: "Edit" }).click();
   await page.locator("#chart-title").fill("Custom host utilization");
   await page.locator("#chart-line-width").fill("2.5");
+  await page.locator("#chart-height").selectOption("360");
   await page.getByRole("button", { name: "Save chart" }).click();
   await expect(
     page.locator('[data-panel-id="host-utilization"]'),
   ).toContainText("Custom host utilization");
+  await expect(
+    page.locator('[data-panel-id="host-utilization"] .panel-body'),
+  ).toHaveAttribute("style", /360px/);
   await page.getByRole("button", { name: "System" }).click();
   await page.getByLabel("Find chart").fill("host utilization");
   await page.getByLabel("Find chart").press("Enter");
@@ -546,14 +563,15 @@ test("configures web theme and density", async ({ page }) => {
 });
 
 test("configures visible workload table columns", async ({ page }) => {
-  await page.goto("/?page=workloads");
-  await page.getByRole("button", { name: "Layout" }).click();
+  await page.goto("/?page=settings");
+  await page.getByRole("button", { name: "Configure panels" }).click();
   const setting = page.locator(".panel-setting").filter({
     hasText: "GPU workloads",
   });
   await setting.locator("summary").click();
   await setting.getByText("pending_gpus").locator("input").uncheck();
   await page.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Workloads" }).click();
 
   await expect(
     page.locator(".submitter-table thead"),

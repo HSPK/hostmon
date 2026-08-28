@@ -139,16 +139,14 @@ main { width: 100%; padding: 12px; }
   font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
 }
 .panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-.panel-section[data-section="Charts"] .panel-grid {
-  grid-template-columns: minmax(0, 1fr); gap: 0;
-}
-.panel-section[data-section="Charts"] .panel {
-  border-radius: 0; border-bottom: 0;
-}
-.panel-section[data-section="Charts"] .panel:last-child {
-  border-bottom: 1px solid var(--border);
-}
 .panel-section[data-section="Tables"] .panel { border: 0; border-radius: 0; }
+.panel-section[data-section="Tables"] .panel-header {
+  min-height: 32px; padding-inline: 0; border-bottom: 0; background: transparent;
+}
+.panel-section[data-section="Tables"] .panel-body { padding: 0; }
+.panel-section[data-section="Tables"] table {
+  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
+}
 .panel {
   min-width: 0; overflow: hidden; border: 1px solid var(--border);
   border-radius: 2px; background: var(--surface);
@@ -171,7 +169,7 @@ main { width: 100%; padding: 12px; }
 .stat-label { display: block; color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-value { display: block; margin-top: 3px; font: 600 17px ui-monospace, monospace; white-space: nowrap; }
 
-.timeseries-panel .panel-body { height: 270px; padding: 5px; }
+.timeseries-panel .panel-body { padding: 5px; }
 .chart-host { width: 100%; height: 100%; min-height: 220px; }
 .series-legend { gap: 10px; flex-wrap: wrap; margin-left: auto; color: var(--muted); font-size: 10px; }
 .series-legend span::before {
@@ -244,6 +242,7 @@ body.table-page .table-scroll {
   display: flex; flex-direction: column; gap: 5px;
   color: var(--muted); font-size: 10px;
 }
+.web-settings-grid > .button { align-self: end; justify-self: start; }
 .collector-dialog {
   width: min(720px, 94vw); max-height: 86vh; padding: 12px;
   color: var(--text); border: 1px solid var(--border-strong);
@@ -369,7 +368,7 @@ body.table-page .table-scroll {
 .chart-dialog form > header, .chart-dialog form > footer { padding: 12px; border-bottom: 1px solid var(--border); }
 .chart-dialog form > footer { align-items: center; border-top: 1px solid var(--border); border-bottom: 0; }
 .chart-dialog form > footer > div { display: flex; gap: 6px; }
-.form-grid { display: grid; grid-template-columns: 2fr repeat(5, 1fr); gap: 8px; padding: 12px; }
+.form-grid { display: grid; grid-template-columns: 2fr repeat(6, 1fr); gap: 8px; padding: 12px; }
 .form-grid label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 10px; }
 .metric-filter-label { grid-column: 1 / -1; }
 .metric-picker-layout {

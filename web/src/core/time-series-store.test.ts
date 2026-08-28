@@ -89,4 +89,25 @@ describe("TimeSeriesStore", () => {
     expect(store.timestamps).toEqual([3, 4, 5]);
     expect(store.series.get("cpu/percent")).toEqual([3, 4, 5]);
   });
+
+  it("changes series revision only when chart data changes", () => {
+    const store = new TimeSeriesStore();
+    const initial = store.revision();
+    store.applyStatus({
+      host: "host-a",
+      version: "test",
+      updated_at: 1,
+      metrics: {"cpu/percent": 10},
+      fields: {},
+      websocket_clients: 0,
+    });
+    expect(store.revision()).toBe(initial);
+    store.append({
+      timestamp: 2,
+      host: "host-a",
+      metrics: {"cpu/percent": 20},
+      fields: {},
+    });
+    expect(store.revision()).toBe(initial + 1);
+  });
 });

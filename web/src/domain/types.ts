@@ -176,6 +176,7 @@ export interface TimeSeriesPanelDefinition extends BasePanelDefinition {
   range?: [number, number];
   style?: "line" | "area";
   lineWidth?: number;
+  height?: number;
 }
 
 export interface CollectorPanelDefinition extends BasePanelDefinition {

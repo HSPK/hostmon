@@ -97,6 +97,12 @@ All notable changes to this project are documented here.
   absolute UTC+8 refresh time, recent errors, and detailed options.
 - Retained the most recent collector failure details after recovery so
   intermittent errors remain inspectable.
+- Restored separated multi-column chart grids, added per-chart height editing,
+  and removed the global toolbar Layout action in favor of Settings.
+- Simplified table titles and outer framing while preserving internal table
+  boundaries and scrolling.
+- Avoided redundant uPlot data and scale updates by tracking series revisions
+  and effective chart ranges.
 
 ## [0.1.0] - 2026-08-17
 

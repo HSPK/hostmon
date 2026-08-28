@@ -108,7 +108,6 @@ export class DashboardApp {
               <button id="pause-button" class="button" type="button">Pause</button>
               <button id="add-chart-button" class="button" type="button">Add chart</button>
               <button id="export-button" class="button" type="button">Export</button>
-              <button id="customize-button" class="button" type="button">Layout</button>
             </div>
           </header>
           <main><div id="panels" class="panel-sections"></div></main>
@@ -132,6 +131,7 @@ export class DashboardApp {
             <label>Title<input id="chart-title" required maxlength="80"></label>
             <label>Style<select id="chart-style"><option value="line">Line</option><option value="area">Area</option></select></label>
             <label>Width<select id="chart-width"><option value="1">One column</option><option value="2">Full width</option></select></label>
+            <label>Height<select id="chart-height"><option value="220">Compact</option><option value="270">Standard</option><option value="360">Tall</option><option value="480">Extra tall</option></select></label>
             <label>Line width<input id="chart-line-width" type="number" min="0.5" max="5" step="0.5"></label>
             <label>Y minimum<input id="chart-min" type="number" step="any" placeholder="Auto"></label>
             <label>Y maximum<input id="chart-max" type="number" step="any" placeholder="Auto"></label>
@@ -182,9 +182,6 @@ export class DashboardApp {
       this.openChartEditor(),
     );
     this.required("export-button").addEventListener("click", () => this.exportCsv());
-    this.required("customize-button").addEventListener("click", () =>
-      this.toggleDrawer(true),
-    );
     this.required("settings-close").addEventListener("click", () =>
       this.toggleDrawer(false),
     );
@@ -454,6 +451,7 @@ export class DashboardApp {
             this.preferences.setAppearance(theme, density);
             this.applyAppearance();
           },
+          openPanelSettings: () => this.toggleDrawer(true),
           createChart: metrics => this.openChartEditor(undefined, metrics),
           editChart: chart => this.openChartEditor(chart),
           removeChart: id => this.removeChart(id),
@@ -646,6 +644,9 @@ export class DashboardApp {
     (this.required("chart-width") as HTMLSelectElement).value = String(
       panel?.columnSpan ?? 1,
     );
+    (this.required("chart-height") as HTMLSelectElement).value = String(
+      panel?.height ?? 270,
+    );
     (this.required("chart-line-width") as HTMLInputElement).value = String(
       panel?.lineWidth ?? 1.5,
     );
@@ -759,6 +760,9 @@ export class DashboardApp {
             (this.required("chart-line-width") as HTMLInputElement).value,
           ) || 1.5,
         ),
+      ),
+      height: Number(
+        (this.required("chart-height") as HTMLSelectElement).value,
       ),
       columnSpan: Number(
         (this.required("chart-width") as HTMLSelectElement).value,

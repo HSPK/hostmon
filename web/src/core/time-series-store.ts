@@ -19,6 +19,7 @@ export class TimeSeriesStore {
   windowSeconds = 3600;
   private readonly listeners = new Set<StoreListener>();
   private readonly trackedMetrics: Set<string>;
+  private seriesRevision = 0;
 
   constructor(
     private readonly maximumHistorySeconds = 30 * 24 * 60 * 60,
@@ -59,6 +60,7 @@ export class TimeSeriesStore {
     for (const [name, metadata] of Object.entries(history.metadata)) {
       this.metadata.set(name, metadata);
     }
+    this.seriesRevision++;
     this.notify();
   }
 
@@ -93,6 +95,7 @@ export class TimeSeriesStore {
       );
     }
     this.trim(snapshot.timestamp - this.maximumHistorySeconds);
+    this.seriesRevision++;
     this.notify();
   }
 
@@ -110,6 +113,10 @@ export class TimeSeriesStore {
           (Array(this.timestamps.length).fill(null) as Array<number | null>),
       ),
     ];
+  }
+
+  revision(): number {
+    return this.seriesRevision;
   }
 
   exportCsv(metrics: string[]): string {

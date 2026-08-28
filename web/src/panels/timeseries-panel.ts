@@ -12,6 +12,10 @@ export class TimeSeriesPanel implements PanelRenderer {
   private readonly chartHost: HTMLElement;
   private readonly resizeObserver: ResizeObserver;
   private plot: uPlot;
+  private lastWidth = 0;
+  private lastHeight = 0;
+  private lastRevision = -1;
+  private lastScaleKey = "";
 
   constructor(
     private readonly definition: TimeSeriesPanelDefinition,
@@ -42,6 +46,7 @@ export class TimeSeriesPanel implements PanelRenderer {
     shell.header.append(actions);
     this.chartHost = document.createElement("div");
     this.chartHost.className = "chart-host";
+    shell.body.style.height = `${definition.height ?? 270}px`;
     shell.body.append(this.chartHost);
     this.plot = new uPlot(
       this.options(),
@@ -53,6 +58,9 @@ export class TimeSeriesPanel implements PanelRenderer {
       if (!entry) return;
       const width = Math.max(240, Math.floor(entry.contentRect.width));
       const height = Math.max(220, Math.floor(entry.contentRect.height));
+      if (width === this.lastWidth && height === this.lastHeight) return;
+      this.lastWidth = width;
+      this.lastHeight = height;
       this.plot.setSize({ width, height });
     });
     this.resizeObserver.observe(this.chartHost);
@@ -60,9 +68,16 @@ export class TimeSeriesPanel implements PanelRenderer {
   }
 
   update(): void {
-    this.plot.setData(this.data(), false);
+    const revision = this.context.store.revision();
+    if (revision !== this.lastRevision) {
+      this.lastRevision = revision;
+      this.plot.setData(this.data(), false);
+    }
     const latest =
       this.context.store.latestTimestamp || Date.now() / 1000;
+    const scaleKey = `${latest}:${this.context.store.windowSeconds}`;
+    if (scaleKey === this.lastScaleKey) return;
+    this.lastScaleKey = scaleKey;
     this.plot.setScale("x", {
       min: latest - this.context.store.windowSeconds,
       max: latest,
