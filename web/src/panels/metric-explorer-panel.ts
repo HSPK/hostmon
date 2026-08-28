@@ -9,7 +9,11 @@ import {
   type DataColumn,
   type SortDirection,
 } from "./data-table";
-import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
+import {
+  pageButton,
+  tableFooter,
+  TABLE_PAGE_SIZE,
+} from "./table-controls";
 
 type SortKey = "name" | "current" | "average" | "p95" | "maximum";
 
@@ -37,7 +41,7 @@ export class MetricExplorerPanel implements PanelRenderer {
     const shell = panelShell(definition, "metric-explorer-panel");
     this.element = shell.element;
     const controls = document.createElement("div");
-    controls.className = "table-controls";
+    controls.className = "table-controls data-grid-toolbar";
     this.search = document.createElement("input");
     this.search.type = "search";
     this.search.placeholder = "Filter metrics";
@@ -64,13 +68,7 @@ export class MetricExplorerPanel implements PanelRenderer {
       this.page++;
       this.render();
     });
-    controls.append(
-      this.search,
-      this.count,
-      this.previous,
-      this.next,
-      this.create,
-    );
+    controls.append(this.search, this.create);
 
     this.columns = this.metricColumns(
       definition.columns ?? [
@@ -96,7 +94,11 @@ export class MetricExplorerPanel implements PanelRenderer {
       item => this.context.actions.createChart([item.name]),
       {value: this.sort, direction: this.sortDirection},
     );
-    shell.body.append(controls, this.table.element);
+    shell.body.append(
+      controls,
+      this.table.element,
+      tableFooter(this.count, this.previous, this.next),
+    );
     void this.load();
   }
 
@@ -146,6 +148,7 @@ export class MetricExplorerPanel implements PanelRenderer {
       select: {
         id: "select",
         label: "",
+        width: "48px",
         render: item => {
           const checkbox = document.createElement("input");
           checkbox.type = "checkbox";
@@ -163,6 +166,8 @@ export class MetricExplorerPanel implements PanelRenderer {
         label: "Metric",
         sortValue: "name",
         className: "metric-name",
+        width: "480px",
+        pinned: true,
         render: item => item.name,
       },
       current: metricValueColumn("current", "Current"),
@@ -173,6 +178,7 @@ export class MetricExplorerPanel implements PanelRenderer {
       samples: {
         id: "samples",
         label: "Samples",
+        width: "90px",
         render: item => String(item.samples),
       },
     };
@@ -189,6 +195,7 @@ function metricValueColumn(
   return {
     id,
     label,
+    width: "140px",
     ...(id === "minimum" ? {} : {sortValue: id}),
     render: item => format(item[id], item.metadata.unit),
   };

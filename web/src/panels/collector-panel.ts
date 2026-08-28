@@ -29,36 +29,48 @@ export class CollectorPanel implements PanelRenderer {
     const shell = panelShell(definition, "collector-panel");
     this.element = shell.element;
     this.columns = [
-      {id: "name", label: "Collector", render: row => row.name},
-      {id: "state", label: "State", render: row => stateBadge(row)},
+      {
+        id: "name",
+        label: "Collector",
+        width: "220px",
+        pinned: true,
+        render: row => row.name,
+      },
+      {id: "state", label: "State", width: "90px", render: row => stateBadge(row)},
       {
         id: "duration",
         label: "Duration",
+        width: "120px",
         render: row => format(row.duration, "ms"),
       },
       {
         id: "refresh",
         label: "Refresh",
+        width: "110px",
         render: row => format(row.refresh_seconds, "s"),
       },
       {
         id: "updated",
         label: "Last refresh (UTC+8)",
+        width: "180px",
         render: row => formatTimestamp(row.last_success_at),
       },
       {
         id: "failures",
         label: "Failures",
+        width: "100px",
         render: row => String(row.failures),
       },
       {
         id: "log",
         label: "Latest log",
+        width: "400px",
         render: row => row.last_error ?? "OK",
       },
       {
         id: "details",
         label: "Details",
+        width: "80px",
         render: row => {
           const button = document.createElement("button");
           button.type = "button";

@@ -103,6 +103,9 @@ All notable changes to this project are documented here.
   boundaries and scrolling.
 - Avoided redundant uPlot data and scale updates by tracking series revisions
   and effective chart ranges.
+- Rebuilt operational tables as an industrial DataGrid with dedicated
+  toolbar/viewport/footer regions, fixed key columns, explicit widths,
+  single-line truncation, stable scrollbars, and CSS containment.
 
 ## [0.1.0] - 2026-08-17
 

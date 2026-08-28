@@ -13,7 +13,11 @@ import {
   type DataColumn,
   type SortDirection,
 } from "./data-table";
-import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
+import {
+  pageButton,
+  tableFooter,
+  TABLE_PAGE_SIZE,
+} from "./table-controls";
 import { compareWorkloads } from "./workload-order";
 
 export class GPUSubmittersPanel implements PanelRenderer {
@@ -44,7 +48,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     const shell = panelShell(definition, "gpu-submitters-panel");
     this.element = shell.element;
     const controls = document.createElement("div");
-    controls.className = "table-controls";
+    controls.className = "table-controls data-grid-toolbar";
     this.search = document.createElement("input");
     this.search.type = "search";
     this.search.placeholder = "Filter workload, submitter, or creator ID";
@@ -85,14 +89,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.page++;
       this.renderRows();
     });
-    controls.append(
-      this.search,
-      this.queue,
-      this.state,
-      this.count,
-      this.previous,
-      this.next,
-    );
+    controls.append(this.search, this.queue, this.state);
 
     this.columns = this.workloadColumns(
       definition.columns ?? [
@@ -118,7 +115,11 @@ export class GPUSubmittersPanel implements PanelRenderer {
       undefined,
       {value: this.sort, direction: this.sortDirection},
     );
-    shell.body.append(controls, this.table.element);
+    shell.body.append(
+      controls,
+      this.table.element,
+      tableFooter(this.count, this.previous, this.next),
+    );
 
     this.drawer = document.createElement("aside");
     this.drawer.className = "workload-drawer";
@@ -218,6 +219,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     ): DataColumn<ClusterGPUWorkloadRow> => ({
       id,
       label,
+      width: "130px",
       ...(sortValue ? {sortValue} : {}),
       render: row => String(row[id]),
     });
@@ -226,12 +228,15 @@ export class GPUSubmittersPanel implements PanelRenderer {
         id: "queue",
         label: "Queue",
         sortValue: "queue",
+        width: "96px",
         render: row => row.queue,
       },
       name: {
         id: "name",
         label: "Workload",
         sortValue: "name",
+        width: "410px",
+        pinned: true,
         render: row => {
           const button = document.createElement("button");
           button.type = "button";
@@ -244,12 +249,14 @@ export class GPUSubmittersPanel implements PanelRenderer {
       status: {
         id: "status",
         label: "State",
+        width: "100px",
         render: row => workloadState(row.status),
       },
       submitter: {
         id: "submitter",
         label: "Submitter",
         sortValue: "submitter",
+        width: "280px",
         render: row => row.submitter,
       },
       running_gpus: numeric(

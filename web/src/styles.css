@@ -144,9 +144,6 @@ main { width: 100%; padding: 12px; }
   min-height: 32px; padding-inline: 0; border-bottom: 0; background: transparent;
 }
 .panel-section[data-section="Tables"] .panel-body { padding: 0; }
-.panel-section[data-section="Tables"] table {
-  border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);
-}
 .panel {
   min-width: 0; overflow: hidden; border: 1px solid var(--border);
   border-radius: 2px; background: var(--surface);
@@ -180,10 +177,26 @@ main { width: 100%; padding: 12px; }
 .u-wrap { background: transparent; }
 .u-legend { display: none; }
 
-.table-controls { gap: 7px; padding-bottom: 8px; }
+.table-controls { gap: 7px; }
 .table-controls input[type="search"] { width: min(360px, 40vw); }
-.table-count { margin-left: auto; color: var(--muted); font: 11px ui-monospace, monospace; }
-.table-scroll { max-height: calc(100vh - 205px); overflow: auto; border: 0; }
+.table-count { color: var(--muted); font: 11px ui-monospace, monospace; }
+.data-grid-toolbar {
+  min-height: 42px; padding: 5px 0; border-bottom: 1px solid var(--border);
+}
+.data-grid-toolbar > .button:last-child { margin-left: auto; }
+.data-grid {
+  min-width: 0; min-height: 0; background: var(--surface);
+  contain: layout paint style;
+}
+.data-grid-viewport {
+  max-height: calc(100vh - 205px); overflow: auto;
+  overscroll-behavior: contain; scrollbar-gutter: stable;
+}
+.data-grid-footer {
+  display: flex; align-items: center; justify-content: space-between;
+  min-height: 38px; padding: 4px 0; border-top: 1px solid var(--border);
+}
+.data-grid-pagination { display: flex; gap: 5px; }
 body.table-page { overflow: hidden; }
 body.table-page .app-shell,
 body.table-page .workspace { height: 100vh; min-height: 0; }
@@ -196,7 +209,8 @@ body.table-page .panel { min-height: 0; }
 body.table-page .panel-sections { height: 100%; }
 body.table-page .panel-section,
 body.table-page .panel,
-body.table-page .panel-body {
+body.table-page .panel-body,
+body.table-page .data-grid {
   display: flex; flex: 1; flex-direction: column;
 }
 body.table-page .panel-body { overflow: hidden; }
@@ -204,17 +218,30 @@ body.table-page .panel-grid { display: flex; flex: 1; }
 body.table-page .table-scroll {
   flex: 1 1 0; width: 100%; height: 0; min-height: 0; max-height: none;
 }
-.metric-table, .health-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+.metric-table, .health-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  font-size: 11px; table-layout: fixed;
+}
 .metric-table th, .metric-table td, .health-table th, .health-table td {
-  height: 31px; padding: 4px 8px; border-bottom: 1px solid var(--border); text-align: right;
-  font-variant-numeric: tabular-nums;
+  height: 34px; padding: 5px 10px; border-bottom: 1px solid var(--border);
+  text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums; background: var(--surface);
 }
 .metric-table th, .health-table th {
-  position: sticky; top: 0; z-index: 1; color: var(--muted); background: var(--surface-2); font-weight: 500;
+  position: sticky; top: 0; z-index: 3; height: 36px; color: var(--muted);
+  background: var(--surface-2); font-weight: 500;
+  box-shadow: inset 0 -1px var(--border);
 }
+.metric-table .column-pinned, .health-table .column-pinned {
+  position: sticky; left: 0; z-index: 2;
+  box-shadow: inset -1px 0 var(--border);
+}
+.metric-table th.column-pinned, .health-table th.column-pinned { z-index: 4; }
 .metric-table th:nth-child(2), .metric-table td:nth-child(2),
 .health-table th:first-child, .health-table td:first-child { text-align: left; }
-.metric-table tbody tr:hover, .health-table tbody tr:hover { background: var(--surface-2); }
+.metric-table tbody tr:hover td, .health-table tbody tr:hover td {
+  background: var(--surface-2);
+}
 .metric-table .table-empty {
   height: 72px; color: var(--muted); text-align: center; font-style: italic;
 }
@@ -222,6 +249,7 @@ body.table-page .table-scroll {
 .metric-table.compact td:first-child { text-align: left; }
 .rules-table th:nth-child(2), .rules-table td:nth-child(2),
 .rules-table th:nth-child(4), .rules-table td:nth-child(4) { text-align: left; }
+.row-actions { display: flex; justify-content: flex-end; gap: 4px; }
 .rule-editor {
   display: grid; grid-template-columns: 2fr 1fr; gap: 8px;
   margin-bottom: 10px; padding: 10px; border: 1px solid var(--border);
@@ -288,7 +316,10 @@ body.table-page .table-scroll {
 .fleet-summary strong { display: block; margin-top: 4px; font: 600 16px ui-monospace, monospace; }
 .fleet-table-scroll { max-height: none; }
 .fleet-table { min-width: 980px; }
-.submitter-table { min-width: 1040px; }
+.submitter-table { min-width: 1276px; }
+.metric-explorer-table { min-width: 1320px; }
+.rules-table { min-width: 1162px; }
+.health-table { min-width: 1300px; }
 .fleet-table th:first-child, .fleet-table td:first-child,
 .submitter-table th:nth-child(-n+4), .submitter-table td:nth-child(-n+4) {
   text-align: left;

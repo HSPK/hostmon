@@ -3,6 +3,8 @@ export interface DataColumn<T> {
   label: string;
   sortValue?: string;
   className?: string;
+  width?: string;
+  pinned?: boolean;
   render(row: T): string | Node;
 }
 
@@ -10,6 +12,7 @@ export type SortDirection = "asc" | "desc";
 
 export class DataTable<T> {
   readonly element: HTMLElement;
+  readonly viewport: HTMLElement;
   private readonly body: HTMLTableSectionElement;
   private readonly sortHeaders = new Map<
     string,
@@ -26,13 +29,22 @@ export class DataTable<T> {
     initialSort?: {value: string; direction: SortDirection},
   ) {
     this.element = document.createElement("div");
-    this.element.className = "table-scroll";
+    this.element.className = "data-grid";
+    this.viewport = document.createElement("div");
+    this.viewport.className = "table-scroll data-grid-viewport";
     const table = document.createElement("table");
     table.className = `metric-table ${className}`.trim();
     const head = document.createElement("thead");
     const row = document.createElement("tr");
     for (const column of columns) {
       const cell = document.createElement("th");
+      cell.dataset.column = column.id;
+      cell.title = column.label;
+      if (column.width) {
+        cell.style.width = column.width;
+        cell.style.minWidth = column.width;
+      }
+      if (column.pinned) cell.classList.add("column-pinned");
       if (column.sortValue && onSort) {
         const button = document.createElement("button");
         button.type = "button";
@@ -56,7 +68,8 @@ export class DataTable<T> {
     head.append(row);
     this.body = document.createElement("tbody");
     table.append(head, this.body);
-    this.element.append(table);
+    this.viewport.append(table);
+    this.element.append(this.viewport);
     if (initialSort) {
       this.setSort(initialSort.value, initialSort.direction);
     }
@@ -93,9 +106,14 @@ export class DataTable<T> {
         const row = document.createElement("tr");
         for (const column of columns) {
           const cell = document.createElement("td");
+          cell.dataset.column = column.id;
           if (column.className) cell.className = column.className;
+          if (column.pinned) cell.classList.add("column-pinned");
           const value = column.render(item);
-          if (typeof value === "string") cell.textContent = value;
+          if (typeof value === "string") {
+            cell.textContent = value;
+            cell.title = value;
+          }
           else cell.append(value);
           row.append(cell);
         }

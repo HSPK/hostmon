@@ -4,15 +4,24 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
+import {
+  DataTable,
+  type DataColumn,
+  type SortDirection,
+} from "./data-table";
+import { tableFooter } from "./table-controls";
 
 export class RulesPanel implements PanelRenderer {
   readonly element: HTMLElement;
-  private readonly body: HTMLTableSectionElement;
+  private readonly table: DataTable<AlertRuleConfig>;
+  private readonly columns: DataColumn<AlertRuleConfig>[];
   private readonly search: HTMLInputElement;
   private readonly count: HTMLElement;
   private readonly editor: HTMLFormElement;
   private rules: AlertRuleConfig[] = [];
   private editing: AlertRuleConfig | null = null;
+  private sort: "alert" | "level" | "expr" = "alert";
+  private sortDirection: SortDirection = "asc";
 
   constructor(
     definition: RulesPanelDefinition,
@@ -21,7 +30,7 @@ export class RulesPanel implements PanelRenderer {
     const shell = panelShell(definition, "rules-panel");
     this.element = shell.element;
     const controls = document.createElement("div");
-    controls.className = "table-controls";
+    controls.className = "table-controls data-grid-toolbar";
     this.search = document.createElement("input");
     this.search.type = "search";
     this.search.placeholder = "Filter alert rules";
@@ -33,20 +42,19 @@ export class RulesPanel implements PanelRenderer {
     add.addEventListener("click", () => this.openEditor());
     this.count = document.createElement("span");
     this.count.className = "table-count";
-    controls.append(this.search, this.count, add);
-
-    const wrapper = document.createElement("div");
-    wrapper.className = "table-scroll";
-    const table = document.createElement("table");
-    table.className = "metric-table rules-table";
-    const head = document.createElement("thead");
-    head.innerHTML = `
-      <tr><th>Enabled</th><th>Alert</th><th>Level</th><th>Expression</th>
-      <th>Actions</th></tr>
-    `;
-    this.body = document.createElement("tbody");
-    table.append(head, this.body);
-    wrapper.append(table);
+    controls.append(this.search, add);
+    this.columns = this.ruleColumns();
+    this.table = new DataTable(
+      this.columns,
+      "rules-table",
+      (value, direction) => {
+        this.sort = value as "alert" | "level" | "expr";
+        this.sortDirection = direction;
+        this.render();
+      },
+      undefined,
+      {value: this.sort, direction: this.sortDirection},
+    );
 
     this.editor = document.createElement("form");
     this.editor.className = "rule-editor";
@@ -69,7 +77,12 @@ export class RulesPanel implements PanelRenderer {
       event.preventDefault();
       void this.save();
     });
-    shell.body.append(controls, this.editor, wrapper);
+    shell.body.append(
+      controls,
+      this.editor,
+      this.table.element,
+      tableFooter(this.count),
+    );
     void this.load();
   }
 
@@ -83,43 +96,81 @@ export class RulesPanel implements PanelRenderer {
 
   private render(): void {
     const query = this.search.value.trim().toLowerCase();
-    const rules = this.rules.filter(
-      rule =>
-        !query ||
-        rule.alert.toLowerCase().includes(query) ||
-        rule.expr.toLowerCase().includes(query),
-    );
+    const rules = this.rules
+      .filter(
+        rule =>
+          !query ||
+          rule.alert.toLowerCase().includes(query) ||
+          rule.expr.toLowerCase().includes(query),
+      )
+      .sort((left, right) => {
+        const result = String(left[this.sort]).localeCompare(
+          String(right[this.sort]),
+        );
+        return this.sortDirection === "asc" ? result : -result;
+      });
     this.count.textContent = `${rules.length} / ${this.rules.length} rules`;
-    this.body.replaceChildren(...rules.map(rule => this.ruleRow(rule)));
+    this.table.setRows(rules, this.columns, "No alert rules match the filter");
   }
 
-  private ruleRow(rule: AlertRuleConfig): HTMLTableRowElement {
-    const row = document.createElement("tr");
-    const enabledCell = document.createElement("td");
-    const enabled = document.createElement("input");
-    enabled.type = "checkbox";
-    enabled.checked = rule.enabled;
-    enabled.setAttribute("aria-label", `Enable ${rule.alert}`);
-    enabled.addEventListener("change", async () => {
-      await this.context.actions.updateRule(rule.alert, {
-        ...rule,
-        enabled: enabled.checked,
-      });
-      await this.load();
-    });
-    enabledCell.append(enabled);
-    const actions = document.createElement("td");
-    const edit = action("Edit", () => this.openEditor(rule));
-    const remove = action("Delete", () => void this.remove(rule));
-    actions.append(edit, remove);
-    row.append(
-      enabledCell,
-      cell(rule.alert),
-      cell(rule.level),
-      cell(rule.expr),
-      actions,
-    );
-    return row;
+  private ruleColumns(): DataColumn<AlertRuleConfig>[] {
+    return [
+      {
+        id: "enabled",
+        label: "",
+        width: "52px",
+        render: rule => {
+          const enabled = document.createElement("input");
+          enabled.type = "checkbox";
+          enabled.checked = rule.enabled;
+          enabled.setAttribute("aria-label", `Enable ${rule.alert}`);
+          enabled.addEventListener("change", async () => {
+            await this.context.actions.updateRule(rule.alert, {
+              ...rule,
+              enabled: enabled.checked,
+            });
+            await this.load();
+          });
+          return enabled;
+        },
+      },
+      {
+        id: "alert",
+        label: "Alert",
+        sortValue: "alert",
+        width: "260px",
+        pinned: true,
+        render: rule => rule.alert,
+      },
+      {
+        id: "level",
+        label: "Level",
+        sortValue: "level",
+        width: "110px",
+        render: rule => rule.level,
+      },
+      {
+        id: "expr",
+        label: "Expression",
+        sortValue: "expr",
+        width: "620px",
+        render: rule => rule.expr,
+      },
+      {
+        id: "actions",
+        label: "",
+        width: "120px",
+        render: rule => {
+          const actions = document.createElement("div");
+          actions.className = "row-actions";
+          actions.append(
+            action("Edit", () => this.openEditor(rule)),
+            action("Delete", () => void this.remove(rule)),
+          );
+          return actions;
+        },
+      },
+    ];
   }
 
   private openEditor(rule?: AlertRuleConfig): void {
@@ -179,12 +230,6 @@ export class RulesPanel implements PanelRenderer {
     await this.context.actions.deleteRule(rule.alert);
     await this.load();
   }
-}
-
-function cell(value: string): HTMLTableCellElement {
-  const output = document.createElement("td");
-  output.textContent = value;
-  return output;
 }
 
 function action(label: string, handler: () => void): HTMLButtonElement {

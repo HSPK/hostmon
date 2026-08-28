@@ -443,6 +443,28 @@ test("remains responsive on narrow screens", async ({ page }) => {
     .locator(".gpu-submitters-panel .table-scroll")
     .evaluate(element => element.scrollHeight > element.clientHeight);
   expect(internalTableScrolls).toBe(true);
+  await expect(
+    page.locator(".gpu-submitters-panel .data-grid-toolbar").getByRole(
+      "button",
+      {name: "Previous"},
+    ),
+  ).toHaveCount(0);
+  await expect(
+    page.locator(".gpu-submitters-panel .data-grid-footer").getByRole(
+      "button",
+      {name: "Previous"},
+    ),
+  ).toHaveCount(1);
+  const viewportElement = page.locator(
+    ".gpu-submitters-panel .data-grid-viewport",
+  );
+  await viewportElement.evaluate(element => {
+    element.scrollLeft = 480;
+  });
+  const pinned = await page
+    .locator('.submitter-table th[data-column="name"]')
+    .boundingBox();
+  expect(pinned?.x).toBeLessThan(12);
 
   await page.getByRole("button", { name: "training-job-001" }).click();
   const closeButton = page
