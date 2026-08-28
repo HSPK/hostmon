@@ -1,13 +1,14 @@
 import type { SystemPanelDefinition } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
+import { renderDisplayItem } from "./display-values";
 
 export class SystemPanel implements PanelRenderer {
   readonly element: HTMLElement;
   private readonly content: HTMLElement;
 
   constructor(
-    definition: SystemPanelDefinition,
+    private readonly definition: SystemPanelDefinition,
     private readonly context: PanelContext,
   ) {
     const shell = panelShell(definition, "system-panel");
@@ -21,22 +22,22 @@ export class SystemPanel implements PanelRenderer {
   update(): void {
     const metrics = this.context.store.latestMetrics;
     const internal = Object.entries(metrics)
-      .filter(([name]) => name.startsWith("monitor/"))
+      .filter(
+        ([name]) =>
+          (!this.definition.metricFilter?.prefix ||
+            name.startsWith(this.definition.metricFilter.prefix)) &&
+          (!this.definition.metricFilter?.suffix ||
+            name.endsWith(this.definition.metricFilter.suffix)),
+      )
       .sort(([left], [right]) => left.localeCompare(right));
     const fragment = document.createDocumentFragment();
     fragment.append(
-      systemCard("Host", this.context.store.host || "--"),
-      systemCard("Version", this.context.store.version || "--"),
-      systemCard(
-        "Latest sample",
-        this.context.store.latestTimestamp
-          ? new Date(this.context.store.latestTimestamp * 1000).toISOString()
-          : "--",
+      ...this.definition.items.map(definition =>
+        systemCard(
+          definition.label,
+          renderDisplayItem(definition, this.context.store),
+        ),
       ),
-      systemCard("Metrics endpoint", "/metrics"),
-      systemCard("Status API", "/api/status"),
-      systemCard("History API", "/api/history"),
-      systemCard("WebSocket", "/api/ws"),
     );
     const table = document.createElement("table");
     table.className = "metric-table compact";

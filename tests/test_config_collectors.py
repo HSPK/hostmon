@@ -92,6 +92,23 @@ class ConfigTests(unittest.TestCase):
 
             self.assertEqual(path.read_text(encoding="utf-8"), before)
 
+    def test_resolves_external_dashboard_configuration(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            initialize_config(path)
+            content = path.read_text(encoding="utf-8").replace(
+                "max_sample_age_seconds = 30",
+                'max_sample_age_seconds = 30\ndashboard_file = "dashboard.json"',
+            )
+            path.write_text(content, encoding="utf-8")
+
+            settings = load_settings(path)
+
+        self.assertEqual(
+            settings.prometheus.dashboard_file,
+            Path(directory) / "dashboard.json",
+        )
+
 
 class CPUCollectorTests(unittest.TestCase):
     def test_parses_and_calculates_cpu_percent(self):
@@ -477,6 +494,8 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
         self.assertEqual(report["workloads"][0]["status"], "Mixed")
         self.assertEqual(report["workloads"][0]["running_nodes"], ["gpu-1"])
         self.assertEqual(report["capacity"][0]["no_job_gpus"], 0)
+        self.assertEqual(report["capacity"][0]["gpu_allocation"], "8 / 16")
+        self.assertEqual(report["capacity"][0]["utilization_percent"], 50)
         self.assertEqual(report["capacity"][0]["no_job_node_equivalents"], 0)
         self.assertEqual(report["capacity"][0]["allocated_cpus"], 125.5)
         self.assertEqual(
@@ -492,7 +511,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
             }
         )
         previous = {
-            "schema_version": 2,
+            "schema_version": 3,
             "at": 100,
             "metrics": {"cluster_gpu/running_gpus": 8},
             "report": {"usage": [], "workloads": []},

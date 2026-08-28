@@ -1,9 +1,10 @@
-import { readdir, readFile, stat, unlink } from "node:fs/promises";
+import { copyFile, readdir, readFile, stat, unlink } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+const scriptDirectory = dirname(fileURLToPath(import.meta.url));
 const root = resolve(
-  dirname(fileURLToPath(import.meta.url)),
+  scriptDirectory,
   "../../src/host_monitor/static/dashboard",
 );
 const assets = resolve(root, "assets");
@@ -34,4 +35,9 @@ await Promise.all(
         !current.has(file.name),
     )
     .map(file => unlink(resolve(assets, file.name))),
+);
+
+await copyFile(
+  resolve(scriptDirectory, "../src/config/dashboard.json"),
+  resolve(root, "dashboard.json"),
 );

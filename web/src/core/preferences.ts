@@ -49,7 +49,14 @@ export class PreferenceStore {
         panel.page === page && !this.value.hiddenPanels.includes(panel.id),
     ).map(panel => {
       const columns = this.value.panelColumns[panel.id];
-      return columns ? {...panel, columns: [...columns]} : panel;
+      return columns && panel.columns
+        ? {
+            ...panel,
+            columns: panel.columns.filter(column =>
+              columns.includes(column.id),
+            ),
+          }
+        : panel;
     });
   }
 
@@ -152,7 +159,7 @@ export class PreferenceStore {
       panelOrder: this.definition.panels.map(panel => panel.id),
       windowSeconds: this.definition.defaultWindowSeconds,
       activePage: "overview",
-      workloadView: defaultWorkloadView(),
+      workloadView: defaultWorkloadView(this.definition),
       panelColumns: {},
       theme: "dark",
       density: "compact",
@@ -179,7 +186,7 @@ export class PreferenceStore {
         activePage: isPageId(parsed.activePage, this.definition)
           ? parsed.activePage
           : "overview",
-        workloadView: parseWorkloadView(parsed.workloadView),
+        workloadView: parseWorkloadView(parsed.workloadView, this.definition),
         panelColumns: isPanelColumns(parsed.panelColumns)
           ? parsed.panelColumns
           : {},
@@ -210,12 +217,17 @@ export class PreferenceStore {
 
 }
 
-function defaultWorkloadView(): WorkloadView {
+function defaultWorkloadView(
+  definition: DashboardDefinition,
+): WorkloadView {
+  const panel = definition.panels.find(
+    item => item.type === "gpu-submitters",
+  );
   return {
     queue: "all",
     state: "all",
-    sort: "running-gpus",
-    sortDirection: "desc",
+    sort: panel?.defaultSort ?? "name",
+    sortDirection: panel?.defaultSortDirection ?? "asc",
   };
 }
 
@@ -234,22 +246,26 @@ function isPanelColumns(
   );
 }
 
-function parseWorkloadView(value: unknown): WorkloadView {
-  if (!value || typeof value !== "object") return defaultWorkloadView();
+function parseWorkloadView(
+  value: unknown,
+  definition: DashboardDefinition,
+): WorkloadView {
+  if (!value || typeof value !== "object") {
+    return defaultWorkloadView(definition);
+  }
   const view = value as Partial<WorkloadView>;
   const valid =
     typeof view.queue === "string" &&
     ["all", "attention", "Running", "Pending", "Mixed"].includes(
       String(view.state),
     ) &&
-    ["running-gpus", "pending-gpus", "name", "submitter", "queue"].includes(
-      String(view.sort),
-    );
-  if (!valid) return defaultWorkloadView();
+    typeof view.sort === "string" &&
+    view.sort.length > 0;
+  if (!valid) return defaultWorkloadView(definition);
   return {
     queue: view.queue!,
     state: view.state!,
-    sort: view.sort!,
+    sort: view.sort!.replaceAll("-", "_"),
     sortDirection:
       view.sortDirection === "asc" || view.sortDirection === "desc"
         ? view.sortDirection

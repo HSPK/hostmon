@@ -1,4 +1,3 @@
-import { DASHBOARD, NAVIGATION } from "./config/dashboard";
 import { ApiClient } from "./core/api-client";
 import { PreferenceStore } from "./core/preferences";
 import { TimeSeriesStore } from "./core/time-series-store";
@@ -6,6 +5,7 @@ import { RealtimeClient } from "./core/websocket-client";
 import type {
   ConnectionState,
   ClusterGPUReport,
+  DashboardDefinition,
   MetricCatalogEntry,
   PageId,
   PanelDefinition,
@@ -17,7 +17,8 @@ import { createPanelRegistry } from "./panels/registry";
 
 export class DashboardApp {
   private readonly api: ApiClient;
-  private readonly preferences = new PreferenceStore(DASHBOARD);
+  private readonly preferences: PreferenceStore;
+  private readonly dashboard: DashboardDefinition;
   private readonly store: TimeSeriesStore;
   private readonly registry = createPanelRegistry();
   private readonly realtime: RealtimeClient;
@@ -45,8 +46,10 @@ export class DashboardApp {
     this.navigate(this.pageFromLocation() ?? "overview", false);
   };
 
-  constructor(root: HTMLElement) {
+  constructor(root: HTMLElement, dashboard: DashboardDefinition) {
     this.root = root;
+    this.dashboard = dashboard;
+    this.preferences = new PreferenceStore(dashboard);
     this.api = new ApiClient((_url, milliseconds) => {
       if (this.operationLatency) {
         this.operationLatency.textContent = `API ${milliseconds.toFixed(1)} ms`;
@@ -306,7 +309,7 @@ export class DashboardApp {
     for (const placement of ["main", "bottom"] as const) {
       const container = document.createElement("div");
       container.className = `nav-${placement}`;
-      const items = NAVIGATION.filter(
+      const items = this.dashboard.navigation.filter(
         item => (item.placement ?? "main") === placement,
       );
       const groups = new Map<string, typeof items>();
@@ -333,7 +336,7 @@ export class DashboardApp {
       fragment.append(container);
     }
     root.replaceChildren(fragment);
-    const current = NAVIGATION.find(item => item.id === active);
+    const current = this.dashboard.navigation.find(item => item.id === active);
     this.required("page-title").textContent = current?.label ?? "Overview";
   }
 
@@ -348,7 +351,9 @@ export class DashboardApp {
 
   private pageFromLocation(): PageId | null {
     const requested = new URL(window.location.href).searchParams.get("page");
-    return NAVIGATION.find(item => item.id === requested)?.id ?? null;
+    return (
+      this.dashboard.navigation.find(item => item.id === requested)?.id ?? null
+    );
   }
 
   private updatePageRoute(page: PageId, replace = false): void {
@@ -546,7 +551,7 @@ export class DashboardApp {
         orderButton("Down", () => this.movePanel(definition.id, 1)),
       );
       row.append(label, actions);
-      const available = DASHBOARD.panels.find(
+      const available = this.dashboard.panels.find(
         panel => panel.id === definition.id,
       )?.columns;
       if (available?.length) {
@@ -557,28 +562,31 @@ export class DashboardApp {
         const options = document.createElement("div");
         options.className = "column-options";
         const selected = new Set(
-          preferences.panelColumns[definition.id] ?? definition.columns,
+          preferences.panelColumns[definition.id] ??
+            definition.columns?.map(column => column.id),
         );
         for (const column of available) {
           const option = document.createElement("label");
           const input = document.createElement("input");
           input.type = "checkbox";
-          input.checked = selected.has(column);
+          input.checked = selected.has(column.id);
           input.addEventListener("change", () => {
-            if (input.checked) selected.add(column);
-            else selected.delete(column);
+            if (input.checked) selected.add(column.id);
+            else selected.delete(column.id);
             if (!selected.size) {
               input.checked = true;
-              selected.add(column);
+              selected.add(column.id);
               return;
             }
             this.preferences.setPanelColumns(
               definition.id,
-              available.filter(item => selected.has(item)),
+              available
+                .filter(item => selected.has(item.id))
+                .map(item => item.id),
             );
             this.renderPanels();
           });
-          option.append(input, document.createTextNode(column));
+          option.append(input, document.createTextNode(column.label));
           options.append(option);
         }
         details.append(summary, options);
@@ -749,6 +757,9 @@ export class DashboardApp {
       custom: true,
       title,
       metrics,
+      ...(this.editingPanel?.series
+        ? {series: this.editingPanel.series}
+        : {}),
       style: (this.required("chart-style") as HTMLSelectElement).value as
         | "line"
         | "area",
@@ -836,7 +847,10 @@ export class DashboardApp {
   }
 
   private allPanels(): PanelDefinition[] {
-    return [...DASHBOARD.panels, ...this.preferences.get().customPanels];
+    return [
+      ...this.dashboard.panels,
+      ...this.preferences.get().customPanels,
+    ];
   }
 
   private required(id: string): HTMLElement {

@@ -1,4 +1,7 @@
 import { expect, test } from "@playwright/test";
+import dashboardDefinition from "../src/config/dashboard.json" with {
+  type: "json",
+};
 
 const now = Date.now() / 1000;
 const metrics = {
@@ -40,6 +43,9 @@ const clusterGPUReport = {
       capacity_cpus: 880,
       allocated_cpus: 700,
       free_cpus: 180,
+      gpu_allocation: "56 / 64",
+      utilization_percent: 87.5,
+      cpu_allocation: "700 / 880",
     },
   ],
   total_capacity: {
@@ -53,6 +59,9 @@ const clusterGPUReport = {
     capacity_cpus: 880,
     allocated_cpus: 700,
     free_cpus: 180,
+    gpu_allocation: "56 / 64",
+    utilization_percent: 87.5,
+    cpu_allocation: "700 / 880",
   },
   usage: [
     {
@@ -227,6 +236,9 @@ test.beforeEach(async ({ page }) => {
             last_success_at: now,
             last_failure_at: null,
             last_error: null,
+            state: "up",
+            duration: 1,
+            failures: 0,
             options: {},
           },
         ],
@@ -590,8 +602,9 @@ test("configures visible workload table columns", async ({ page }) => {
   const setting = page.locator(".panel-setting").filter({
     hasText: "GPU workloads",
   });
+
   await setting.locator("summary").click();
-  await setting.getByText("pending_gpus").locator("input").uncheck();
+  await setting.getByText("Pending GPUs").locator("input").uncheck();
   await page.getByRole("button", { name: "Close" }).click();
   await page.getByRole("button", { name: "Workloads" }).click();
 
@@ -602,4 +615,32 @@ test("configures visible workload table columns", async ({ page }) => {
   await expect(
     page.locator(".submitter-table thead"),
   ).not.toContainText("Pending GPUs");
+});
+
+test("loads navigation and panels from runtime configuration", async ({
+  page,
+}) => {
+  const dashboard = structuredClone(dashboardDefinition);
+  dashboard.navigation.push({
+    id: "custom-runtime",
+    label: "Runtime view",
+    group: "Charts",
+  });
+  dashboard.panels.push({
+    id: "runtime-chart",
+    type: "timeseries",
+    page: "custom-runtime",
+    title: "Runtime configured chart",
+    metrics: ["cpu/percent"],
+  });
+  await page.route("**/dashboard.json", route =>
+    route.fulfill({json: dashboard}),
+  );
+
+  await page.goto("/?page=custom-runtime");
+
+  await expect(page.locator("#page-title")).toHaveText("Runtime view");
+  await expect(page.locator('[data-panel-id="runtime-chart"]')).toContainText(
+    "Runtime configured chart",
+  );
 });

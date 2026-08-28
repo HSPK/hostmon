@@ -1,14 +1,149 @@
+import type { TableColumnDefinition } from "../domain/types";
+
 export interface DataColumn<T> {
   id: string;
   label: string;
   sortValue?: string;
   className?: string;
   width?: string;
+  align?: "left" | "center" | "right";
   pinned?: boolean;
   render(row: T): string | Node;
 }
 
 export type SortDirection = "asc" | "desc";
+export type ColumnAction<T> = (row: T) => string | Node;
+
+export function configuredColumns<T extends object>(
+  definitions: TableColumnDefinition[],
+  actions: Record<string, ColumnAction<T>> = {},
+): DataColumn<T>[] {
+  return definitions.map(definition => ({
+    id: definition.id,
+    label: definition.label,
+    ...(definition.width ? {width: definition.width} : {}),
+    ...(definition.align ? {align: definition.align} : {}),
+    ...(definition.pinned ? {pinned: true} : {}),
+    ...(definition.sort ? {sortValue: definition.sort} : {}),
+    render: row => {
+      if (definition.action && actions[definition.action]) {
+        return actions[definition.action]!(row);
+      }
+      const value = readPath(row, definition.path ?? definition.id);
+      return formatConfiguredValue(
+        value,
+        definition.format,
+        row,
+        definition.unit ?? "",
+        definition.fallback ?? "--",
+      );
+    },
+  }));
+}
+
+export function readPath(value: object, path: string): unknown {
+  let current: unknown = value;
+  for (const component of path.split(".")) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[component];
+  }
+  return current;
+}
+
+export function compareByPath(
+  left: object,
+  right: object,
+  path: string,
+  direction: SortDirection,
+): number {
+  const first = readPath(left, path);
+  const second = readPath(right, path);
+  const result =
+    typeof first === "number" && typeof second === "number"
+      ? first - second
+      : String(first ?? "").localeCompare(String(second ?? ""));
+  return direction === "asc" ? result : -result;
+}
+
+export function formatConfiguredValue(
+  value: unknown,
+  format: TableColumnDefinition["format"],
+  row: object,
+  unit: string,
+  fallback: string,
+): string | Node {
+  if (format === "state") {
+    const state = document.createElement("span");
+    const text = String(value ?? "unknown");
+    const normalized = text.toLowerCase();
+    const kind =
+      ["up", "running", "enabled", "ok"].includes(normalized)
+        ? "up"
+        : ["stale", "pending", "warning"].includes(normalized)
+          ? "stale"
+          : ["mixed", "info"].includes(normalized)
+            ? "mixed"
+            : "down";
+    state.className = `state state-${kind}`;
+    state.textContent = text;
+    return state;
+  }
+  if (format === "timestamp") {
+    if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+    return new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(new Date(value * 1000));
+  }
+  if (format === "duration") {
+    return typeof value === "number" && Number.isFinite(value)
+      ? `${value.toFixed(1)} s`
+      : fallback;
+  }
+  if (format === "metric") {
+    const unit = readPath(row, "metadata.unit");
+    return formatNumber(value, typeof unit === "string" ? unit : "", fallback);
+  }
+  if (format === "number") return formatNumber(value, unit, fallback);
+  return value === undefined || value === null ? fallback : String(value);
+}
+
+function formatNumber(
+  value: unknown,
+  unit: string,
+  fallback = "--",
+): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
+  if (unit === "bytes") return formatBytes(value);
+  if (unit === "s" && value >= 120) return formatDuration(value);
+  const magnitude = Math.abs(value);
+  const decimals = magnitude >= 100 ? 0 : magnitude >= 10 ? 1 : 2;
+  return `${value.toFixed(decimals)}${unit ? ` ${unit}` : ""}`;
+}
+
+function formatBytes(value: number): string {
+  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  let scaled = Math.abs(value);
+  let index = 0;
+  while (scaled >= 1024 && index < units.length - 1) {
+    scaled /= 1024;
+    index++;
+  }
+  const sign = value < 0 ? "-" : "";
+  const decimals = scaled >= 100 ? 0 : scaled >= 10 ? 1 : 2;
+  return `${sign}${scaled.toFixed(decimals)} ${units[index]}`;
+}
+
+function formatDuration(value: number): string {
+  if (value >= 86400) return `${(value / 86400).toFixed(1)} d`;
+  if (value >= 3600) return `${(value / 3600).toFixed(1)} h`;
+  return `${(value / 60).toFixed(1)} min`;
+}
 
 export class DataTable<T> {
   readonly element: HTMLElement;
@@ -34,6 +169,11 @@ export class DataTable<T> {
     this.viewport.className = "table-scroll data-grid-viewport";
     const table = document.createElement("table");
     table.className = `metric-table ${className}`.trim();
+    const configuredWidth = columns.reduce((total, column) => {
+      const match = column.width?.match(/^(\d+(?:\.\d+)?)px$/);
+      return total + (match ? Number(match[1]) : 0);
+    }, 0);
+    if (configuredWidth) table.style.minWidth = `${configuredWidth}px`;
     const head = document.createElement("thead");
     const row = document.createElement("tr");
     for (const column of columns) {
@@ -44,6 +184,7 @@ export class DataTable<T> {
         cell.style.width = column.width;
         cell.style.minWidth = column.width;
       }
+      if (column.align) cell.style.textAlign = column.align;
       if (column.pinned) cell.classList.add("column-pinned");
       if (column.sortValue && onSort) {
         const button = document.createElement("button");
@@ -108,6 +249,7 @@ export class DataTable<T> {
           const cell = document.createElement("td");
           cell.dataset.column = column.id;
           if (column.className) cell.className = column.className;
+          if (column.align) cell.style.textAlign = column.align;
           if (column.pinned) cell.classList.add("column-pinned");
           const value = column.render(item);
           if (typeof value === "string") {

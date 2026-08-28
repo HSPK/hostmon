@@ -110,6 +110,11 @@ All notable changes to this project are documented here.
   labels on table-only pages, and added themed high-contrast scrollbars.
 - Coalesced identical long-history requests into one disk scan and cached the
   bounded result for 15 seconds to prevent multi-client I/O amplification.
+- Moved all dashboard metric names, chart series metadata, stat definitions,
+  table columns, summary fields, sort paths, widths, alignment, and value
+  sources into validated runtime JSON configuration.
+- Added optional `[prometheus].dashboard_file` loading with packaged fallback,
+  allowing navigation and panel changes without rebuilding the frontend.
 
 ## [0.1.0] - 2026-08-17
 

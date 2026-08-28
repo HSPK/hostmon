@@ -23,7 +23,7 @@ from . import __version__
 from .config import CollectorSettings, PrometheusSettings
 from .dashboard import (
     DASHBOARD_CAPACITY,
-    DEFAULT_DASHBOARD_SERIES,
+    DEFAULT_HISTORY_METRIC_LIMIT,
     MAX_HISTORY_SECONDS,
     DashboardSnapshot,
     DashboardStore,
@@ -311,7 +311,10 @@ class PrometheusExporter:
             payload = await self._long_history(
                 seconds,
                 maximum,
-                metrics or list(DEFAULT_DASHBOARD_SERIES),
+                metrics
+                or sorted(self._snapshot().metrics)[
+                    :DEFAULT_HISTORY_METRIC_LIMIT
+                ],
             )
         else:
             try:
@@ -491,6 +494,7 @@ class PrometheusExporter:
         except MonitorError as error:
             return self._error(error)
         envelopes = state.get("collectors", {})
+        metrics = state.get("last_metrics", {})
         diagnostics = []
         for setting in self.collector_settings:
             envelope = (
@@ -504,6 +508,13 @@ class PrometheusExporter:
                 "poll_interval_seconds",
                 self.interval_seconds,
             )
+            prefix = f"monitor/collector/{setting.name}"
+            up = float(metrics.get(f"{prefix}/up", 0)) if isinstance(metrics, dict) else 0
+            stale = (
+                float(metrics.get(f"{prefix}/stale", 0))
+                if isinstance(metrics, dict)
+                else 0
+            )
             diagnostics.append(
                 {
                     "name": setting.name,
@@ -515,6 +526,13 @@ class PrometheusExporter:
                     "last_success_at": envelope.get("last_success_at"),
                     "last_failure_at": envelope.get("last_failure_at"),
                     "last_error": envelope.get("last_error"),
+                    "state": "stale" if stale else "up" if up else "down",
+                    "duration": (
+                        metrics.get(f"{prefix}/duration_ms")
+                        if isinstance(metrics, dict)
+                        else None
+                    ),
+                    "failures": envelope.get("failures_total", 0),
                     "options": setting.options,
                 }
             )
@@ -577,7 +595,13 @@ class PrometheusExporter:
         if path.is_absolute() or ".." in path.parts:
             raise web.HTTPNotFound()
         root = self._static_root()
-        asset = root.joinpath(*path.parts)
+        asset = (
+            self.settings.dashboard_file
+            if requested == "dashboard.json"
+            and self.settings.dashboard_file is not None
+            and self.settings.dashboard_file.is_file()
+            else root.joinpath(*path.parts)
+        )
         if not asset.is_file():
             asset = root.joinpath("index.html")
         try:

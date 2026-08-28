@@ -12,7 +12,7 @@ from .kubectl_client import KubectlClient, parse_quantity
 
 
 METRIC_COMPONENT = re.compile(r"[^a-zA-Z0-9_]+")
-STATE_SCHEMA_VERSION = 2
+STATE_SCHEMA_VERSION = 3
 
 
 @dataclass
@@ -211,6 +211,21 @@ def build_report(
     for key, value in tuple(total.items()):
         if isinstance(value, float) and value.is_integer():
             total[key] = int(value)
+    for row in [*capacity, total]:
+        utilization = (
+            float(row["allocated_gpus"]) / float(row["capacity_gpus"]) * 100
+            if row["capacity_gpus"]
+            else 0.0
+        )
+        row["gpu_allocation"] = (
+            f"{_number(Decimal(str(row['allocated_gpus'])))} / "
+            f"{_number(Decimal(str(row['capacity_gpus'])))}"
+        )
+        row["utilization_percent"] = utilization
+        row["cpu_allocation"] = (
+            f"{_number(Decimal(str(row['allocated_cpus'])))} / "
+            f"{_number(Decimal(str(row['capacity_cpus'])))}"
+        )
     workload_rows = [
         {
             "queue": queue,

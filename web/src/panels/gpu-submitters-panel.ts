@@ -9,6 +9,8 @@ import type {
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
 import {
+  compareByPath,
+  configuredColumns,
   DataTable,
   type DataColumn,
   type SortDirection,
@@ -18,7 +20,6 @@ import {
   tableFooter,
   TABLE_PAGE_SIZE,
 } from "./table-controls";
-import { compareWorkloads } from "./workload-order";
 
 export class GPUSubmittersPanel implements PanelRenderer {
   readonly element: HTMLElement;
@@ -91,16 +92,18 @@ export class GPUSubmittersPanel implements PanelRenderer {
     });
     controls.append(this.search, this.queue, this.state);
 
-    this.columns = this.workloadColumns(
-      definition.columns ?? [
-        "queue",
-        "name",
-        "status",
-        "submitter",
-        "running_gpus",
-        "running_gpu_nodes",
-        "pending_gpus",
-      ],
+    this.columns = configuredColumns(
+      definition.columns ?? [],
+      {
+        details: row => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "workload-link";
+          button.textContent = row.name;
+          button.addEventListener("click", () => this.openDetails(row));
+          return button;
+        },
+      },
     );
     this.table = new DataTable(
       this.columns,
@@ -189,7 +192,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
             row.creator_id.toLowerCase().includes(query)),
       )
       .sort((left, right) =>
-        compareWorkloads(left, right, this.sort, this.sortDirection),
+        compareByPath(left, right, this.sort, this.sortDirection),
       );
     const pages = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
     this.page = Math.min(this.page, pages - 1);
@@ -205,70 +208,6 @@ export class GPUSubmittersPanel implements PanelRenderer {
       pageRows,
       this.columns,
       "No workloads match the current filters",
-    );
-  }
-
-  private workloadColumns(
-    ids: string[],
-  ): DataColumn<ClusterGPUWorkloadRow>[] {
-    const numeric = (
-      id: "running_gpus" | "running_gpu_nodes" | "pending_gpus",
-      label: string,
-      sortValue?: string,
-    ): DataColumn<ClusterGPUWorkloadRow> => ({
-      id,
-      label,
-      width: "130px",
-      ...(sortValue ? {sortValue} : {}),
-      render: row => String(row[id]),
-    });
-    const columns: Record<string, DataColumn<ClusterGPUWorkloadRow>> = {
-      queue: {
-        id: "queue",
-        label: "Queue",
-        sortValue: "queue",
-        width: "96px",
-        render: row => row.queue,
-      },
-      name: {
-        id: "name",
-        label: "Workload",
-        sortValue: "name",
-        width: "410px",
-        pinned: true,
-        render: row => {
-          const button = document.createElement("button");
-          button.type = "button";
-          button.className = "workload-link";
-          button.textContent = row.name;
-          button.addEventListener("click", () => this.openDetails(row));
-          return button;
-        },
-      },
-      status: {
-        id: "status",
-        label: "State",
-        width: "100px",
-        render: row => workloadState(row.status),
-      },
-      submitter: {
-        id: "submitter",
-        label: "Submitter",
-        sortValue: "submitter",
-        width: "280px",
-        render: row => row.submitter,
-      },
-      running_gpus: numeric(
-        "running_gpus",
-        "Running GPUs",
-        "running-gpus",
-      ),
-      running_gpu_nodes: numeric("running_gpu_nodes", "GPU nodes"),
-      pending_gpus: numeric("pending_gpus", "Pending GPUs", "pending-gpus"),
-    };
-    return ids.map(id => columns[id]).filter(
-      (column): column is DataColumn<ClusterGPUWorkloadRow> =>
-        column !== undefined,
     );
   }
 
@@ -372,19 +311,6 @@ function selectControl(
     }),
   );
   return select;
-}
-
-function workloadState(value: ClusterGPUWorkloadRow["status"]): HTMLElement {
-  const state = document.createElement("span");
-  state.className = `state ${
-    value === "Running"
-      ? "state-up"
-      : value === "Pending"
-        ? "state-stale"
-        : "state-mixed"
-  }`;
-  state.textContent = value;
-  return state;
 }
 
 function detailCell(

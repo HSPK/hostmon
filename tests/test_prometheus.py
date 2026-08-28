@@ -55,12 +55,15 @@ class PrometheusRenderingTests(unittest.TestCase):
         self.assertTrue(names["metric/a-b"].startswith("hostmon_metric_a_b_"))
         self.assertEqual(names, prometheus_names(["metric/a_b", "metric/a-b"]))
 
-    def test_cluster_gpu_metadata_uses_business_labels_and_units(self):
+    def test_metric_metadata_uses_generic_labels_and_units(self):
         metadata = infer_metric_metadata(
             "cluster_gpu/queue/total/allocated_gpus"
         )
 
-        self.assertEqual(metadata["label"], "Allocated GPUs")
+        self.assertEqual(
+            metadata["label"],
+            "cluster gpu / queue / total / allocated gpus",
+        )
         self.assertEqual(metadata["unit"], "GPUs")
 
     def test_dashboard_history_is_bounded_and_columnar(self):
@@ -266,6 +269,11 @@ class PrometheusHTTPTests(unittest.TestCase):
         with urllib.request.urlopen(self.url("/"), timeout=5) as response:
             dashboard = response.read().decode()
         with urllib.request.urlopen(
+            self.url("/dashboard.json"),
+            timeout=5,
+        ) as response:
+            dashboard_config = json.load(response)
+        with urllib.request.urlopen(
             self.url("/api/history?seconds=3600&max_points=100"),
             timeout=5,
         ) as response:
@@ -280,6 +288,8 @@ class PrometheusHTTPTests(unittest.TestCase):
         event = asyncio.run(self.websocket_event())
 
         self.assertIn("hostmon operations dashboard", dashboard)
+        self.assertTrue(dashboard_config["navigation"])
+        self.assertTrue(dashboard_config["panels"])
         self.assertIn("requestAnimationFrame", script)
         self.assertIn("WebSocket", script)
         self.assertNotIn("https://", dashboard)
@@ -456,6 +466,30 @@ class PrometheusHTTPTests(unittest.TestCase):
         self.assertEqual(collectors[0]["name"], "cpu")
         self.assertEqual(collectors[0]["refresh_seconds"], 10)
         self.assertEqual(collectors[0]["deadline_seconds"], 2)
+
+    def test_serves_external_dashboard_configuration(self):
+        dashboard_file = Path(self.directory.name) / "dashboard.json"
+        dashboard_file.write_text(
+            json.dumps({"title": "custom-dashboard"}),
+            encoding="utf-8",
+        )
+        self.exporter.settings = PrometheusSettings(
+            enabled=True,
+            host="127.0.0.1",
+            port=0,
+            max_sample_age_seconds=30,
+            dashboard_file=dashboard_file,
+        )
+        self.save_state(time.time())
+        self.exporter.start()
+
+        with urllib.request.urlopen(
+            self.url("/dashboard.json"),
+            timeout=5,
+        ) as response:
+            dashboard = json.load(response)
+
+        self.assertEqual(dashboard["title"], "custom-dashboard")
 
     def test_multiple_websocket_clients_receive_broadcast(self):
         self.save_state(time.time())

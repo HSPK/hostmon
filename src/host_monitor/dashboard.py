@@ -16,43 +16,8 @@ from pathlib import Path
 DASHBOARD_CAPACITY = 2160
 MAX_HISTORY_SECONDS = 30 * 24 * 60 * 60
 MAX_DASHBOARD_METRICS = 512
+DEFAULT_HISTORY_METRIC_LIMIT = 32
 HISTORY_TIMESTAMP = re.compile(rb'"_time"\s*:\s*(-?\d+(?:\.\d+)?)')
-DEFAULT_DASHBOARD_SERIES: dict[str, dict[str, str]] = {
-    "cpu/percent": {"label": "CPU", "unit": "%", "color": "#66d9ef"},
-    "memory/percent": {"label": "Memory", "unit": "%", "color": "#a6e22e"},
-    "disk/percent": {"label": "Disk", "unit": "%", "color": "#fd971f"},
-    "network/rx_mbps": {
-        "label": "Network RX",
-        "unit": "Mbps",
-        "color": "#ae81ff",
-    },
-    "network/tx_mbps": {
-        "label": "Network TX",
-        "unit": "Mbps",
-        "color": "#f92672",
-    },
-    "gpu/percent": {"label": "GPU", "unit": "%", "color": "#00d4aa"},
-    "gpu/memory_percent": {
-        "label": "GPU memory",
-        "unit": "%",
-        "color": "#ffd866",
-    },
-    "gpu/temperature_c": {
-        "label": "GPU temperature",
-        "unit": "C",
-        "color": "#ff6188",
-    },
-    "k8s/occupied_gpu_nodes": {
-        "label": "Occupied GPU nodes",
-        "unit": "nodes",
-        "color": "#78dce8",
-    },
-    "k8s/quota_nodes": {
-        "label": "GPU node quota",
-        "unit": "nodes",
-        "color": "#fc9867",
-    },
-}
 
 
 @dataclass(frozen=True)
@@ -75,20 +40,7 @@ def _uniform_indices(length: int, maximum: int) -> list[int]:
 
 
 def infer_metric_metadata(name: str) -> dict[str, str]:
-    if name in DEFAULT_DASHBOARD_SERIES:
-        return dict(DEFAULT_DASHBOARD_SERIES[name])
     final = name.rsplit("/", 1)[-1]
-    business_labels = {
-        "capacity_gpus": "GPU capacity",
-        "allocated_gpus": "Allocated GPUs",
-        "pending_gpus": "Pending GPUs",
-        "unallocated_gpus": "Free GPUs",
-        "no_job_gpus": "No-job GPUs",
-        "no_job_node_equivalents": "No-job nodes",
-        "capacity_cpus": "CPU capacity",
-        "allocated_cpus": "Allocated CPUs",
-        "free_cpus": "Free CPUs",
-    }
     unit = ""
     for suffix, candidate in (
         ("_percent", "%"),
@@ -108,12 +60,7 @@ def infer_metric_metadata(name: str) -> dict[str, str]:
         if final.endswith(suffix):
             unit = candidate
             break
-    if name.startswith("cluster_gpu/queue/") and final in business_labels:
-        queue = name.split("/")[2]
-        base_label = business_labels[final]
-        label = base_label if queue == "total" else f"{queue}: {base_label}"
-    else:
-        label = name.replace("/", " / ").replace("_", " ")
+    label = name.replace("/", " / ").replace("_", " ")
     hue = int(sha1(name.encode("utf-8")).hexdigest()[:6], 16) % 360
     red, green, blue = hls_to_rgb(hue / 360, 0.64, 0.72)
     color = f"#{round(red * 255):02x}{round(green * 255):02x}{round(blue * 255):02x}"
@@ -250,10 +197,8 @@ class DashboardStore:
         metrics: list[str] | None = None,
     ) -> dict[str, Any]:
         with self._lock:
-            selected = metrics or [
-                name
-                for name in DEFAULT_DASHBOARD_SERIES
-                if name in self._series
+            selected = metrics or sorted(self._series)[
+                :DEFAULT_HISTORY_METRIC_LIMIT
             ]
             unknown = sorted(set(selected) - set(self._series))
             if unknown:

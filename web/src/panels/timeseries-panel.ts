@@ -27,9 +27,13 @@ export class TimeSeriesPanel implements PanelRenderer {
     legend.className = "series-legend";
     for (const metric of definition.metrics) {
       const metadata = context.store.metadata.get(metric);
+      const configured = definition.series?.[metric];
       const item = document.createElement("span");
-      item.textContent = metadata?.label ?? metric;
-      item.style.setProperty("--series-color", metadata?.color ?? "#7dd3fc");
+      item.textContent = configured?.label ?? metadata?.label ?? metric;
+      item.style.setProperty(
+        "--series-color",
+        configured?.color ?? metadata?.color ?? "#7dd3fc",
+      );
       legend.append(item);
     }
     shell.header.append(legend);
@@ -129,15 +133,17 @@ export class TimeSeriesPanel implements PanelRenderer {
         {},
         ...this.definition.metrics.map(metric => {
           const metadata = this.context.store.metadata.get(metric);
+          const configured = this.definition.series?.[metric];
           const series: uPlot.Series = {
-            label: metadata?.label ?? metric,
-            stroke: metadata?.color ?? "#7dd3fc",
+            label: configured?.label ?? metadata?.label ?? metric,
+            stroke: configured?.color ?? metadata?.color ?? "#7dd3fc",
             width: this.definition.lineWidth ?? 1.5,
             spanGaps: true,
             points: { show: false },
           };
-          if (this.definition.style === "area" && metadata?.color) {
-            series.fill = `${metadata.color}24`;
+          const color = configured?.color ?? metadata?.color;
+          if (this.definition.style === "area" && color) {
+            series.fill = `${color}24`;
           }
           return series;
         }),

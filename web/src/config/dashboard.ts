@@ -10,7 +10,17 @@ assertDashboard(rawDashboard);
 export const DASHBOARD: DashboardDefinition = rawDashboard;
 export const NAVIGATION: NavigationItem[] = DASHBOARD.navigation;
 
-function assertDashboard(value: unknown): asserts value is DashboardDefinition {
+export async function loadDashboard(): Promise<DashboardDefinition> {
+  const response = await fetch("/dashboard.json", {cache: "no-store"});
+  if (!response.ok) return DASHBOARD;
+  const value: unknown = await response.json();
+  assertDashboard(value);
+  return value;
+}
+
+export function assertDashboard(
+  value: unknown,
+): asserts value is DashboardDefinition {
   if (!isRecord(value)) throw new Error("Dashboard config must be an object");
   if (
     typeof value.title !== "string" ||
@@ -51,7 +61,18 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
   if (value.type === "timeseries") {
     return (
       Array.isArray(value.metrics) &&
-      value.metrics.every(metric => typeof metric === "string")
+      value.metrics.every(metric => typeof metric === "string") &&
+      (value.series === undefined ||
+        (isRecord(value.series) &&
+          Object.values(value.series).every(
+            metadata =>
+              isRecord(metadata) &&
+              ["label", "unit", "color"].every(
+                key =>
+                  metadata[key] === undefined ||
+                  typeof metadata[key] === "string",
+              ),
+          )))
     );
   }
   if (value.type === "stats") {
@@ -69,7 +90,50 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
   if (
     value.columns !== undefined &&
     (!Array.isArray(value.columns) ||
-      !value.columns.every(column => typeof column === "string"))
+      !value.columns.every(
+        column =>
+          isRecord(column) &&
+          typeof column.id === "string" &&
+          typeof column.label === "string" &&
+          (column.path === undefined || typeof column.path === "string") &&
+          (column.width === undefined || typeof column.width === "string") &&
+          (column.align === undefined ||
+            ["left", "center", "right"].includes(String(column.align))) &&
+          (column.pinned === undefined ||
+            typeof column.pinned === "boolean") &&
+          (column.sort === undefined || typeof column.sort === "string") &&
+          (column.action === undefined || typeof column.action === "string") &&
+          (column.unit === undefined || typeof column.unit === "string") &&
+          (column.fallback === undefined ||
+            typeof column.fallback === "string") &&
+          (column.format === undefined ||
+            ["text", "number", "state", "metric", "timestamp", "duration"]
+              .includes(String(column.format))),
+      ))
+  ) {
+    return false;
+  }
+  if (
+    value.type === "tasks" &&
+    (!Array.isArray(value.items) || !value.items.every(isDisplayItem))
+  ) {
+    return false;
+  }
+  if (
+    value.type === "system" &&
+    (!Array.isArray(value.items) || !value.items.every(isDisplayItem))
+  ) {
+    return false;
+  }
+  if (
+    value.type === "gpu-fleet" &&
+    (!Array.isArray(value.summary) ||
+      !value.summary.every(
+        item =>
+          isRecord(item) &&
+          typeof item.label === "string" &&
+          typeof item.path === "string",
+      ))
   ) {
     return false;
   }
@@ -83,6 +147,22 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
     "rules",
     "web-settings",
   ].includes(value.type);
+}
+
+function isDisplayItem(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    typeof value.label === "string" &&
+    typeof value.template === "string" &&
+    isRecord(value.values) &&
+    Object.values(value.values).every(
+      source =>
+        isRecord(source) &&
+        ["metric", "field", "system", "static", "metricMatch"].includes(
+          String(source.source),
+        ),
+    )
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

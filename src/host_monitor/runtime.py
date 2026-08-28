@@ -212,39 +212,13 @@ class MonitorRuntime:
             else:
                 for warning in result.warnings:
                     LOGGER.warning("%s", warning)
-                summary_names = (
-                    "cpu/percent",
-                    "memory/percent",
-                    "disk/percent",
-                    "network/rx_mbps",
-                    "network/tx_mbps",
-                    "gpu/percent",
-                    "gpu/memory_percent",
-                    "gpu/temperature_c",
-                    "k8s/failed_task_count",
-                    "k8s/occupied_gpu_nodes",
-                    "k8s/quota_nodes",
-                )
-                summary = {
-                    name: result.metrics[name]
-                    for name in summary_names
-                    if name in result.metrics
-                }
-                summary.update(
-                    {
-                        name: value
-                        for name, value in result.metrics.items()
-                        if name.startswith("permission/")
-                        and name.endswith("/allowed")
-                    }
-                )
                 LOGGER.info(
                     "sample %s",
                     json.dumps(
                         {
                             "host": self.hostname,
                             "collected_at": result.collected_at,
-                            "metrics": summary,
+                            "metric_count": len(result.metrics),
                             "alert_count": len(result.alerts),
                         },
                         ensure_ascii=False,

@@ -5,21 +5,44 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
+import {
+  configuredColumns,
+  compareByPath,
+  DataTable,
+  formatConfiguredValue,
+  readPath,
+  type DataColumn,
+  type SortDirection,
+} from "./data-table";
 
 export class GPUFleetPanel implements PanelRenderer {
   readonly element: HTMLElement;
   private readonly body: HTMLElement;
+  private readonly columns: DataColumn<ClusterGPUCapacityRow>[];
+  private readonly table: DataTable<ClusterGPUCapacityRow>;
   private report: ClusterGPUReport | null = null;
   private lastLoaded = 0;
   private loading = false;
+  private sort = "";
+  private direction: SortDirection = "asc";
 
   constructor(
-    definition: GPUFleetPanelDefinition,
+    private readonly definition: GPUFleetPanelDefinition,
     private readonly context: PanelContext,
   ) {
     const shell = panelShell(definition, "gpu-fleet-panel");
     this.element = shell.element;
     this.body = shell.body;
+    this.columns = configuredColumns(definition.columns ?? []);
+    this.table = new DataTable(
+      this.columns,
+      "fleet-table",
+      (value, direction) => {
+        this.sort = value;
+        this.direction = direction;
+        this.render();
+      },
+    );
     void this.load();
   }
 
@@ -44,75 +67,40 @@ export class GPUFleetPanel implements PanelRenderer {
   private render(): void {
     if (!this.report) return;
     const total = this.report.total_capacity;
-    const utilization =
-      total.capacity_gpus > 0
-        ? total.allocated_gpus / total.capacity_gpus * 100
-        : 0;
     const summary = document.createElement("div");
     summary.className = "fleet-summary";
     summary.append(
-      summaryCell("GPU allocation", `${total.allocated_gpus} / ${total.capacity_gpus}`),
-      summaryCell("Utilization", `${utilization.toFixed(1)} %`),
-      summaryCell("Pending GPUs", String(total.pending_gpus)),
-      summaryCell("No-job GPUs", String(total.no_job_gpus)),
-      summaryCell("No-job nodes", String(total.no_job_node_equivalents)),
-      summaryCell("Free CPUs", formatNumber(total.free_cpus)),
+      ...this.definition.summary.map(definition =>
+        summaryCell(
+          definition.label,
+          formatConfiguredValue(
+            readPath(total, definition.path),
+            definition.format,
+            total,
+            definition.unit ?? "",
+            definition.fallback ?? "--",
+          ),
+        ),
+      ),
     );
-
-    const table = document.createElement("table");
-    table.className = "metric-table fleet-table";
-    const head = document.createElement("thead");
-    head.innerHTML = `
-      <tr><th>Queue</th><th>GPU allocation</th><th>Usage</th><th>Pending</th>
-      <th>Free now</th><th>No-job GPUs</th><th>No-job nodes</th>
-      <th>CPU allocation</th><th>Free CPUs</th></tr>
-    `;
-    const body = document.createElement("tbody");
-    for (const row of [...this.report.capacity, total]) {
-      body.append(capacityRow(row));
+    const rows = [...this.report.capacity, total];
+    if (this.sort) {
+      rows.sort((left, right) =>
+        compareByPath(left, right, this.sort, this.direction),
+      );
     }
-    table.append(head, body);
-    const wrapper = document.createElement("div");
-    wrapper.className = "table-scroll fleet-table-scroll";
-    wrapper.append(table);
-    this.body.replaceChildren(summary, wrapper);
+    this.table.setRows(rows, this.columns, "No capacity data");
+    this.body.replaceChildren(summary, this.table.element);
   }
 }
 
-function summaryCell(label: string, value: string): HTMLElement {
+function summaryCell(label: string, value: string | Node): HTMLElement {
   const cell = document.createElement("div");
   const name = document.createElement("span");
   name.textContent = label;
   const output = document.createElement("strong");
-  output.textContent = value;
+  if (typeof value === "string") output.textContent = value;
+  else output.append(value);
   cell.append(name, output);
   return cell;
-}
-
-function capacityRow(row: ClusterGPUCapacityRow): HTMLTableRowElement {
-  const utilization =
-    row.capacity_gpus > 0
-      ? row.allocated_gpus / row.capacity_gpus * 100
-      : 0;
-  const output = document.createElement("tr");
-  for (const value of [
-    row.queue,
-    `${row.allocated_gpus} / ${row.capacity_gpus}`,
-    `${utilization.toFixed(1)} %`,
-    row.pending_gpus,
-    row.unallocated_gpus,
-    row.no_job_gpus,
-    row.no_job_node_equivalents,
-    `${formatNumber(row.allocated_cpus)} / ${formatNumber(row.capacity_cpus)}`,
-    formatNumber(row.free_cpus),
-  ]) {
-    const cell = document.createElement("td");
-    cell.textContent = String(value);
-    output.append(cell);
-  }
-  return output;
-}
-
-function formatNumber(value: number): string {
-  return value.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }

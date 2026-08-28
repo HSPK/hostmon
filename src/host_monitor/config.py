@@ -24,7 +24,13 @@ KNOWN_MONITOR_KEYS = {
 }
 KNOWN_ALERT_KEYS = {"enabled", "env_file", "env", "channels", "policy"}
 KNOWN_HISTORY_KEYS = {"enabled", "directory", "max_file_mb"}
-KNOWN_PROMETHEUS_KEYS = {"enabled", "host", "port", "max_sample_age_seconds"}
+KNOWN_PROMETHEUS_KEYS = {
+    "enabled",
+    "host",
+    "port",
+    "max_sample_age_seconds",
+    "dashboard_file",
+}
 REQUIRED_COLLECTORS = {"cpu", "memory", "disk", "network"}
 
 
@@ -60,6 +66,7 @@ class PrometheusSettings:
     host: str
     port: int
     max_sample_age_seconds: float
+    dashboard_file: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -301,6 +308,12 @@ def load_settings(path: str | Path | None = None) -> Settings:
             max(30.0, interval * 3),
         ),
     )
+    raw_dashboard_file = raw_prometheus.get("dashboard_file")
+    dashboard_file = (
+        _resolve_path(raw_dashboard_file, base, base / "dashboard.json")
+        if raw_dashboard_file not in (None, "")
+        else None
+    )
 
     return Settings(
         config_file=config_file,
@@ -328,6 +341,7 @@ def load_settings(path: str | Path | None = None) -> Settings:
             host=prometheus_host,
             port=prometheus_port,
             max_sample_age_seconds=max_sample_age,
+            dashboard_file=dashboard_file,
         ),
     )
 
@@ -486,16 +500,17 @@ def atomic_write_text(path: Path, content: str, mode: int = 0o600) -> None:
 
 
 def _render_prometheus_section(settings: PrometheusSettings) -> str:
-    return "\n".join(
-        [
+    lines = [
             "[prometheus]",
             f"enabled = {'true' if settings.enabled else 'false'}",
             f"host = {json.dumps(settings.host)}",
             f"port = {settings.port}",
             f"max_sample_age_seconds = {settings.max_sample_age_seconds:g}",
-            "",
-        ]
-    )
+    ]
+    if settings.dashboard_file is not None:
+        lines.append(f"dashboard_file = {json.dumps(str(settings.dashboard_file))}")
+    lines.append("")
+    return "\n".join(lines)
 
 
 def _replace_toml_section(text: str, name: str, replacement: str) -> str:
@@ -559,6 +574,7 @@ def update_prometheus_config(
         host=resolved_host,
         port=resolved_port,
         max_sample_age_seconds=float(resolved_max_age),
+        dashboard_file=current.dashboard_file,
     )
     try:
         text = settings.config_file.read_text(encoding="utf-8")

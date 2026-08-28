@@ -7,6 +7,14 @@ export interface MetricSnapshot {
   fields: Record<string, string | number | boolean | null>;
 }
 
+export interface SummaryFieldDefinition {
+  label: string;
+  path: string;
+  format?: TableColumnDefinition["format"];
+  unit?: string;
+  fallback?: string;
+}
+
 export interface StatusResponse {
   host: string;
   version: string;
@@ -70,12 +78,7 @@ export type WorkloadStateFilter =
   | "Pending"
   | "Mixed";
 
-export type WorkloadSort =
-  | "running-gpus"
-  | "pending-gpus"
-  | "name"
-  | "submitter"
-  | "queue";
+export type WorkloadSort = string;
 
 export interface WorkloadView {
   queue: string;
@@ -95,6 +98,9 @@ export interface ClusterGPUCapacityRow {
   capacity_cpus: number;
   allocated_cpus: number;
   free_cpus: number;
+  gpu_allocation: string;
+  utilization_percent: number;
+  cpu_allocation: string;
 }
 
 export interface ClusterGPUReport {
@@ -131,6 +137,9 @@ export interface CollectorDiagnostic {
   last_success_at: number | null;
   last_failure_at: number | null;
   last_error: string | null;
+  state: "up" | "stale" | "down";
+  duration: number | null;
+  failures: number;
   options: Record<string, unknown>;
 }
 
@@ -160,9 +169,39 @@ export interface BasePanelDefinition {
   type: string;
   page: PageId;
   section?: string;
-  columns?: string[];
+  columns?: TableColumnDefinition[];
   columnSpan?: 1 | 2;
   custom?: boolean;
+}
+
+export interface TableColumnDefinition {
+  id: string;
+  label: string;
+  path?: string;
+  width?: string;
+  align?: "left" | "center" | "right";
+  pinned?: boolean;
+  sort?: string;
+  format?: "text" | "number" | "state" | "metric" | "timestamp" | "duration";
+  unit?: string;
+  fallback?: string;
+  action?: string;
+}
+
+export interface DisplayValueSource {
+  source: "metric" | "field" | "system" | "static" | "metricMatch";
+  key?: string;
+  value?: string | number;
+  prefix?: string;
+  suffix?: string;
+  equals?: number;
+  fallback?: string;
+}
+
+export interface DisplayItemDefinition {
+  label: string;
+  template: string;
+  values: Record<string, DisplayValueSource>;
 }
 
 export interface StatPanelDefinition extends BasePanelDefinition {
@@ -173,6 +212,7 @@ export interface StatPanelDefinition extends BasePanelDefinition {
 export interface TimeSeriesPanelDefinition extends BasePanelDefinition {
   type: "timeseries";
   metrics: MetricName[];
+  series?: Record<string, Partial<MetricMetadata>>;
   range?: [number, number];
   style?: "line" | "area";
   lineWidth?: number;
@@ -185,6 +225,7 @@ export interface CollectorPanelDefinition extends BasePanelDefinition {
 
 export interface TasksPanelDefinition extends BasePanelDefinition {
   type: "tasks";
+  items: DisplayItemDefinition[];
 }
 
 export interface MetricsPanelDefinition extends BasePanelDefinition {
@@ -193,14 +234,19 @@ export interface MetricsPanelDefinition extends BasePanelDefinition {
 
 export interface SystemPanelDefinition extends BasePanelDefinition {
   type: "system";
+  items: DisplayItemDefinition[];
+  metricFilter?: {prefix?: string; suffix?: string};
 }
 
 export interface GPUFleetPanelDefinition extends BasePanelDefinition {
   type: "gpu-fleet";
+  summary: SummaryFieldDefinition[];
 }
 
 export interface GPUSubmittersPanelDefinition extends BasePanelDefinition {
   type: "gpu-submitters";
+  defaultSort?: string;
+  defaultSortDirection?: "asc" | "desc";
 }
 
 export interface RulesPanelDefinition extends BasePanelDefinition {

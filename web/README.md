@@ -113,6 +113,21 @@ interface PanelRenderer {
 Register the factory in `src/panels/registry.ts`. Data transport, storage, and
 application orchestration do not need to change.
 
+Every concrete metric name and display field belongs in `dashboard.json`.
+Table columns use the generic `id`, `label`, `path`, `width`, `align`, `pinned`,
+`sort`, `format`, and `action` schema. Summary cards use configured value
+sources and templates.
+
+For runtime customization, copy the packaged `dashboard.json` and configure:
+
+```toml
+[prometheus]
+dashboard_file = "~/.config/host-monitor/dashboard.json"
+```
+
+The browser fetches and validates this file on each reload; no TypeScript
+rebuild is required.
+
 ## Development
 
 ```bash

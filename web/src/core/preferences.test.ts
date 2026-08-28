@@ -48,7 +48,7 @@ describe("PreferenceStore", () => {
     first.setWorkloadView({
       queue: "queue-a",
       state: "attention",
-      sort: "pending-gpus",
+      sort: "pending_gpus",
       sortDirection: "desc",
     });
 
@@ -59,7 +59,7 @@ describe("PreferenceStore", () => {
     expect(restored.get().workloadView).toEqual({
       queue: "queue-a",
       state: "attention",
-      sort: "pending-gpus",
+      sort: "pending_gpus",
       sortDirection: "desc",
     });
     expect(restored.visiblePanels().some(panel => panel.id === "network")).toBe(false);
@@ -138,6 +138,9 @@ describe("PreferenceStore", () => {
       .visiblePanels("workloads")
       .find(item => item.id === "gpu-submitters");
 
-    expect(panel?.columns).toEqual(["queue", "name"]);
+    expect(panel?.columns?.map(column => column.id)).toEqual([
+      "queue",
+      "name",
+    ]);
   });
 });
