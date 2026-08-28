@@ -54,6 +54,7 @@ export interface ClusterGPUUsageRow {
 export interface ClusterGPUWorkloadRow extends ClusterGPUUsageRow {
   name: string;
   status: "Running" | "Pending" | "Mixed";
+  running_nodes: string[];
 }
 
 export interface WorkloadSelection {

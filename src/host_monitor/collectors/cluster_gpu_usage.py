@@ -226,6 +226,7 @@ def build_report(
             "running_pods": item.running_pods,
             "running_gpus": _number(item.running_gpus),
             "running_gpu_nodes": len(item.running_nodes),
+            "running_nodes": sorted(item.running_nodes),
             "pending_pods": item.pending_pods,
             "pending_gpus": _number(item.pending_gpus),
         }
@@ -326,12 +327,20 @@ class ClusterGPUUsageCollector:
             at = previous.get("at")
             metrics = previous.get("metrics")
             report = previous.get("report")
+            workload_rows = (
+                report.get("workloads") if isinstance(report, dict) else None
+            )
             if (
                 isinstance(at, (int, float))
                 and now - float(at) < self.poll_interval
                 and isinstance(metrics, dict)
                 and isinstance(report, dict)
-                and isinstance(report.get("workloads"), list)
+                and isinstance(workload_rows, list)
+                and all(
+                    isinstance(row, dict)
+                    and isinstance(row.get("running_nodes"), list)
+                    for row in workload_rows
+                )
             ):
                 return CollectorResult(
                     metrics={

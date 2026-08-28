@@ -213,6 +213,11 @@ export class GPUSubmittersPanel implements PanelRenderer {
       detailCell("Running pods", row.running_pods),
       detailCell("Pending GPUs", row.pending_gpus),
       detailCell("Pending pods", row.pending_pods),
+      detailCell(
+        "GPU node names",
+        row.running_nodes?.join(", ") || "--",
+        "detail-wide",
+      ),
     );
     this.drawer.replaceChildren(header, grid);
     this.drawer.classList.add("open");
@@ -275,8 +280,13 @@ function workloadRow(
   return output;
 }
 
-function detailCell(label: string, value: string | number): HTMLElement {
+function detailCell(
+  label: string,
+  value: string | number,
+  className = "",
+): HTMLElement {
   const cell = document.createElement("div");
+  cell.className = className;
   const name = document.createElement("span");
   name.textContent = label;
   const output = document.createElement("strong");

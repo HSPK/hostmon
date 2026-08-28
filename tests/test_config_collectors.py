@@ -475,6 +475,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
         self.assertEqual(len(report["workloads"]), 1)
         self.assertEqual(report["workloads"][0]["name"], "job-a")
         self.assertEqual(report["workloads"][0]["status"], "Mixed")
+        self.assertEqual(report["workloads"][0]["running_nodes"], ["gpu-1"])
         self.assertEqual(report["capacity"][0]["no_job_gpus"], 4)
         self.assertEqual(report["capacity"][0]["no_job_node_equivalents"], 0)
         self.assertEqual(report["capacity"][0]["allocated_cpus"], 125.5)

@@ -200,6 +200,7 @@ main { width: 100%; padding: 12px; }
   gap: 1px; margin-top: 14px; background: var(--border);
 }
 .workload-detail-grid > div { min-width: 0; padding: 10px; background: var(--surface); }
+.workload-detail-grid .detail-wide { grid-column: 1 / -1; }
 .workload-detail-grid span { display: block; color: var(--muted); font-size: 10px; }
 .workload-detail-grid strong {
   display: block; margin-top: 4px; font: 600 13px ui-monospace, monospace;

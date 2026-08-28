@@ -61,6 +61,8 @@ All notable changes to this project are documented here.
   shared and restored with browser Back/Forward navigation.
 - Kept the workload drawer close action inside narrow viewports when long run
   names exercise flexbox intrinsic sizing.
+- Added concrete, deterministically ordered GPU node names to run diagnostics
+  without increasing time-series cardinality or issuing extra cluster queries.
 
 ## [0.1.0] - 2026-08-17
 

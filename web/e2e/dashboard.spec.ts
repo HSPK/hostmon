@@ -76,6 +76,7 @@ const clusterGPUReport = {
       running_pods: 7,
       running_gpus: 56,
       running_gpu_nodes: 7,
+      running_nodes: ["gpu-node-01", "gpu-node-02"],
       pending_pods: 1,
       pending_gpus: 8,
     },
@@ -88,6 +89,7 @@ const clusterGPUReport = {
       running_pods: 1,
       running_gpus: 1,
       running_gpu_nodes: 1,
+      running_nodes: [`gpu-node-${String(index + 3).padStart(2, "0")}`],
       pending_pods: 0,
       pending_gpus: 0,
     })),
@@ -198,6 +200,7 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   );
   await expect(page.locator(".workload-drawer")).toContainText("user-a");
   await expect(page.locator(".workload-drawer")).toContainText("56");
+  await expect(page.locator(".workload-drawer")).toContainText("gpu-node-01");
   await page.getByRole("button", { name: "Close" }).click();
   await expect(page.locator(".workload-drawer")).toHaveAttribute(
     "aria-hidden",
