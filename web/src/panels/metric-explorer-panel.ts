@@ -94,11 +94,10 @@ export class MetricExplorerPanel implements PanelRenderer {
       item => this.context.actions.createChart([item.name]),
       {value: this.sort, direction: this.sortDirection},
     );
-    shell.body.append(
-      controls,
-      this.table.element,
+    this.table.element.append(
       tableFooter(this.count, this.previous, this.next),
     );
+    shell.body.append(controls, this.table.element);
     void this.load();
   }
 

@@ -77,12 +77,8 @@ export class RulesPanel implements PanelRenderer {
       event.preventDefault();
       void this.save();
     });
-    shell.body.append(
-      controls,
-      this.editor,
-      this.table.element,
-      tableFooter(this.count),
-    );
+    this.table.element.append(tableFooter(this.count));
+    shell.body.append(controls, this.editor, this.table.element);
     void this.load();
   }
 

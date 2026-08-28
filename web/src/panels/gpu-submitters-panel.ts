@@ -115,11 +115,10 @@ export class GPUSubmittersPanel implements PanelRenderer {
       undefined,
       {value: this.sort, direction: this.sortDirection},
     );
-    shell.body.append(
-      controls,
-      this.table.element,
+    this.table.element.append(
       tableFooter(this.count, this.previous, this.next),
     );
+    shell.body.append(controls, this.table.element);
 
     this.drawer = document.createElement("aside");
     this.drawer.className = "workload-drawer";
