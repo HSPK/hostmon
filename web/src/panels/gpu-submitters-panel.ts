@@ -3,11 +3,13 @@ import type {
   ClusterGPUWorkloadRow,
   GPUSubmittersPanelDefinition,
   WorkloadSelection,
+  WorkloadSort,
+  WorkloadStateFilter,
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
 import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
-import { compareWorkloads, type WorkloadSort } from "./workload-order";
+import { compareWorkloads } from "./workload-order";
 
 export class GPUSubmittersPanel implements PanelRenderer {
   readonly element: HTMLElement;
@@ -47,6 +49,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.queue.setAttribute("aria-label", "Queue");
     this.queue.addEventListener("change", () => {
       this.page = 0;
+      this.persistView();
       this.renderRows();
     });
     this.state = selectControl("Workload state", [
@@ -58,6 +61,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     ]);
     this.state.addEventListener("change", () => {
       this.page = 0;
+      this.persistView();
       this.renderRows();
     });
     this.sort = selectControl("Sort workloads", [
@@ -69,8 +73,12 @@ export class GPUSubmittersPanel implements PanelRenderer {
     ]);
     this.sort.addEventListener("change", () => {
       this.page = 0;
+      this.persistView();
       this.renderRows();
     });
+    const view = this.context.actions.workloadView();
+    this.state.value = view.state;
+    this.sort.value = view.sort;
     this.count = document.createElement("span");
     this.count.className = "table-count";
     this.previous = pageButton("Previous", () => {
@@ -137,7 +145,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.report = await this.context.actions.loadClusterGPU();
       this.lastLoaded = Date.now();
       const queues = ["all", ...this.report.capacity.map(row => row.queue)];
-      const selected = this.queue.value || "all";
+      const selected = this.queue.value || this.context.actions.workloadView().queue;
       this.queue.replaceChildren(
         ...queues.map(value => {
           const option = document.createElement("option");
@@ -147,6 +155,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
         }),
       );
       this.queue.value = queues.includes(selected) ? selected : "all";
+      if (this.queue.value !== selected) this.persistView();
       this.renderRows();
       this.syncSelectedDetails();
     } finally {
@@ -194,11 +203,20 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.tableBody.replaceChildren(row);
       return;
     }
+
     this.tableBody.replaceChildren(
       ...pageRows.map(row =>
         workloadRow(row, selected => this.openDetails(selected)),
       ),
     );
+  }
+
+  private persistView(): void {
+    this.context.actions.setWorkloadView({
+      queue: this.queue.value || "all",
+      state: this.state.value as WorkloadStateFilter,
+      sort: this.sort.value as WorkloadSort,
+    });
   }
 
   private syncSelectedDetails(): void {

@@ -44,11 +44,21 @@ describe("PreferenceStore", () => {
     first.setVisible("network", false);
     first.move("tasks", -1);
     first.setWindow(900);
+    first.setWorkloadView({
+      queue: "queue-a",
+      state: "attention",
+      sort: "pending-gpus",
+    });
 
     const restored = new PreferenceStore(DASHBOARD);
 
     expect(restored.get().hiddenPanels).toContain("network");
     expect(restored.get().windowSeconds).toBe(900);
+    expect(restored.get().workloadView).toEqual({
+      queue: "queue-a",
+      state: "attention",
+      sort: "pending-gpus",
+    });
     expect(restored.visiblePanels().some(panel => panel.id === "network")).toBe(false);
   });
 

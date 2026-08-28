@@ -73,6 +73,8 @@ All notable changes to this project are documented here.
   exceeds unallocated capacity, while preserving pending demand separately.
 - Versioned cluster GPU collector cache state so semantic upgrades force an
   immediate fresh report instead of reusing older calculations.
+- Persisted workload queue, state, and sort choices as typed dashboard
+  preferences so triage views survive navigation and reloads.
 
 ## [0.1.0] - 2026-08-17
 

@@ -307,6 +307,10 @@ test("filters and sorts workload triage views", async ({ page }) => {
   await expect(page.locator(".table-empty")).toHaveText(
     "No workloads match the current filters",
   );
+  await page.reload();
+  await expect(page.getByLabel("Workload state")).toHaveValue("attention");
+  await expect(page.getByLabel("Sort workloads")).toHaveValue("pending-gpus");
+  await expect(page.locator(".table-count")).toContainText("2 workloads");
 });
 
 test("remains responsive on narrow screens", async ({ page }) => {

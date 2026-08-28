@@ -4,6 +4,7 @@ import type {
   PanelDefinition,
   PageId,
   TimeSeriesPanelDefinition,
+  WorkloadView,
 } from "../domain/types";
 
 const STORAGE_KEY = "hostmon.dashboard.preferences.v2";
@@ -21,6 +22,7 @@ export class PreferenceStore {
       panelOrder: [...this.value.panelOrder],
       windowSeconds: this.value.windowSeconds,
       activePage: this.value.activePage,
+      workloadView: {...this.value.workloadView},
       customPanels: this.value.customPanels.map(panel => ({...panel})),
     };
   }
@@ -68,6 +70,11 @@ export class PreferenceStore {
     this.save();
   }
 
+  setWorkloadView(view: WorkloadView): void {
+    this.value.workloadView = {...view};
+    this.save();
+  }
+
   saveCustomPanel(panel: TimeSeriesPanelDefinition): void {
     const index = this.value.customPanels.findIndex(item => item.id === panel.id);
     if (index >= 0) this.value.customPanels[index] = panel;
@@ -98,6 +105,7 @@ export class PreferenceStore {
       panelOrder: this.definition.panels.map(panel => panel.id),
       windowSeconds: this.definition.defaultWindowSeconds,
       activePage: "overview",
+      workloadView: defaultWorkloadView(),
       customPanels: [],
     };
   }
@@ -121,6 +129,9 @@ export class PreferenceStore {
         activePage: isPageId(parsed.activePage)
           ? parsed.activePage
           : "overview",
+        workloadView: isWorkloadView(parsed.workloadView)
+          ? parsed.workloadView
+          : defaultWorkloadView(),
         customPanels: Array.isArray(parsed.customPanels)
           ? parsed.customPanels.filter(isCustomPanel)
           : [],
@@ -138,6 +149,24 @@ export class PreferenceStore {
     }
   }
 
+}
+
+function defaultWorkloadView(): WorkloadView {
+  return {queue: "all", state: "all", sort: "running-gpus"};
+}
+
+function isWorkloadView(value: unknown): value is WorkloadView {
+  if (!value || typeof value !== "object") return false;
+  const view = value as Partial<WorkloadView>;
+  return (
+    typeof view.queue === "string" &&
+    ["all", "attention", "Running", "Pending", "Mixed"].includes(
+      String(view.state),
+    ) &&
+    ["running-gpus", "pending-gpus", "name", "submitter", "queue"].includes(
+      String(view.sort),
+    )
+  );
 }
 
 function isPageId(value: unknown): value is PageId {

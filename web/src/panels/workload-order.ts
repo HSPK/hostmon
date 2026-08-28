@@ -1,11 +1,7 @@
-import type { ClusterGPUWorkloadRow } from "../domain/types";
-
-export type WorkloadSort =
-  | "running-gpus"
-  | "pending-gpus"
-  | "name"
-  | "submitter"
-  | "queue";
+import type {
+  ClusterGPUWorkloadRow,
+  WorkloadSort,
+} from "../domain/types";
 
 export function compareWorkloads(
   left: ClusterGPUWorkloadRow,

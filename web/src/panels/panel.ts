@@ -4,6 +4,7 @@ import type {
   PanelDefinition,
   TimeSeriesPanelDefinition,
   WorkloadSelection,
+  WorkloadView,
 } from "../domain/types";
 import type { TimeSeriesStore } from "../core/time-series-store";
 
@@ -17,6 +18,8 @@ export interface PanelContext {
       selection: WorkloadSelection | null,
       replace?: boolean,
     ): void;
+    workloadView(): WorkloadView;
+    setWorkloadView(view: WorkloadView): void;
     createChart(metrics?: string[]): void;
     editChart(panel: TimeSeriesPanelDefinition): void;
     removeChart(panelId: string): void;

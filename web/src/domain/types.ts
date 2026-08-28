@@ -62,6 +62,26 @@ export interface WorkloadSelection {
   name: string;
 }
 
+export type WorkloadStateFilter =
+  | "all"
+  | "attention"
+  | "Running"
+  | "Pending"
+  | "Mixed";
+
+export type WorkloadSort =
+  | "running-gpus"
+  | "pending-gpus"
+  | "name"
+  | "submitter"
+  | "queue";
+
+export interface WorkloadView {
+  queue: string;
+  state: WorkloadStateFilter;
+  sort: WorkloadSort;
+}
+
 export interface ClusterGPUCapacityRow {
   queue: string;
   capacity_gpus: number;
@@ -185,5 +205,6 @@ export interface DashboardPreferences {
   panelOrder: string[];
   windowSeconds: number;
   activePage: PageId;
+  workloadView: WorkloadView;
   customPanels: TimeSeriesPanelDefinition[];
 }

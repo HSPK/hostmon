@@ -365,6 +365,8 @@ export class DashboardApp {
           selectedWorkload: () => this.workloadFromLocation(),
           selectWorkload: (selection, replace) =>
             this.updateWorkloadRoute(selection, replace),
+          workloadView: () => this.preferences.get().workloadView,
+          setWorkloadView: view => this.preferences.setWorkloadView(view),
           createChart: metrics => this.openChartEditor(undefined, metrics),
           editChart: chart => this.openChartEditor(chart),
           removeChart: id => this.removeChart(id),
