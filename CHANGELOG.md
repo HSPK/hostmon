@@ -106,6 +106,8 @@ All notable changes to this project are documented here.
 - Rebuilt operational tables as an industrial DataGrid with dedicated
   toolbar/viewport/footer regions, fixed key columns, explicit widths,
   single-line truncation, stable scrollbars, and CSS containment.
+- Standardized UI spacing on 4/8/12/16-pixel tokens, removed redundant section
+  labels on table-only pages, and added themed high-contrast scrollbars.
 
 ## [0.1.0] - 2026-08-17
 
