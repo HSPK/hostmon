@@ -63,6 +63,8 @@ All notable changes to this project are documented here.
   names exercise flexbox intrinsic sizing.
 - Added concrete, deterministically ordered GPU node names to run diagnostics
   without increasing time-series cardinality or issuing extra cluster queries.
+- Prevented dashboard rebuilds from deleting live hashed assets before the new
+  index is ready, retaining one prior JS/CSS generation for in-flight clients.
 
 ## [0.1.0] - 2026-08-17
 

@@ -7,7 +7,7 @@ export default defineConfig({
   build: {
     target: "es2022",
     outDir: "../src/host_monitor/static/dashboard",
-    emptyOutDir: true,
+    emptyOutDir: false,
     sourcemap: false,
     cssCodeSplit: true,
     assetsInlineLimit: 2048,
