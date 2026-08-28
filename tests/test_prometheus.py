@@ -10,6 +10,7 @@ import unittest
 import urllib.error
 import urllib.request
 from pathlib import Path
+from unittest.mock import patch
 
 from aiohttp import ClientSession, WSMsgType, WSServerHandshakeError
 
@@ -324,6 +325,26 @@ class PrometheusHTTPTests(unittest.TestCase):
             finally:
                 await asyncio.gather(*(socket.close() for socket in sockets))
 
+    async def concurrent_history_requests(self, count: int):
+        address = self.exporter.address
+        self.assertIsNotNone(address)
+        host, port = address
+        url = (
+            f"http://{host}:{port}/api/history"
+            "?seconds=21601&max_points=100&metrics=cpu/percent"
+        )
+        async with ClientSession() as session:
+            responses = await asyncio.gather(
+                *(session.get(url) for _ in range(count))
+            )
+            try:
+                return await asyncio.gather(
+                    *(response.json() for response in responses)
+                )
+            finally:
+                for response in responses:
+                    response.release()
+
     async def cross_origin_websocket_status(self):
         address = self.exporter.address
         self.assertIsNotNone(address)
@@ -443,6 +464,36 @@ class PrometheusHTTPTests(unittest.TestCase):
         received = asyncio.run(self.websocket_broadcast(20))
 
         self.assertEqual(received, [99] * 20)
+
+    def test_long_history_requests_share_one_disk_scan(self):
+        history = Path(self.directory.name) / "history"
+        history.mkdir()
+        now = time.time()
+        (history / "metrics-2026-08-28-0001.jsonl").write_text(
+            "".join(
+                json.dumps(
+                    {
+                        "_time": now - index * 10,
+                        "metrics": {"cpu/percent": index},
+                    }
+                )
+                + "\n"
+                for index in range(20)
+            ),
+            encoding="utf-8",
+        )
+        self.exporter.history_directory = history
+        self.save_state(now)
+        with patch(
+            "host_monitor.prometheus.load_history_window",
+            wraps=load_history_window,
+        ) as loader:
+            self.exporter.start()
+            payloads = asyncio.run(self.concurrent_history_requests(8))
+
+        self.assertEqual(loader.call_count, 1)
+        self.assertEqual(len(payloads), 8)
+        self.assertTrue(all(payload == payloads[0] for payload in payloads))
 
     def test_websocket_rejects_cross_origin_client(self):
         self.save_state(time.time())

@@ -39,6 +39,7 @@ LOGGER = logging.getLogger("host_monitor.prometheus")
 INVALID_NAME = re.compile(r"[^a-zA-Z0-9_:]")
 PLUGIN_NAME = re.compile(r"^[a-zA-Z0-9_]+$")
 WEB_EXECUTOR_WORKERS = 4
+LONG_HISTORY_CACHE_SECONDS = 15.0
 
 
 @dataclass(frozen=True)
@@ -183,6 +184,14 @@ class PrometheusExporter:
         self._catalog_responses: dict[
             float, tuple[int, bytes]
         ] = {}
+        self._long_history_cache: dict[
+            tuple[float, int, tuple[str, ...]],
+            tuple[float, dict[str, Any]],
+        ] = {}
+        self._long_history_inflight: dict[
+            tuple[float, int, tuple[str, ...]],
+            asyncio.Task[dict[str, Any]],
+        ] = {}
 
     @property
     def address(self) -> tuple[str, int] | None:
@@ -299,13 +308,10 @@ class PrometheusExporter:
             else None
         )
         if seconds > 21600 and self.history_directory is not None:
-            payload = await asyncio.to_thread(
-                load_history_window,
-                self.history_directory,
-                now=time.time(),
-                seconds=seconds,
-                maximum_points=maximum,
-                metrics=metrics or list(DEFAULT_DASHBOARD_SERIES),
+            payload = await self._long_history(
+                seconds,
+                maximum,
+                metrics or list(DEFAULT_DASHBOARD_SERIES),
             )
         else:
             try:
@@ -322,6 +328,42 @@ class PrometheusExporter:
                     content_type="text/plain",
                 )
         return self._json_response(payload)
+
+    async def _long_history(
+        self,
+        seconds: float,
+        maximum_points: int,
+        metrics: list[str],
+    ) -> dict[str, Any]:
+        if self.history_directory is None:
+            raise MonitorError("history directory is not configured")
+        key = (round(seconds, 3), maximum_points, tuple(metrics))
+        now = time.monotonic()
+        cached = self._long_history_cache.get(key)
+        if cached is not None and now - cached[0] <= LONG_HISTORY_CACHE_SECONDS:
+            return cached[1]
+        task = self._long_history_inflight.get(key)
+        if task is None:
+            task = asyncio.create_task(
+                asyncio.to_thread(
+                    load_history_window,
+                    self.history_directory,
+                    now=time.time(),
+                    seconds=seconds,
+                    maximum_points=maximum_points,
+                    metrics=metrics,
+                )
+            )
+            self._long_history_inflight[key] = task
+        try:
+            payload = await asyncio.shield(task)
+        finally:
+            if task.done():
+                self._long_history_inflight.pop(key, None)
+        if len(self._long_history_cache) >= 16:
+            self._long_history_cache.clear()
+        self._long_history_cache[key] = (time.monotonic(), payload)
+        return payload
 
     async def _catalog(self, request: web.Request) -> web.Response:
         try:

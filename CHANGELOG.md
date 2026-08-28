@@ -108,6 +108,8 @@ All notable changes to this project are documented here.
   single-line truncation, stable scrollbars, and CSS containment.
 - Standardized UI spacing on 4/8/12/16-pixel tokens, removed redundant section
   labels on table-only pages, and added themed high-contrast scrollbars.
+- Coalesced identical long-history requests into one disk scan and cached the
+  bounded result for 15 seconds to prevent multi-client I/O amplification.
 
 ## [0.1.0] - 2026-08-17
 
