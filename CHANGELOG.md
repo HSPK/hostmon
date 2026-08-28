@@ -69,6 +69,10 @@ All notable changes to this project are documented here.
   pending GPUs, name, submitter, or queue.
 - Added an explicit workload empty state so zero-result triage filters never
   look like a loading or rendering failure.
+- Clamped no-job GPU availability at zero when pending demand temporarily
+  exceeds unallocated capacity, while preserving pending demand separately.
+- Versioned cluster GPU collector cache state so semantic upgrades force an
+  immediate fresh report instead of reusing older calculations.
 
 ## [0.1.0] - 2026-08-17
 

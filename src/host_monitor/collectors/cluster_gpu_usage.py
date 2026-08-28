@@ -12,6 +12,7 @@ from .kubectl_client import KubectlClient, parse_quantity
 
 
 METRIC_COMPONENT = re.compile(r"[^a-zA-Z0-9_]+")
+STATE_SCHEMA_VERSION = 2
 
 
 @dataclass
@@ -174,7 +175,7 @@ def build_report(
             Decimal(),
         )
         unallocated_gpus = capacity_gpus - allocated_gpus
-        no_job_gpus = unallocated_gpus - int(pending_gpus)
+        no_job_gpus = max(unallocated_gpus - int(pending_gpus), 0)
         capacity.append(
             {
                 "queue": queue,
@@ -331,7 +332,8 @@ class ClusterGPUUsageCollector:
                 report.get("workloads") if isinstance(report, dict) else None
             )
             if (
-                isinstance(at, (int, float))
+                previous.get("schema_version") == STATE_SCHEMA_VERSION
+                and isinstance(at, (int, float))
                 and now - float(at) < self.poll_interval
                 and isinstance(metrics, dict)
                 and isinstance(report, dict)
@@ -394,6 +396,7 @@ class ClusterGPUUsageCollector:
         return CollectorResult(
             metrics=metrics,
             state={
+                "schema_version": STATE_SCHEMA_VERSION,
                 "at": now,
                 "metrics": metrics,
                 "report": report,

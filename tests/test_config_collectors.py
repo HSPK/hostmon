@@ -429,7 +429,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
                         "containers": [
                             {
                                 "resources": {
-                                    "requests": {"nvidia.com/gpu": "4"}
+                                    "requests": {"nvidia.com/gpu": "12"}
                                 }
                             }
                         ]
@@ -471,12 +471,12 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
         metrics = report_metrics(report)
 
         self.assertEqual(report["usage"][0]["running_gpus"], 8)
-        self.assertEqual(report["usage"][0]["pending_gpus"], 4)
+        self.assertEqual(report["usage"][0]["pending_gpus"], 12)
         self.assertEqual(len(report["workloads"]), 1)
         self.assertEqual(report["workloads"][0]["name"], "job-a")
         self.assertEqual(report["workloads"][0]["status"], "Mixed")
         self.assertEqual(report["workloads"][0]["running_nodes"], ["gpu-1"])
-        self.assertEqual(report["capacity"][0]["no_job_gpus"], 4)
+        self.assertEqual(report["capacity"][0]["no_job_gpus"], 0)
         self.assertEqual(report["capacity"][0]["no_job_node_equivalents"], 0)
         self.assertEqual(report["capacity"][0]["allocated_cpus"], 125.5)
         self.assertEqual(
@@ -492,6 +492,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
             }
         )
         previous = {
+            "schema_version": 2,
             "at": 100,
             "metrics": {"cluster_gpu/running_gpus": 8},
             "report": {"usage": [], "workloads": []},
