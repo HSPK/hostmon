@@ -1,167 +1,82 @@
-import type { DashboardDefinition } from "../domain/types";
+import rawDashboard from "./dashboard.json";
+import type {
+  DashboardDefinition,
+  NavigationItem,
+  PanelDefinition,
+} from "../domain/types";
 
-export const NAVIGATION = [
-  {id: "overview", label: "Overview"},
-  {id: "gpu-fleet", label: "GPU Fleet"},
-  {id: "workloads", label: "Workloads"},
-  {id: "metrics", label: "Metrics"},
-  {id: "collectors", label: "Collectors"},
-  {id: "kubernetes", label: "Kubernetes"},
-  {id: "system", label: "System"},
-] as const;
+assertDashboard(rawDashboard);
 
-export const DASHBOARD: DashboardDefinition = {
-  title: "hostmon operations",
-  defaultWindowSeconds: 3600,
-  panels: [
-    {
-      id: "overview",
-      type: "stats",
-      page: "overview",
-      title: "Current resource state",
-      columnSpan: 2,
-      metrics: [
-        { metric: "cpu/percent", label: "CPU", unit: "%", decimals: 1 },
-        { metric: "memory/percent", label: "Memory", unit: "%", decimals: 1 },
-        { metric: "disk/percent", label: "Disk", unit: "%", decimals: 1 },
-        { metric: "gpu/percent", label: "GPU", unit: "%", decimals: 1 },
-        {
-          metric: "gpu/memory_percent",
-          label: "GPU memory",
-          unit: "%",
-          decimals: 1,
-        },
-        {
-          metric: "gpu/temperature_c",
-          label: "GPU temperature",
-          unit: "C",
-          decimals: 0,
-        },
-        {
-          metric: "network/rx_mbps",
-          label: "Network RX",
-          unit: "Mbps",
-          decimals: 2,
-        },
-        {
-          metric: "network/tx_mbps",
-          label: "Network TX",
-          unit: "Mbps",
-          decimals: 2,
-        },
-      ],
-    },
-    {
-      id: "host-utilization",
-      type: "timeseries",
-      page: "overview",
-      title: "Host utilization",
-      metrics: ["cpu/percent", "memory/percent", "disk/percent"],
-      range: [0, 100],
-    },
-    {
-      id: "network",
-      type: "timeseries",
-      page: "overview",
-      title: "Network throughput",
-      metrics: ["network/rx_mbps", "network/tx_mbps"],
-    },
-    {
-      id: "gpu",
-      type: "timeseries",
-      page: "overview",
-      title: "GPU",
-      metrics: [
-        "gpu/percent",
-        "gpu/memory_percent",
-        "gpu/temperature_c",
-      ],
-      range: [0, 100],
-    },
-    {
-      id: "pressure",
-      type: "timeseries",
-      page: "overview",
-      title: "Resource pressure (PSI avg10)",
-      metrics: [
-        "pressure/cpu/some_avg10",
-        "pressure/io/some_avg10",
-        "pressure/memory/some_avg10",
-      ],
-      range: [0, 100],
-    },
-    {
-      id: "kubernetes",
-      type: "timeseries",
-      page: "kubernetes",
-      title: "Kubernetes GPU nodes",
-      metrics: ["k8s/occupied_gpu_nodes", "k8s/quota_nodes"],
-    },
-    {
-      id: "collectors",
-      type: "collectors",
-      page: "collectors",
-      title: "Collector health",
-      columnSpan: 2,
-    },
-    {
-      id: "tasks",
-      type: "tasks",
-      page: "kubernetes",
-      title: "Kubernetes task state",
-      columnSpan: 2,
-    },
-    {
-      id: "gpu-fleet",
-      type: "gpu-fleet",
-      page: "gpu-fleet",
-      title: "Queue capacity and allocation",
-      columnSpan: 2,
-    },
-    {
-      id: "gpu-capacity-history",
-      type: "timeseries",
-      page: "gpu-fleet",
-      title: "GPU capacity history",
-      columnSpan: 2,
-      metrics: [
-        "cluster_gpu/queue/total/capacity_gpus",
-        "cluster_gpu/queue/total/allocated_gpus",
-      ],
-    },
-    {
-      id: "gpu-availability-history",
-      type: "timeseries",
-      page: "gpu-fleet",
-      title: "GPU availability and demand",
-      columnSpan: 2,
-      metrics: [
-        "cluster_gpu/queue/total/pending_gpus",
-        "cluster_gpu/queue/total/unallocated_gpus",
-        "cluster_gpu/queue/total/no_job_gpus",
-        "cluster_gpu/queue/total/no_job_node_equivalents",
-      ],
-    },
-    {
-      id: "gpu-submitters",
-      type: "gpu-submitters",
-      page: "workloads",
-      title: "GPU workloads",
-      columnSpan: 2,
-    },
-    {
-      id: "metric-explorer",
-      type: "metrics",
-      page: "metrics",
-      title: "Metric explorer",
-      columnSpan: 2,
-    },
-    {
-      id: "system",
-      type: "system",
-      page: "system",
-      title: "System and API status",
-      columnSpan: 2,
-    },
-  ],
-};
+export const DASHBOARD: DashboardDefinition = rawDashboard;
+export const NAVIGATION: NavigationItem[] = DASHBOARD.navigation;
+
+function assertDashboard(value: unknown): asserts value is DashboardDefinition {
+  if (!isRecord(value)) throw new Error("Dashboard config must be an object");
+  if (
+    typeof value.title !== "string" ||
+    typeof value.defaultWindowSeconds !== "number" ||
+    !Array.isArray(value.navigation) ||
+    !Array.isArray(value.panels)
+  ) {
+    throw new Error("Dashboard config is missing required fields");
+  }
+  const pages = new Set<string>();
+  for (const item of value.navigation) {
+    if (
+      !isRecord(item) ||
+      typeof item.id !== "string" ||
+      typeof item.label !== "string" ||
+      pages.has(item.id)
+    ) {
+      throw new Error("Dashboard navigation entries must have unique ids");
+    }
+    pages.add(item.id);
+  }
+  if (!value.panels.every(panel => isPanel(panel, pages))) {
+    throw new Error("Dashboard contains an invalid panel definition");
+  }
+}
+
+function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
+  if (
+    !isRecord(value) ||
+    typeof value.id !== "string" ||
+    typeof value.title !== "string" ||
+    typeof value.type !== "string" ||
+    typeof value.page !== "string" ||
+    !pages.has(value.page)
+  ) {
+    return false;
+  }
+  if (value.type === "timeseries") {
+    return (
+      Array.isArray(value.metrics) &&
+      value.metrics.every(metric => typeof metric === "string")
+    );
+  }
+  if (value.type === "stats") {
+    return (
+      Array.isArray(value.metrics) &&
+      value.metrics.every(
+        metric =>
+          isRecord(metric) &&
+          typeof metric.metric === "string" &&
+          typeof metric.label === "string" &&
+          typeof metric.unit === "string",
+      )
+    );
+  }
+  return [
+    "collectors",
+    "tasks",
+    "metrics",
+    "system",
+    "gpu-fleet",
+    "gpu-submitters",
+    "rules",
+  ].includes(value.type);
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object";
+}

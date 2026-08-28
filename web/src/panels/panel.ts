@@ -5,6 +5,7 @@ import type {
   TimeSeriesPanelDefinition,
   WorkloadSelection,
   WorkloadView,
+  AlertRuleConfig,
 } from "../domain/types";
 import type { TimeSeriesStore } from "../core/time-series-store";
 
@@ -20,6 +21,10 @@ export interface PanelContext {
     ): void;
     workloadView(): WorkloadView;
     setWorkloadView(view: WorkloadView): void;
+    loadRules(): Promise<AlertRuleConfig[]>;
+    createRule(rule: AlertRuleConfig): Promise<void>;
+    updateRule(name: string, rule: AlertRuleConfig): Promise<void>;
+    deleteRule(name: string): Promise<void>;
     createChart(metrics?: string[]): void;
     editChart(panel: TimeSeriesPanelDefinition): void;
     removeChart(panelId: string): void;

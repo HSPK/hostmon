@@ -110,6 +110,19 @@ const clusterGPUReport = {
 };
 
 test.beforeEach(async ({ page }) => {
+  let alertRules = [
+    {
+      alert: "high-cpu",
+      expr: "cpu.percent >= 90",
+      level: "warning",
+      title: "High CPU",
+      message: "CPU is high",
+      enabled: true,
+      for: 3,
+      mode: "level",
+      cooldown: 300,
+    },
+  ];
   const timestamps = Array.from({ length: 60 }, (_, index) => now - 590 + index * 10);
   const metadata = Object.fromEntries(
     Object.keys(metrics).map(name => [
@@ -177,6 +190,29 @@ test.beforeEach(async ({ page }) => {
       }),
     }),
   );
+  await page.route("**/api/rules*", async route => {
+    const request = route.request();
+    const name = new URL(request.url()).pathname.split("/").at(-1);
+    if (request.method() === "POST") {
+      alertRules.push(request.postDataJSON());
+      await route.fulfill({status: 201, json: alertRules.at(-1)});
+      return;
+    }
+    if (request.method() === "PUT") {
+      const replacement = request.postDataJSON();
+      alertRules = alertRules.map(rule =>
+        rule.alert === name ? replacement : rule,
+      );
+      await route.fulfill({json: replacement});
+      return;
+    }
+    if (request.method() === "DELETE") {
+      alertRules = alertRules.filter(rule => rule.alert !== name);
+      await route.fulfill({status: 204});
+      return;
+    }
+    await route.fulfill({json: {rules: alertRules}});
+  });
   await page.routeWebSocket("**/api/ws", socket => {
     socket.send(
       JSON.stringify({
@@ -196,6 +232,8 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".stat-card")).toHaveCount(8);
   await expect(page.locator(".uplot")).toHaveCount(4);
   await expect(page.locator("#connection-text")).toHaveText("connected");
+  await expect(page.locator(".statusbar")).toContainText("API ");
+  await expect(page.locator(".statusbar")).toContainText("UTC+8");
 
   await page.getByRole("button", { name: "Collectors" }).click();
   await expect(page.locator("#page-title")).toHaveText("Collectors");
@@ -287,7 +325,8 @@ test("supports deep links and browser workspace history", async ({ page }) => {
 
 test("filters and sorts workload triage views", async ({ page }) => {
   await page.goto("/?page=workloads");
-  await page.getByLabel("Sort workloads").selectOption("pending-gpus");
+  await page.getByRole("button", { name: "Pending GPUs" }).click();
+  await expect(page.getByLabel("Sort workloads")).toHaveValue("pending-gpus");
   await expect(page.locator(".submitter-table tbody tr").first()).toContainText(
     "queued-job-001",
   );
@@ -366,4 +405,70 @@ test("maintains smooth animation frame cadence", async ({ page }) => {
   frameDurations.sort((left, right) => left - right);
   const p95 = frameDurations[Math.floor(frameDurations.length * 0.95)] ?? 100;
   expect(p95).toBeLessThan(35);
+});
+
+test("requests bounded adaptive history for long windows", async ({ page }) => {
+  const historyRequests: URL[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/history") historyRequests.push(url);
+  });
+  await page.goto("/");
+  await page.locator("#window-select").selectOption("2592000");
+  await expect.poll(() => historyRequests.at(-1)?.searchParams.get("seconds"))
+    .toBe("2592000");
+  const maximum = Number(
+    historyRequests.at(-1)?.searchParams.get("max_points"),
+  );
+  expect(maximum).toBeGreaterThanOrEqual(300);
+  expect(maximum).toBeLessThanOrEqual(2400);
+});
+
+test("drags panels and edits built-in chart configuration", async ({ page }) => {
+  await page.goto("/?page=overview");
+  const network = page.locator('[data-panel-id="network"]');
+  const utilization = page.locator('[data-panel-id="host-utilization"]');
+  await network.locator(".panel-header").dragTo(utilization);
+  await expect
+    .poll(async () =>
+      page.locator(".panel").evaluateAll(elements =>
+        elements.map(element => (element as HTMLElement).dataset.panelId),
+      ),
+    )
+    .toEqual([
+      "overview",
+      "network",
+      "host-utilization",
+      "gpu",
+      "pressure",
+    ]);
+
+  await utilization.getByRole("button", { name: "Edit" }).click();
+  await page.locator("#chart-title").fill("Custom host utilization");
+  await page.locator("#chart-line-width").fill("2.5");
+  await page.getByRole("button", { name: "Save chart" }).click();
+  await expect(
+    page.locator('[data-panel-id="host-utilization"]'),
+  ).toContainText("Custom host utilization");
+  await page.getByRole("button", { name: "System" }).click();
+  await page.getByLabel("Find chart").fill("host utilization");
+  await page.getByLabel("Find chart").press("Enter");
+  await expect(page.locator("#page-title")).toHaveText("Overview");
+  await expect(
+    page.locator('[data-panel-id="host-utilization"]'),
+  ).toHaveClass(/panel-highlight/);
+});
+
+test("creates and toggles alert rules from settings", async ({ page }) => {
+  await page.goto("/?page=settings");
+  await expect(page.locator(".rules-table")).toContainText("high-cpu");
+  await page.getByRole("button", { name: "Add rule" }).click();
+  await page.locator('[name="alert"]').fill("gpu-hot");
+  await page.locator('[name="expr"]').fill("gpu.temperature_c >= 85");
+  await page.locator('[name="title"]').fill("GPU hot");
+  await page.locator('[name="message"]').fill("GPU temperature exceeded");
+  await page.getByRole("button", { name: "Save rule" }).click();
+  await expect(page.locator(".rules-table")).toContainText("gpu-hot");
+  await page.getByLabel("Enable gpu-hot").uncheck();
+  await expect(page.getByLabel("Enable gpu-hot")).not.toBeChecked();
 });

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import math
 import json
+import re
 import threading
 from bisect import bisect_left
 from collections import deque
@@ -13,7 +14,9 @@ from pathlib import Path
 
 
 DASHBOARD_CAPACITY = 2160
+MAX_HISTORY_SECONDS = 30 * 24 * 60 * 60
 MAX_DASHBOARD_METRICS = 512
+HISTORY_TIMESTAMP = re.compile(rb'"_time"\s*:\s*(-?\d+(?:\.\d+)?)')
 DEFAULT_DASHBOARD_SERIES: dict[str, dict[str, str]] = {
     "cpu/percent": {"label": "CPU", "unit": "%", "color": "#66d9ef"},
     "memory/percent": {"label": "Memory", "unit": "%", "color": "#a6e22e"},
@@ -362,3 +365,74 @@ def load_recent_history(directory: Path, count: int) -> list[dict[str, Any]]:
         except OSError:
             continue
     return list(reversed(records))
+
+
+def load_history_window(
+    directory: Path,
+    *,
+    now: float,
+    seconds: float,
+    maximum_points: int,
+    metrics: list[str],
+) -> dict[str, Any]:
+    cutoff = now - seconds
+    bucket_width = seconds / maximum_points
+    buckets: dict[int, tuple[float, dict[str, float | None]]] = {}
+    finished = False
+    if directory.exists():
+        for path in reversed(sorted(directory.glob("metrics-*.jsonl"))):
+            try:
+                for line in _reverse_lines(path):
+                    match = HISTORY_TIMESTAMP.search(line)
+                    if match is None:
+                        continue
+                    try:
+                        timestamp = float(match.group(1))
+                    except ValueError:
+                        continue
+                    if timestamp > now:
+                        continue
+                    if timestamp < cutoff:
+                        finished = True
+                        break
+                    index = min(
+                        maximum_points - 1,
+                        max(0, int((timestamp - cutoff) / bucket_width)),
+                    )
+                    if index in buckets:
+                        continue
+                    try:
+                        record = json.loads(line)
+                    except (UnicodeDecodeError, json.JSONDecodeError):
+                        continue
+                    values = record.get("metrics") if isinstance(record, dict) else None
+                    if not isinstance(values, dict):
+                        continue
+                    buckets[index] = (
+                        timestamp,
+                        {
+                            name: (
+                                float(values[name])
+                                if isinstance(values.get(name), (int, float))
+                                and math.isfinite(float(values[name]))
+                                else None
+                            )
+                            for name in metrics
+                        },
+                    )
+            except OSError:
+                continue
+            if finished:
+                break
+    ordered = [buckets[index] for index in sorted(buckets)]
+    return {
+        "from": ordered[0][0] if ordered else None,
+        "to": ordered[-1][0] if ordered else None,
+        "timestamps": [bucket[0] for bucket in ordered],
+        "series": {
+            name: [bucket[1][name] for bucket in ordered]
+            for name in metrics
+        },
+        "metadata": {name: infer_metric_metadata(name) for name in metrics},
+        "resolution_seconds": bucket_width,
+    }

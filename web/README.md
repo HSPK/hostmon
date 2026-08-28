@@ -29,7 +29,8 @@ Important modules:
 | `core/preferences.ts` | Browser-local layout preferences |
 | `panels/panel.ts` | Renderer interface and registry |
 | `panels/timeseries-panel.ts` | uPlot adapter |
-| `config/dashboard.ts` | Declarative default panel layout |
+| `config/dashboard.json` | Declarative navigation and default panel layout |
+| `config/dashboard.ts` | Runtime validation for dashboard configuration |
 | `app.ts` | Application orchestration only |
 
 ## Performance properties
@@ -40,6 +41,7 @@ Important modules:
 - Charts redraw only when data, layout, or time range changes.
 - History is aligned and columnar rather than object-per-point.
 - Server history is bounded and downsampled before serialization.
+- Windows up to 30 days decode at most one JSON record per display bucket.
 - Hashed Vite assets use immutable HTTP caching.
 - No runtime CDN, fonts, JavaScript, or CSS dependencies.
 - Rendering pauses when the page is hidden.
@@ -48,7 +50,8 @@ The production bundle budget is below 100 KiB compressed.
 
 ## Customize the dashboard
 
-Users can open **Layout** to show, hide, and reorder panels. Preferences are
+Users can drag panel headers or open **Layout** to show, hide, and reorder
+panels. Preferences are
 stored in browser local storage and do not affect other users.
 
 The navigation model separates operational workflows:
@@ -60,6 +63,7 @@ The navigation model separates operational workflows:
 - **Metrics**: complete metric catalog and custom chart builder.
 - **Collectors**: plugin health and stale/failure state.
 - **Kubernetes**: node and task state.
+- **Settings**: validated Expr Tracker alert rule CRUD.
 - **System**: internal hostmon and API diagnostics.
 
 The **Metrics** page searches every metric exposed by hostmon and shows
@@ -68,15 +72,15 @@ to create line or area charts with custom titles, fixed/automatic axes, and
 one- or two-column layouts. Custom charts can be edited or deleted without
 rebuilding the frontend.
 
-The default layout is declarative:
+Navigation groups and the default layout are declarative:
 
-```ts
-// src/config/dashboard.ts
+```json
 {
-  id: "network",
-  type: "timeseries",
-  title: "Network throughput",
-  metrics: ["network/rx_mbps", "network/tx_mbps"]
+  "id": "network",
+  "type": "timeseries",
+  "page": "overview",
+  "title": "Network throughput",
+  "metrics": ["network/rx_mbps", "network/tx_mbps"]
 }
 ```
 
@@ -86,6 +90,11 @@ Available built-in panel types:
 - `timeseries`
 - `collectors`
 - `tasks`
+- `metrics`
+- `gpu-fleet`
+- `gpu-submitters`
+- `rules`
+- `system`
 
 To add a display type, implement the small `PanelRenderer` lifecycle:
 

@@ -15,7 +15,7 @@ from aiohttp import ClientSession, WSMsgType, WSServerHandshakeError
 
 from host_monitor.config import PrometheusSettings
 from host_monitor.dashboard import DashboardStore, infer_metric_metadata
-from host_monitor.dashboard import load_recent_history
+from host_monitor.dashboard import load_history_window, load_recent_history
 from host_monitor.errors import MonitorError
 from host_monitor.prometheus import (
     PrometheusExporter,
@@ -23,6 +23,7 @@ from host_monitor.prometheus import (
     prometheus_names,
     render_prometheus,
 )
+from host_monitor.rules import DEFAULT_RULES, RuleStore
 from host_monitor.state import StateStore
 
 
@@ -144,18 +145,55 @@ class PrometheusRenderingTests(unittest.TestCase):
 
         self.assertEqual([record["_time"] for record in records], [2, 3, 4])
 
+    def test_long_history_is_aggregated_to_requested_point_budget(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "metrics-2026-08-27-0001.jsonl"
+            path.write_text(
+                "".join(
+                    json.dumps(
+                        {
+                            "_time": float(index),
+                            "metrics": {"cpu/percent": float(index)},
+                        }
+                    )
+                    + "\n"
+                    for index in range(100)
+                ),
+                encoding="utf-8",
+            )
+
+            history = load_history_window(
+                root,
+                now=100,
+                seconds=100,
+                maximum_points=10,
+                metrics=["cpu/percent"],
+            )
+
+        self.assertLessEqual(len(history["timestamps"]), 10)
+        self.assertEqual(history["series"]["cpu/percent"][0], 9)
+        self.assertEqual(history["series"]["cpu/percent"][-1], 99)
+        self.assertEqual(history["resolution_seconds"], 10)
+
 
 class PrometheusHTTPTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
         self.state_file = Path(self.directory.name) / "state.json"
+        self.rules_file = Path(self.directory.name) / "rules.json"
+        RuleStore(self.rules_file).write([DEFAULT_RULES[0]])
         self.settings = PrometheusSettings(
             enabled=True,
             host="127.0.0.1",
             port=0,
             max_sample_age_seconds=30,
         )
-        self.exporter = PrometheusExporter(self.settings, self.state_file)
+        self.exporter = PrometheusExporter(
+            self.settings,
+            self.state_file,
+            rules_file=self.rules_file,
+        )
 
     def tearDown(self):
         self.exporter.close()
@@ -336,6 +374,42 @@ class PrometheusHTTPTests(unittest.TestCase):
             document = json.load(response)
 
         self.assertEqual(document["document"]["usage"][0]["submitter"], "run-a")
+
+    def test_manages_alert_rules_over_http(self):
+        self.save_state(time.time())
+        self.exporter.start()
+        created = {
+            **DEFAULT_RULES[0],
+            "alert": "test-rule",
+            "expr": "cpu.percent >= 80",
+        }
+
+        request = urllib.request.Request(
+            self.url("/api/rules"),
+            data=json.dumps(created).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            self.assertEqual(response.status, 201)
+        created["enabled"] = False
+        request = urllib.request.Request(
+            self.url("/api/rules/test-rule"),
+            data=json.dumps(created).encode(),
+            headers={"Content-Type": "application/json"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            self.assertEqual(response.status, 200)
+        with urllib.request.urlopen(self.url("/api/rules"), timeout=5) as response:
+            rules = json.load(response)["rules"]
+        self.assertFalse(next(rule for rule in rules if rule["alert"] == "test-rule")["enabled"])
+        request = urllib.request.Request(
+            self.url("/api/rules/test-rule"),
+            method="DELETE",
+        )
+        with urllib.request.urlopen(request, timeout=5) as response:
+            self.assertEqual(response.status, 204)
 
     def test_multiple_websocket_clients_receive_broadcast(self):
         self.save_state(time.time())

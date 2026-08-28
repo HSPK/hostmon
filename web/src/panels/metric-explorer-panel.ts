@@ -4,7 +4,11 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
-import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
+import {
+  bindSortHeaders,
+  pageButton,
+  TABLE_PAGE_SIZE,
+} from "./table-controls";
 
 type SortKey = "name" | "current" | "average" | "p95" | "maximum";
 
@@ -40,6 +44,7 @@ export class MetricExplorerPanel implements PanelRenderer {
       this.render();
     });
     this.sort = document.createElement("select");
+    this.sort.setAttribute("aria-label", "Sort metrics");
     const sortOptions: Array<[SortKey, string]> = [
       ["name", "Name"],
       ["current", "Current"],
@@ -90,11 +95,15 @@ export class MetricExplorerPanel implements PanelRenderer {
     table.className = "metric-table";
     const head = document.createElement("thead");
     head.innerHTML = `
-      <tr><th></th><th>Metric</th><th>Current</th><th>Min</th>
-      <th>Average</th><th>P95</th><th>Max</th><th>Samples</th></tr>
+      <tr><th></th><th><button data-sort-value="name">Metric</button></th>
+      <th><button data-sort-value="current">Current</button></th><th>Min</th>
+      <th><button data-sort-value="average">Average</button></th>
+      <th><button data-sort-value="p95">P95</button></th>
+      <th><button data-sort-value="maximum">Max</button></th><th>Samples</th></tr>
     `;
     this.tableBody = document.createElement("tbody");
     table.append(head, this.tableBody);
+    bindSortHeaders(table, this.sort);
     wrapper.append(table);
     shell.body.append(controls, wrapper);
     void this.load();

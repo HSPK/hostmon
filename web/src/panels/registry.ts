@@ -7,6 +7,7 @@ import type {
   TasksPanelDefinition,
   TimeSeriesPanelDefinition,
   SystemPanelDefinition,
+  RulesPanelDefinition,
 } from "../domain/types";
 import { CollectorPanel } from "./collector-panel";
 import { PanelRegistry } from "./panel";
@@ -17,6 +18,7 @@ import { StatPanel } from "./stat-panel";
 import { TasksPanel } from "./tasks-panel";
 import { TimeSeriesPanel } from "./timeseries-panel";
 import { SystemPanel } from "./system-panel";
+import { RulesPanel } from "./rules-panel";
 
 export function createPanelRegistry(): PanelRegistry {
   return new PanelRegistry()
@@ -62,5 +64,10 @@ export function createPanelRegistry(): PanelRegistry {
           definition as GPUSubmittersPanelDefinition,
           context,
         ),
+    )
+    .register(
+      "rules",
+      (definition, context) =>
+        new RulesPanel(definition as RulesPanelDefinition, context),
     );
 }

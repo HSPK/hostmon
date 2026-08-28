@@ -74,4 +74,19 @@ describe("TimeSeriesStore", () => {
     expect(store.series.has("unbounded/cardinality")).toBe(false);
     expect(store.latestMetrics["unbounded/cardinality"]).toBe(99);
   });
+
+  it("bounds long windows by point count", () => {
+    const store = new TimeSeriesStore(1000, ["cpu/percent"], 3);
+    for (let timestamp = 1; timestamp <= 5; timestamp++) {
+      store.append({
+        timestamp,
+        host: "host-a",
+        metrics: {"cpu/percent": timestamp},
+        fields: {},
+      });
+    }
+
+    expect(store.timestamps).toEqual([3, 4, 5]);
+    expect(store.series.get("cpu/percent")).toEqual([3, 4, 5]);
+  });
 });

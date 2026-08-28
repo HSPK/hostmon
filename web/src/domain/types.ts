@@ -22,6 +22,7 @@ export interface HistoryResponse {
   timestamps: number[];
   series: Record<MetricName, Array<number | null>>;
   metadata: Record<MetricName, MetricMetadata>;
+  resolution_seconds?: number;
 }
 
 export interface MetricCatalogEntry {
@@ -109,6 +110,16 @@ export interface PluginDocument<T> {
   document: T;
 }
 
+export interface AlertRuleConfig {
+  alert: string;
+  expr: string;
+  level: string;
+  title: string;
+  message: string;
+  enabled: boolean;
+  [key: string]: unknown;
+}
+
 export interface MetricMetadata {
   label: string;
   unit: string;
@@ -175,6 +186,10 @@ export interface GPUSubmittersPanelDefinition extends BasePanelDefinition {
   type: "gpu-submitters";
 }
 
+export interface RulesPanelDefinition extends BasePanelDefinition {
+  type: "rules";
+}
+
 export type PanelDefinition =
   | StatPanelDefinition
   | TimeSeriesPanelDefinition
@@ -183,20 +198,20 @@ export type PanelDefinition =
   | MetricsPanelDefinition
   | SystemPanelDefinition
   | GPUFleetPanelDefinition
-  | GPUSubmittersPanelDefinition;
+  | GPUSubmittersPanelDefinition
+  | RulesPanelDefinition;
 
-export type PageId =
-  | "overview"
-  | "gpu-fleet"
-  | "workloads"
-  | "metrics"
-  | "collectors"
-  | "kubernetes"
-  | "system";
+export type PageId = string;
+
+export interface NavigationItem {
+  id: PageId;
+  label: string;
+}
 
 export interface DashboardDefinition {
   title: string;
   defaultWindowSeconds: number;
+  navigation: NavigationItem[];
   panels: PanelDefinition[];
 }
 

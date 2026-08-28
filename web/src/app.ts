@@ -16,7 +16,7 @@ import type { PanelRenderer } from "./panels/panel";
 import { createPanelRegistry } from "./panels/registry";
 
 export class DashboardApp {
-  private readonly api = new ApiClient();
+  private readonly api: ApiClient;
   private readonly preferences = new PreferenceStore(DASHBOARD);
   private readonly store: TimeSeriesStore;
   private readonly registry = createPanelRegistry();
@@ -31,6 +31,7 @@ export class DashboardApp {
   private hostText!: HTMLElement;
   private sampleAge!: HTMLElement;
   private pauseButton!: HTMLButtonElement;
+  private operationLatency!: HTMLElement;
   private refreshController: AbortController | null = null;
   private catalogCache: { loadedAt: number; entries: MetricCatalogEntry[] } | null =
     null;
@@ -46,13 +47,18 @@ export class DashboardApp {
 
   constructor(root: HTMLElement) {
     this.root = root;
+    this.api = new ApiClient((_url, milliseconds) => {
+      if (this.operationLatency) {
+        this.operationLatency.textContent = `API ${milliseconds.toFixed(1)} ms`;
+      }
+    });
     const tracked = this.allPanels()
       .filter(
         (panel): panel is TimeSeriesPanelDefinition =>
           panel.type === "timeseries",
       )
       .flatMap(panel => panel.metrics);
-    this.store = new TimeSeriesStore(21600, tracked);
+    this.store = new TimeSeriesStore(30 * 24 * 60 * 60, tracked, 2400);
     this.realtime = new RealtimeClient({
       onSnapshot: snapshot => {
         this.store.append(snapshot);
@@ -79,7 +85,6 @@ export class DashboardApp {
     this.renderNavigation();
     this.renderPanels();
     this.realtime.start();
-    window.setInterval(() => this.updateSampleAge(), 1000);
     window.addEventListener("popstate", this.handlePopState);
     window.addEventListener("beforeunload", () => this.destroy(), { once: true });
   }
@@ -96,9 +101,8 @@ export class DashboardApp {
           <header class="toolbar">
             <div class="toolbar-title"><button id="mobile-menu" class="icon-button mobile-menu" type="button">Menu</button><div><h1 id="page-title">Overview</h1><p id="host-text">waiting for data</p></div></div>
             <div class="toolbar-actions">
-              <div class="connection"><span id="connection-dot" class="connection-dot"></span><span id="connection-text">connecting</span><span id="sample-age">--</span></div>
-              <input id="metric-search" class="toolbar-search" type="search" placeholder="Find metric" aria-label="Find metric">
-              <label class="control">Window<select id="window-select"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option></select></label>
+              <input id="chart-search" class="toolbar-search" type="search" placeholder="Find chart" aria-label="Find chart">
+              <label class="control">Window<select id="window-select"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option><option value="43200">12h</option><option value="86400">24h</option><option value="604800">7d</option><option value="2592000">30d</option></select></label>
               <button id="refresh-button" class="button" type="button">Refresh</button>
               <button id="pause-button" class="button" type="button">Pause</button>
               <button id="add-chart-button" class="button" type="button">Add chart</button>
@@ -107,6 +111,11 @@ export class DashboardApp {
             </div>
           </header>
           <main><div id="panels" class="panel-grid"></div></main>
+          <footer class="statusbar">
+            <div class="connection"><span id="connection-dot" class="connection-dot"></span><span id="connection-text">connecting</span></div>
+            <span id="operation-latency">API -- ms</span>
+            <span id="sample-age">Updated -- (UTC+8)</span>
+          </footer>
         </section>
       </div>
       <aside id="settings-drawer" class="settings-drawer" aria-hidden="true">
@@ -122,6 +131,7 @@ export class DashboardApp {
             <label>Title<input id="chart-title" required maxlength="80"></label>
             <label>Style<select id="chart-style"><option value="line">Line</option><option value="area">Area</option></select></label>
             <label>Width<select id="chart-width"><option value="1">One column</option><option value="2">Full width</option></select></label>
+            <label>Line width<input id="chart-line-width" type="number" min="0.5" max="5" step="0.5"></label>
             <label>Y minimum<input id="chart-min" type="number" step="any" placeholder="Auto"></label>
             <label>Y maximum<input id="chart-max" type="number" step="any" placeholder="Auto"></label>
             <label class="metric-filter-label">Filter metrics<input id="chart-metric-filter" type="search" placeholder="cpu, gpu, latency..."></label>
@@ -138,6 +148,7 @@ export class DashboardApp {
     this.connectionText = this.required("connection-text");
     this.hostText = this.required("host-text");
     this.sampleAge = this.required("sample-age");
+    this.operationLatency = this.required("operation-latency");
     this.pauseButton = this.required("pause-button") as HTMLButtonElement;
     (this.required("window-select") as HTMLSelectElement).value = String(
       this.preferences.get().windowSeconds,
@@ -188,18 +199,27 @@ export class DashboardApp {
       this.renderPanels();
       void this.reloadData();
     });
-    this.required("metric-search").addEventListener("keydown", event => {
+    this.required("chart-search").addEventListener("keydown", event => {
       if (event.key !== "Enter") return;
-      this.navigate("metrics");
-      requestAnimationFrame(() => {
-        const search = document.querySelector<HTMLInputElement>(
-          ".metric-explorer-panel input[type=search]",
+      const query = (event.target as HTMLInputElement).value
+        .trim()
+        .toLowerCase();
+      const panel = this.allPanels().find(item => {
+        const metrics =
+          item.type === "timeseries"
+            ? item.metrics
+            : item.type === "stats"
+              ? item.metrics.map(metric => metric.metric)
+              : [];
+        return (
+          item.title.toLowerCase().includes(query) ||
+          item.id.toLowerCase().includes(query) ||
+          metrics.some(metric => metric.toLowerCase().includes(query))
         );
-        if (!search) return;
-        search.value = (event.target as HTMLInputElement).value;
-        search.dispatchEvent(new Event("input"));
-        search.focus();
       });
+      if (!panel) return;
+      this.navigate(panel.page);
+      this.focusPanel(panel.id);
     });
     this.required("mobile-menu").addEventListener("click", () =>
       document.querySelector(".sidebar")?.classList.toggle("open"),
@@ -224,7 +244,7 @@ export class DashboardApp {
       const [history, status] = await Promise.all([
         this.api.history(
           this.store.windowSeconds,
-          1800,
+          this.historyPointBudget(),
           controller.signal,
           this.store.tracked(),
         ),
@@ -248,7 +268,9 @@ export class DashboardApp {
     if (this.catalogCache && Date.now() - this.catalogCache.loadedAt < 5000) {
       return this.catalogCache.entries;
     }
-    const response = await this.api.catalog(this.store.windowSeconds);
+    const response = await this.api.catalog(
+      Math.min(this.store.windowSeconds, 21600),
+    );
     this.catalogCache = {loadedAt: Date.now(), entries: response.metrics};
     return response.metrics;
   }
@@ -260,6 +282,7 @@ export class DashboardApp {
     ) {
       return this.clusterGPUCache.report;
     }
+
     const response = await this.api.plugin<ClusterGPUReport>(
       "cluster_gpu_usage",
     );
@@ -268,6 +291,11 @@ export class DashboardApp {
       report: response.document,
     };
     return response.document;
+  }
+
+  private historyPointBudget(): number {
+    const pixels = window.innerWidth * window.devicePixelRatio;
+    return Math.min(2400, Math.max(300, Math.ceil(pixels * 1.25)));
   }
 
   private renderNavigation(): void {
@@ -356,6 +384,7 @@ export class DashboardApp {
       if (generation !== this.renderGeneration || index >= definitions.length) {
         return;
       }
+
       const definition = definitions[index]!;
       const panel = this.registry.create(definition, {
         store: this.store,
@@ -367,6 +396,10 @@ export class DashboardApp {
             this.updateWorkloadRoute(selection, replace),
           workloadView: () => this.preferences.get().workloadView,
           setWorkloadView: view => this.preferences.setWorkloadView(view),
+          loadRules: () => this.api.rules(),
+          createRule: rule => this.api.createRule(rule),
+          updateRule: (name, rule) => this.api.updateRule(name, rule),
+          deleteRule: name => this.api.deleteRule(name),
           createChart: metrics => this.openChartEditor(undefined, metrics),
           editChart: chart => this.openChartEditor(chart),
           removeChart: id => this.removeChart(id),
@@ -374,12 +407,31 @@ export class DashboardApp {
       });
       this.panels.push(panel);
       this.panelsRoot.append(panel.element);
+      this.bindPanelDrag(panel.element, definition.id);
       panel.update();
       if (index + 1 < definitions.length) {
         requestAnimationFrame(() => renderNext(index + 1));
       }
     };
     renderNext(0);
+  }
+
+  private focusPanel(panelId: string, attempts = 20): void {
+    requestAnimationFrame(() => {
+      const target = document.querySelector<HTMLElement>(
+        `[data-panel-id="${CSS.escape(panelId)}"]`,
+      );
+      if (!target && attempts > 1) {
+        this.focusPanel(panelId, attempts - 1);
+        return;
+      }
+      target?.scrollIntoView({behavior: "smooth", block: "start"});
+      target?.classList.add("panel-highlight");
+      window.setTimeout(
+        () => target?.classList.remove("panel-highlight"),
+        1200,
+      );
+    });
   }
 
   private queuePanelUpdate(): void {
@@ -434,6 +486,40 @@ export class DashboardApp {
     this.renderPanels();
   }
 
+  private bindPanelDrag(element: HTMLElement, panelId: string): void {
+    const handle = element.querySelector<HTMLElement>(".panel-header");
+    if (!handle) return;
+    handle.draggable = true;
+    handle.addEventListener("dragstart", event => {
+      event.dataTransfer?.setData("text/x-hostmon-panel", panelId);
+      if (event.dataTransfer) event.dataTransfer.effectAllowed = "move";
+      element.classList.add("dragging");
+    });
+    handle.addEventListener("dragend", () => {
+      element.classList.remove("dragging");
+      for (const panel of this.panelsRoot.querySelectorAll(".drag-over")) {
+        panel.classList.remove("drag-over");
+      }
+    });
+    element.addEventListener("dragover", event => {
+      if (!event.dataTransfer?.types.includes("text/x-hostmon-panel")) return;
+      event.preventDefault();
+      element.classList.add("drag-over");
+    });
+    element.addEventListener("dragleave", () =>
+      element.classList.remove("drag-over"),
+    );
+    element.addEventListener("drop", event => {
+      event.preventDefault();
+      element.classList.remove("drag-over");
+      const source = event.dataTransfer?.getData("text/x-hostmon-panel");
+      if (!source || source === panelId) return;
+      this.preferences.moveBefore(source, panelId);
+      this.renderSettings();
+      this.renderPanels();
+    });
+  }
+
   private openChartEditor(
     panel?: TimeSeriesPanelDefinition,
     initialMetrics: string[] = [],
@@ -448,6 +534,9 @@ export class DashboardApp {
       panel?.style ?? "line";
     (this.required("chart-width") as HTMLSelectElement).value = String(
       panel?.columnSpan ?? 1,
+    );
+    (this.required("chart-line-width") as HTMLInputElement).value = String(
+      panel?.lineWidth ?? 1.5,
     );
     (this.required("chart-min") as HTMLInputElement).value =
       panel?.range?.[0] === undefined ? "" : String(panel.range[0]);
@@ -517,13 +606,22 @@ export class DashboardApp {
         this.editingPanel?.id ??
         `custom-${globalThis.crypto?.randomUUID?.() ?? Date.now()}`,
       type: "timeseries",
-      page: "metrics",
+      page: this.editingPanel?.page ?? "metrics",
       custom: true,
       title,
       metrics,
       style: (this.required("chart-style") as HTMLSelectElement).value as
         | "line"
         | "area",
+      lineWidth: Math.min(
+        5,
+        Math.max(
+          0.5,
+          Number(
+            (this.required("chart-line-width") as HTMLInputElement).value,
+          ) || 1.5,
+        ),
+      ),
       columnSpan: Number(
         (this.required("chart-width") as HTMLSelectElement).value,
       ) as 1 | 2,
@@ -532,7 +630,7 @@ export class DashboardApp {
     this.preferences.saveCustomPanel(panel);
     this.store.track(metrics);
     this.chartDialog.close();
-    this.navigate("metrics");
+    this.navigate(panel.page);
     await this.reloadData();
     this.renderSettings();
     this.renderPanels();
@@ -558,12 +656,24 @@ export class DashboardApp {
 
   private updateSampleAge(): void {
     if (!this.store.latestTimestamp) {
-      this.sampleAge.textContent = "--";
+      this.sampleAge.textContent = "Updated -- (UTC+8)";
       return;
     }
-    const age = Math.max(0, Date.now() / 1000 - this.store.latestTimestamp);
-    this.sampleAge.textContent = `${age.toFixed(0)}s`;
-    this.sampleAge.classList.toggle("stale", age > 30);
+    const updated = new Intl.DateTimeFormat("en-CA", {
+      timeZone: "Asia/Shanghai",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+      hour12: false,
+    }).format(new Date(this.store.latestTimestamp * 1000));
+    this.sampleAge.textContent = `Updated ${updated} (UTC+8)`;
+    this.sampleAge.classList.toggle(
+      "stale",
+      Date.now() / 1000 - this.store.latestTimestamp > 30,
+    );
   }
 
   private exportCsv(): void {

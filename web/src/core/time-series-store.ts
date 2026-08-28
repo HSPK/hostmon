@@ -21,8 +21,9 @@ export class TimeSeriesStore {
   private readonly trackedMetrics: Set<string>;
 
   constructor(
-    private readonly maximumHistorySeconds = 21600,
+    private readonly maximumHistorySeconds = 30 * 24 * 60 * 60,
     trackedMetrics: string[] = [],
+    private readonly maximumPoints = 2400,
   ) {
     this.trackedMetrics = new Set(trackedMetrics);
     for (const metric of this.trackedMetrics) this.series.set(metric, []);
@@ -125,9 +126,14 @@ export class TimeSeriesStore {
     while (remove < this.timestamps.length && this.timestamps[remove]! < cutoff) {
       remove++;
     }
-    if (!remove) return;
-    this.timestamps.splice(0, remove);
-    for (const values of this.series.values()) values.splice(0, remove);
+    if (remove) {
+      this.timestamps.splice(0, remove);
+      for (const values of this.series.values()) values.splice(0, remove);
+    }
+    const excess = this.timestamps.length - this.maximumPoints;
+    if (excess <= 0) return;
+    this.timestamps.splice(0, excess);
+    for (const values of this.series.values()) values.splice(0, excess);
   }
 
   private notify(): void {

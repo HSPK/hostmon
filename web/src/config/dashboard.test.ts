@@ -14,22 +14,13 @@ describe("dashboard definition", () => {
       "system",
       "gpu-fleet",
       "gpu-submitters",
+      "rules",
     ]);
 
     expect(new Set(ids).size).toBe(ids.length);
     expect(DASHBOARD.panels.every(panel => supported.has(panel.type))).toBe(true);
-    expect(
-      new Set(DASHBOARD.panels.map(panel => panel.page)),
-    ).toEqual(
-      new Set([
-        "overview",
-        "gpu-fleet",
-        "workloads",
-        "metrics",
-        "collectors",
-        "kubernetes",
-        "system",
-      ]),
+    expect(new Set(DASHBOARD.panels.map(panel => panel.page))).toEqual(
+      new Set(DASHBOARD.navigation.map(item => item.id)),
     );
   });
 

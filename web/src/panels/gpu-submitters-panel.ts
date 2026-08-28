@@ -8,7 +8,11 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
-import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
+import {
+  bindSortHeaders,
+  pageButton,
+  TABLE_PAGE_SIZE,
+} from "./table-controls";
 import { compareWorkloads } from "./workload-order";
 
 export class GPUSubmittersPanel implements PanelRenderer {
@@ -105,11 +109,16 @@ export class GPUSubmittersPanel implements PanelRenderer {
     table.className = "metric-table submitter-table";
     const head = document.createElement("thead");
     head.innerHTML = `
-      <tr><th>Queue</th><th>Workload</th><th>State</th><th>Submitter</th>
-      <th>Running GPUs</th><th>GPU nodes</th><th>Pending GPUs</th></tr>
+      <tr><th><button data-sort-value="queue">Queue</button></th>
+      <th><button data-sort-value="name">Workload</button></th><th>State</th>
+      <th><button data-sort-value="submitter">Submitter</button></th>
+      <th><button data-sort-value="running-gpus">Running GPUs</button></th>
+      <th>GPU nodes</th>
+      <th><button data-sort-value="pending-gpus">Pending GPUs</button></th></tr>
     `;
     this.tableBody = document.createElement("tbody");
     table.append(head, this.tableBody);
+    bindSortHeaders(table, this.sort);
     wrapper.append(table);
     shell.body.append(controls, wrapper);
 

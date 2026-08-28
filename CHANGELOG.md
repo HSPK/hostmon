@@ -75,6 +75,14 @@ All notable changes to this project are documented here.
   immediate fresh report instead of reusing older calculations.
 - Persisted workload queue, state, and sort choices as typed dashboard
   preferences so triage views survive navigation and reloads.
+- Added adaptive 30-day history windows backed by bounded server-side
+  downsampling and viewport-sized browser point budgets.
+- Moved default navigation and panel/chart definitions into validated
+  `dashboard.json` configuration.
+- Added persistent drag-and-drop panel ordering and enabled full chart editing
+  for built-in panels, including line width.
+- Moved connection state into a bottom status bar with API latency and UTC+8
+  sample timestamps.
 
 ## [0.1.0] - 2026-08-17
 

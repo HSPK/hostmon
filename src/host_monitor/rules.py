@@ -220,6 +220,11 @@ class RuleStore:
         self._cached_rules = None
         self.last_error = None
 
+    def entries(self) -> list[dict[str, Any]]:
+        entries = self._read_raw()
+        self._parse_entries(entries)
+        return entries
+
     def add(self, entry: dict[str, Any]) -> AlertRule:
         try:
             candidate = AlertRule.from_dict(entry)
@@ -244,6 +249,23 @@ class RuleStore:
         if len(remaining) == len(entries):
             raise RuleError(f"rule not found: {name}")
         self.write(remaining)
+
+    def replace(self, name: str, entry: dict[str, Any]) -> AlertRule:
+        try:
+            candidate = AlertRule.from_dict(entry)
+            validate(compile_condition(candidate.condition))
+        except (TypeError, ValueError) as error:
+            raise RuleError(f"invalid rule: {error}") from error
+        if candidate.name != name:
+            raise RuleError("rule name cannot be changed")
+        entries = self._read_raw()
+        self._parse_entries(entries)
+        for index, current in enumerate(entries):
+            if AlertRule.from_dict(current).name == name:
+                entries[index] = entry
+                self.write(entries)
+                return candidate
+        raise RuleError(f"rule not found: {name}")
 
     def set_enabled(self, name: str, enabled: bool) -> None:
         entries = self._read_raw()

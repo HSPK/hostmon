@@ -60,6 +60,26 @@ export class PreferenceStore {
     this.save();
   }
 
+  moveBefore(sourceId: string, targetId: string): void {
+    if (sourceId === targetId) return;
+    const definitions = [
+      ...this.definition.panels,
+      ...this.value.customPanels,
+    ];
+    const known = new Set(definitions.map(panel => panel.id));
+    const order = this.value.panelOrder.filter(id => known.has(id));
+    for (const panel of definitions) {
+      if (!order.includes(panel.id)) order.push(panel.id);
+    }
+    const source = order.indexOf(sourceId);
+    const target = order.indexOf(targetId);
+    if (source < 0 || target < 0) return;
+    order.splice(source, 1);
+    order.splice(order.indexOf(targetId), 0, sourceId);
+    this.value.panelOrder = order;
+    this.save();
+  }
+
   setWindow(seconds: number): void {
     this.value.windowSeconds = seconds;
     this.save();
@@ -80,7 +100,9 @@ export class PreferenceStore {
     if (index >= 0) this.value.customPanels[index] = panel;
     else {
       this.value.customPanels.push(panel);
-      this.value.panelOrder.push(panel.id);
+      if (!this.value.panelOrder.includes(panel.id)) {
+        this.value.panelOrder.push(panel.id);
+      }
     }
     this.save();
   }
@@ -126,7 +148,7 @@ export class PreferenceStore {
           typeof parsed.windowSeconds === "number"
             ? parsed.windowSeconds
             : this.definition.defaultWindowSeconds,
-        activePage: isPageId(parsed.activePage)
+        activePage: isPageId(parsed.activePage, this.definition)
           ? parsed.activePage
           : "overview",
         workloadView: isWorkloadView(parsed.workloadView)
@@ -169,16 +191,11 @@ function isWorkloadView(value: unknown): value is WorkloadView {
   );
 }
 
-function isPageId(value: unknown): value is PageId {
-  return [
-    "overview",
-    "gpu-fleet",
-    "workloads",
-    "metrics",
-    "collectors",
-    "kubernetes",
-    "system",
-  ].includes(String(value));
+function isPageId(
+  value: unknown,
+  definition: DashboardDefinition,
+): value is PageId {
+  return definition.navigation.some(item => item.id === value);
 }
 
 function isCustomPanel(value: unknown): value is TimeSeriesPanelDefinition {

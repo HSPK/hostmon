@@ -29,16 +29,17 @@ export class TimeSeriesPanel implements PanelRenderer {
       legend.append(item);
     }
     shell.header.append(legend);
+    const actions = document.createElement("div");
+    actions.className = "panel-actions";
+    const edit = actionButton("Edit", () => context.actions.editChart(definition));
+    actions.append(edit);
     if (definition.custom) {
-      const actions = document.createElement("div");
-      actions.className = "panel-actions";
-      const edit = actionButton("Edit", () => context.actions.editChart(definition));
       const remove = actionButton("Delete", () =>
         context.actions.removeChart(definition.id),
       );
-      actions.append(edit, remove);
-      shell.header.append(actions);
+      actions.append(remove);
     }
+    shell.header.append(actions);
     this.chartHost = document.createElement("div");
     this.chartHost.className = "chart-host";
     shell.body.append(this.chartHost);
@@ -116,7 +117,7 @@ export class TimeSeriesPanel implements PanelRenderer {
           const series: uPlot.Series = {
             label: metadata?.label ?? metric,
             stroke: metadata?.color ?? "#7dd3fc",
-            width: 1.5,
+            width: this.definition.lineWidth ?? 1.5,
             spanGaps: true,
             points: { show: false },
           };

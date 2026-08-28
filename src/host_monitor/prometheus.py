@@ -23,11 +23,15 @@ from . import __version__
 from .config import PrometheusSettings
 from .dashboard import (
     DASHBOARD_CAPACITY,
+    DEFAULT_DASHBOARD_SERIES,
+    MAX_HISTORY_SECONDS,
     DashboardSnapshot,
     DashboardStore,
+    load_history_window,
     load_recent_history,
 )
-from .errors import MonitorError
+from .errors import MonitorError, RuleError
+from .rules import RuleStore
 from .state import StateStore
 
 
@@ -154,10 +158,12 @@ class PrometheusExporter:
         settings: PrometheusSettings,
         state_file: Path,
         history_directory: Path | None = None,
+        rules_file: Path | None = None,
     ):
         self.settings = settings
         self.state_file = state_file
         self.history_directory = history_directory
+        self.rules = RuleStore(rules_file) if rules_file is not None else None
         self.reader = StateSnapshotReader(state_file)
         self.dashboard = DashboardStore()
         self.thread: threading.Thread | None = None
@@ -273,9 +279,12 @@ class PrometheusExporter:
                 status=400,
                 content_type="text/plain",
             )
-        if not 10 <= seconds <= 21600 or not 2 <= maximum <= 5000:
+        if not 10 <= seconds <= MAX_HISTORY_SECONDS or not 2 <= maximum <= 5000:
             return web.Response(
-                text="seconds must be 10..21600 and max_points must be 2..5000\n",
+                text=(
+                    f"seconds must be 10..{MAX_HISTORY_SECONDS} "
+                    "and max_points must be 2..5000\n"
+                ),
                 status=400,
                 content_type="text/plain",
             )
@@ -285,19 +294,29 @@ class PrometheusExporter:
             if raw_metrics
             else None
         )
-        try:
-            payload = self.dashboard.history(
+        if seconds > 21600 and self.history_directory is not None:
+            payload = await asyncio.to_thread(
+                load_history_window,
+                self.history_directory,
                 now=time.time(),
                 seconds=seconds,
                 maximum_points=maximum,
-                metrics=metrics,
+                metrics=metrics or list(DEFAULT_DASHBOARD_SERIES),
             )
-        except ValueError as error:
-            return web.Response(
-                text=f"{error}\n",
-                status=400,
-                content_type="text/plain",
-            )
+        else:
+            try:
+                payload = self.dashboard.history(
+                    now=time.time(),
+                    seconds=seconds,
+                    maximum_points=maximum,
+                    metrics=metrics,
+                )
+            except ValueError as error:
+                return web.Response(
+                    text=f"{error}\n",
+                    status=400,
+                    content_type="text/plain",
+                )
         return self._json_response(payload)
 
     async def _catalog(self, request: web.Request) -> web.Response:
@@ -370,6 +389,52 @@ class PrometheusExporter:
                 "document": document,
             }
         )
+
+    def _require_same_origin(self, request: web.Request) -> None:
+        origin = request.headers.get("Origin")
+        if origin and urlsplit(origin).netloc != request.host:
+            raise web.HTTPForbidden(text="Origin is not allowed\n")
+
+    def _rule_store(self) -> RuleStore:
+        if self.rules is None:
+            raise web.HTTPNotFound(text="Rule management is not configured\n")
+        return self.rules
+
+    async def _rules_list(self, request: web.Request) -> web.Response:
+        try:
+            return self._json_response({"rules": self._rule_store().entries()})
+        except RuleError as error:
+            return self._json_response({"error": str(error)}, status=400)
+
+    async def _rules_add(self, request: web.Request) -> web.Response:
+        self._require_same_origin(request)
+        try:
+            payload = await request.json()
+            if not isinstance(payload, dict):
+                raise RuleError("rule must be a JSON object")
+            self._rule_store().add(payload)
+            return self._json_response(payload, status=201)
+        except (json.JSONDecodeError, RuleError) as error:
+            return self._json_response({"error": str(error)}, status=400)
+
+    async def _rules_replace(self, request: web.Request) -> web.Response:
+        self._require_same_origin(request)
+        try:
+            payload = await request.json()
+            if not isinstance(payload, dict):
+                raise RuleError("rule must be a JSON object")
+            self._rule_store().replace(request.match_info["name"], payload)
+            return self._json_response(payload)
+        except (json.JSONDecodeError, RuleError) as error:
+            return self._json_response({"error": str(error)}, status=400)
+
+    async def _rules_delete(self, request: web.Request) -> web.Response:
+        self._require_same_origin(request)
+        try:
+            self._rule_store().remove(request.match_info["name"])
+            return web.Response(status=204)
+        except RuleError as error:
+            return self._json_response({"error": str(error)}, status=404)
 
     async def _websocket(self, request: web.Request) -> web.StreamResponse:
         origin = request.headers.get("Origin")
@@ -482,6 +547,10 @@ class PrometheusExporter:
                 web.get("/api/status", self._status),
                 web.get("/api/history", self._history),
                 web.get("/api/catalog", self._catalog),
+                web.get("/api/rules", self._rules_list),
+                web.post("/api/rules", self._rules_add),
+                web.put("/api/rules/{name}", self._rules_replace),
+                web.delete("/api/rules/{name}", self._rules_delete),
                 web.get("/api/plugins/{name}", self._plugin_document),
                 web.get("/api/ws", self._websocket),
                 web.get("/{path:.*}", self._asset),

@@ -18,6 +18,11 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
+.metric-table th button {
+  padding: 0; color: inherit; border: 0; background: transparent;
+  font: inherit; cursor: pointer;
+}
+.metric-table th button:hover { color: var(--text); }
 
 * { box-sizing: border-box; }
 html, body, #app { min-height: 100%; }
@@ -58,7 +63,7 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   font: 10px ui-monospace, monospace; overflow-wrap: anywhere;
 }
 
-.workspace { grid-column: 2; min-width: 0; }
+.workspace { grid-column: 2; min-width: 0; padding-bottom: 28px; }
 .toolbar {
   position: sticky; top: 0; z-index: 20; min-height: 62px;
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
@@ -92,6 +97,14 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 input, select { padding: 0 8px; }
 .toolbar-search { width: clamp(130px, 14vw, 220px); }
 .mobile-menu { display: none; }
+.statusbar {
+  position: fixed; right: 0; bottom: 0; left: 218px; z-index: 25;
+  display: flex; align-items: center; gap: 14px; height: 28px; padding: 0 12px;
+  border-top: 1px solid var(--border); background: #0c1015;
+  color: var(--muted); font: 10px ui-monospace, monospace; white-space: nowrap;
+}
+.statusbar .connection { margin: 0; }
+.statusbar #sample-age { margin-left: auto; }
 
 main { width: 100%; padding: 12px; }
 .panel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -104,6 +117,10 @@ main { width: 100%; padding: 12px; }
   min-height: 38px; justify-content: space-between; gap: 10px; padding: 5px 9px;
   border-bottom: 1px solid var(--border); background: var(--surface-2);
 }
+.panel-header[draggable="true"] { cursor: grab; }
+.panel.dragging { opacity: .45; }
+.panel.drag-over { border-color: var(--accent); }
+.panel-highlight { border-color: var(--accent); }
 .panel-header h2 { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: .02em; }
 .panel-body { padding: 8px; }
 .panel-actions { display: flex; gap: 4px; margin-left: auto; }
@@ -144,6 +161,20 @@ main { width: 100%; padding: 12px; }
 }
 .metric-name { font-family: ui-monospace, monospace; color: #b7c5d6; }
 .metric-table.compact td:first-child { text-align: left; }
+.rules-table th:nth-child(2), .rules-table td:nth-child(2),
+.rules-table th:nth-child(4), .rules-table td:nth-child(4) { text-align: left; }
+.rule-editor {
+  display: grid; grid-template-columns: 2fr 1fr; gap: 8px;
+  margin-bottom: 10px; padding: 10px; border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.rule-editor[hidden] { display: none; }
+.rule-editor label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 10px; }
+.rule-editor textarea { min-height: 70px; resize: vertical; color: var(--text); border: 1px solid var(--border); background: var(--surface); }
+.rule-expression, .rule-message, .rule-editor output { grid-column: 1 / -1; }
+.rule-enabled { flex-direction: row !important; align-items: center; }
+.rule-editor-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.rule-editor output { color: var(--danger); white-space: pre-wrap; }
 
 .state { display: inline-block; min-width: 45px; padding: 2px 5px; text-align: center; text-transform: uppercase; font-size: 9px; }
 .state-up { color: var(--success); border: 1px solid #315b47; }
@@ -242,7 +273,7 @@ main { width: 100%; padding: 12px; }
 .chart-dialog form > header, .chart-dialog form > footer { padding: 12px; border-bottom: 1px solid var(--border); }
 .chart-dialog form > footer { align-items: center; border-top: 1px solid var(--border); border-bottom: 0; }
 .chart-dialog form > footer > div { display: flex; gap: 6px; }
-.form-grid { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 1fr; gap: 8px; padding: 12px; }
+.form-grid { display: grid; grid-template-columns: 2fr repeat(5, 1fr); gap: 8px; padding: 12px; }
 .form-grid label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 10px; }
 .metric-filter-label { grid-column: 1 / -1; }
 .metric-picker {
@@ -260,6 +291,7 @@ main { width: 100%; padding: 12px; }
 @media (max-width: 850px) {
   .app-shell { grid-template-columns: 1fr; }
   .workspace { grid-column: 1; }
+  .statusbar { left: 0; gap: 8px; padding: 0 6px; font-size: 9px; }
   .sidebar { transform: translateX(-101%); transition: transform .15s linear; box-shadow: 8px 0 24px rgba(0, 0, 0, .35); }
   .sidebar.open { transform: translateX(0); }
   .mobile-menu { display: inline-block; }

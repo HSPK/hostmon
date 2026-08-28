@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { DASHBOARD } from "../config/dashboard";
+import type { TimeSeriesPanelDefinition } from "../domain/types";
 import { PreferenceStore } from "./preferences";
 
 class MemoryStorage implements Storage {
@@ -91,5 +92,38 @@ describe("PreferenceStore", () => {
 
     restored.removeCustomPanel("custom-latency");
     expect(restored.get().customPanels).toHaveLength(0);
+  });
+
+  it("persists drag ordering before a target panel", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    preferences.moveBefore("network", "host-utilization");
+
+    const restored = new PreferenceStore(DASHBOARD);
+    const ids = restored.visiblePanels("overview").map(panel => panel.id);
+
+    expect(ids.indexOf("network")).toBeLessThan(
+      ids.indexOf("host-utilization"),
+    );
+  });
+
+  it("overrides a built-in chart without duplicating its order", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    const original = DASHBOARD.panels.find(
+      (panel): panel is TimeSeriesPanelDefinition =>
+        panel.id === "host-utilization" && panel.type === "timeseries",
+    );
+    expect(original).toBeDefined();
+    preferences.saveCustomPanel({
+      ...original!,
+      title: "Edited utilization",
+      custom: true,
+    });
+
+    const panels = preferences
+      .visiblePanels("overview")
+      .filter(panel => panel.id === "host-utilization");
+
+    expect(panels).toHaveLength(1);
+    expect(panels[0]?.title).toBe("Edited utilization");
   });
 });
