@@ -65,6 +65,10 @@ All notable changes to this project are documented here.
   without increasing time-series cardinality or issuing extra cluster queries.
 - Prevented dashboard rebuilds from deleting live hashed assets before the new
   index is ready, retaining one prior JS/CSS generation for in-flight clients.
+- Added workload state triage and deterministic sorting by running GPUs,
+  pending GPUs, name, submitter, or queue.
+- Added an explicit workload empty state so zero-result triage filters never
+  look like a loading or rendering failure.
 
 ## [0.1.0] - 2026-08-17
 

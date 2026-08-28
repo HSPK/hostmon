@@ -7,12 +7,15 @@ import type {
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
 import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
+import { compareWorkloads, type WorkloadSort } from "./workload-order";
 
 export class GPUSubmittersPanel implements PanelRenderer {
   readonly element: HTMLElement;
   private readonly tableBody: HTMLTableSectionElement;
   private readonly search: HTMLInputElement;
   private readonly queue: HTMLSelectElement;
+  private readonly state: HTMLSelectElement;
+  private readonly sort: HTMLSelectElement;
   private readonly count: HTMLElement;
   private readonly previous: HTMLButtonElement;
   private readonly next: HTMLButtonElement;
@@ -41,7 +44,30 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.renderRows();
     });
     this.queue = document.createElement("select");
+    this.queue.setAttribute("aria-label", "Queue");
     this.queue.addEventListener("change", () => {
+      this.page = 0;
+      this.renderRows();
+    });
+    this.state = selectControl("Workload state", [
+      ["all", "State: All"],
+      ["attention", "Needs attention"],
+      ["Running", "Running"],
+      ["Pending", "Pending"],
+      ["Mixed", "Mixed"],
+    ]);
+    this.state.addEventListener("change", () => {
+      this.page = 0;
+      this.renderRows();
+    });
+    this.sort = selectControl("Sort workloads", [
+      ["running-gpus", "Sort: Running GPUs"],
+      ["pending-gpus", "Sort: Pending GPUs"],
+      ["name", "Sort: Workload name"],
+      ["submitter", "Sort: Submitter"],
+      ["queue", "Sort: Queue"],
+    ]);
+    this.sort.addEventListener("change", () => {
       this.page = 0;
       this.renderRows();
     });
@@ -58,6 +84,8 @@ export class GPUSubmittersPanel implements PanelRenderer {
     controls.append(
       this.search,
       this.queue,
+      this.state,
+      this.sort,
       this.count,
       this.previous,
       this.next,
@@ -130,21 +158,22 @@ export class GPUSubmittersPanel implements PanelRenderer {
     if (!this.report) return;
     const query = this.search.value.trim().toLowerCase();
     const queue = this.queue.value;
+    const state = this.state.value;
+    const sort = this.sort.value as WorkloadSort;
     const rows = (this.report.workloads ?? [])
       .filter(
         row =>
           (queue === "all" || row.queue === queue) &&
+          (state === "all" ||
+            (state === "attention"
+              ? row.pending_gpus > 0 || row.status !== "Running"
+              : row.status === state)) &&
           (!query ||
             row.name.toLowerCase().includes(query) ||
             row.submitter.toLowerCase().includes(query) ||
             row.creator_id.toLowerCase().includes(query)),
       )
-      .sort(
-        (left, right) =>
-          right.running_gpus - left.running_gpus ||
-          right.pending_gpus - left.pending_gpus ||
-          left.submitter.localeCompare(right.submitter),
-      );
+      .sort((left, right) => compareWorkloads(left, right, sort));
     const pages = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
     this.page = Math.min(this.page, pages - 1);
     const pageRows = rows.slice(
@@ -155,6 +184,16 @@ export class GPUSubmittersPanel implements PanelRenderer {
       `${rows.length} workloads | ${this.page + 1}/${pages}`;
     this.previous.disabled = this.page === 0;
     this.next.disabled = this.page >= pages - 1;
+    if (pageRows.length === 0) {
+      const row = document.createElement("tr");
+      const cell = document.createElement("td");
+      cell.colSpan = 7;
+      cell.className = "table-empty";
+      cell.textContent = "No workloads match the current filters";
+      row.append(cell);
+      this.tableBody.replaceChildren(row);
+      return;
+    }
     this.tableBody.replaceChildren(
       ...pageRows.map(row =>
         workloadRow(row, selected => this.openDetails(selected)),
@@ -236,6 +275,23 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.activeSelection = null;
     if (updateRoute) this.context.actions.selectWorkload(null);
   }
+}
+
+function selectControl(
+  label: string,
+  options: Array<[string, string]>,
+): HTMLSelectElement {
+  const select = document.createElement("select");
+  select.setAttribute("aria-label", label);
+  select.replaceChildren(
+    ...options.map(([value, text]) => {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = text;
+      return option;
+    }),
+  );
+  return select;
 }
 
 function workloadRow(

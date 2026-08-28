@@ -139,6 +139,9 @@ main { width: 100%; padding: 12px; }
 .metric-table th:nth-child(2), .metric-table td:nth-child(2),
 .health-table th:first-child, .health-table td:first-child { text-align: left; }
 .metric-table tbody tr:hover, .health-table tbody tr:hover { background: var(--surface-2); }
+.metric-table .table-empty {
+  height: 72px; color: var(--muted); text-align: center; font-style: italic;
+}
 .metric-name { font-family: ui-monospace, monospace; color: #b7c5d6; }
 .metric-table.compact td:first-child { text-align: left; }
 

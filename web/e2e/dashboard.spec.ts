@@ -80,6 +80,19 @@ const clusterGPUReport = {
       pending_pods: 1,
       pending_gpus: 8,
     },
+    {
+      queue: "queue-a",
+      name: "queued-job-001",
+      status: "Pending",
+      submitter: "queued-run",
+      creator_id: "user-c",
+      running_pods: 0,
+      running_gpus: 0,
+      running_gpu_nodes: 0,
+      running_nodes: [],
+      pending_pods: 2,
+      pending_gpus: 16,
+    },
     ...Array.from({ length: 80 }, (_, index) => ({
       queue: "queue-a",
       name: `batch-job-${String(index).padStart(3, "0")}`,
@@ -269,6 +282,30 @@ test("supports deep links and browser workspace history", async ({ page }) => {
   );
   await expect(page.locator(".workload-drawer")).toContainText(
     "training-job-001",
+  );
+});
+
+test("filters and sorts workload triage views", async ({ page }) => {
+  await page.goto("/?page=workloads");
+  await page.getByLabel("Sort workloads").selectOption("pending-gpus");
+  await expect(page.locator(".submitter-table tbody tr").first()).toContainText(
+    "queued-job-001",
+  );
+
+  await page.getByLabel("Workload state").selectOption("attention");
+  await expect(page.locator(".table-count")).toContainText("2 workloads");
+  await expect(page.locator(".submitter-table")).toContainText(
+    "training-job-001",
+  );
+  await expect(page.locator(".submitter-table")).toContainText(
+    "queued-job-001",
+  );
+
+  await page.locator(".gpu-submitters-panel input[type=search]").fill(
+    "missing-workload",
+  );
+  await expect(page.locator(".table-empty")).toHaveText(
+    "No workloads match the current filters",
   );
 });
 
