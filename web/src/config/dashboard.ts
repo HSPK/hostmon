@@ -66,6 +66,13 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
       )
     );
   }
+  if (
+    value.columns !== undefined &&
+    (!Array.isArray(value.columns) ||
+      !value.columns.every(column => typeof column === "string"))
+  ) {
+    return false;
+  }
   return [
     "collectors",
     "tasks",

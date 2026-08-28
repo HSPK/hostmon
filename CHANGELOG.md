@@ -83,6 +83,9 @@ All notable changes to this project are documented here.
   for built-in panels, including line width.
 - Moved connection state into a bottom status bar with API latency and UTC+8
   sample timestamps.
+- Added a generic typed data-table renderer, JSON-configured Workload/Metric
+  columns, persistent column visibility controls, and semantic table/chart
+  page sections.
 
 ## [0.1.0] - 2026-08-17
 

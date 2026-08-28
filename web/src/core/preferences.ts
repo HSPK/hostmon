@@ -23,6 +23,12 @@ export class PreferenceStore {
       windowSeconds: this.value.windowSeconds,
       activePage: this.value.activePage,
       workloadView: {...this.value.workloadView},
+      panelColumns: Object.fromEntries(
+        Object.entries(this.value.panelColumns).map(([id, columns]) => [
+          id,
+          [...columns],
+        ]),
+      ),
       customPanels: this.value.customPanels.map(panel => ({...panel})),
     };
   }
@@ -39,7 +45,10 @@ export class PreferenceStore {
     return ordered.filter(
       panel =>
         panel.page === page && !this.value.hiddenPanels.includes(panel.id),
-    );
+    ).map(panel => {
+      const columns = this.value.panelColumns[panel.id];
+      return columns ? {...panel, columns: [...columns]} : panel;
+    });
   }
 
   setVisible(panelId: string, visible: boolean): void {
@@ -95,6 +104,11 @@ export class PreferenceStore {
     this.save();
   }
 
+  setPanelColumns(panelId: string, columns: string[]): void {
+    this.value.panelColumns[panelId] = [...columns];
+    this.save();
+  }
+
   saveCustomPanel(panel: TimeSeriesPanelDefinition): void {
     const index = this.value.customPanels.findIndex(item => item.id === panel.id);
     if (index >= 0) this.value.customPanels[index] = panel;
@@ -128,6 +142,7 @@ export class PreferenceStore {
       windowSeconds: this.definition.defaultWindowSeconds,
       activePage: "overview",
       workloadView: defaultWorkloadView(),
+      panelColumns: {},
       customPanels: [],
     };
   }
@@ -154,6 +169,9 @@ export class PreferenceStore {
         workloadView: isWorkloadView(parsed.workloadView)
           ? parsed.workloadView
           : defaultWorkloadView(),
+        panelColumns: isPanelColumns(parsed.panelColumns)
+          ? parsed.panelColumns
+          : {},
         customPanels: Array.isArray(parsed.customPanels)
           ? parsed.customPanels.filter(isCustomPanel)
           : [],
@@ -175,6 +193,21 @@ export class PreferenceStore {
 
 function defaultWorkloadView(): WorkloadView {
   return {queue: "all", state: "all", sort: "running-gpus"};
+}
+
+function isPanelColumns(
+  value: unknown,
+): value is Record<string, string[]> {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    Object.values(value).every(
+      columns =>
+        Array.isArray(columns) &&
+        columns.length > 0 &&
+        columns.every(column => typeof column === "string"),
+    )
+  );
 }
 
 function isWorkloadView(value: unknown): value is WorkloadView {

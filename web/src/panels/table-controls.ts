@@ -11,17 +11,3 @@ export function pageButton(
   button.addEventListener("click", action);
   return button;
 }
-
-export function bindSortHeaders(
-  table: HTMLTableElement,
-  select: HTMLSelectElement,
-): void {
-  for (const button of table.querySelectorAll<HTMLButtonElement>(
-    "[data-sort-value]",
-  )) {
-    button.addEventListener("click", () => {
-      select.value = button.dataset.sortValue ?? select.value;
-      select.dispatchEvent(new Event("change"));
-    });
-  }
-}

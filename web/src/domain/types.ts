@@ -145,6 +145,8 @@ export interface BasePanelDefinition {
   title: string;
   type: string;
   page: PageId;
+  section?: string;
+  columns?: string[];
   columnSpan?: 1 | 2;
   custom?: boolean;
 }
@@ -221,5 +223,6 @@ export interface DashboardPreferences {
   windowSeconds: number;
   activePage: PageId;
   workloadView: WorkloadView;
+  panelColumns: Record<string, string[]>;
   customPanels: TimeSeriesPanelDefinition[];
 }

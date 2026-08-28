@@ -28,6 +28,7 @@ Important modules:
 | `core/time-series-store.ts` | Bounded aligned columnar data |
 | `core/preferences.ts` | Browser-local layout preferences |
 | `panels/panel.ts` | Renderer interface and registry |
+| `panels/data-table.ts` | Typed configurable table rendering |
 | `panels/timeseries-panel.ts` | uPlot adapter |
 | `config/dashboard.json` | Declarative navigation and default panel layout |
 | `config/dashboard.ts` | Runtime validation for dashboard configuration |
@@ -53,6 +54,7 @@ The production bundle budget is below 100 KiB compressed.
 Users can drag panel headers or open **Layout** to show, hide, and reorder
 panels. Preferences are
 stored in browser local storage and do not affect other users.
+Configured tables also expose per-column visibility controls in **Layout**.
 
 The navigation model separates operational workflows:
 
@@ -80,7 +82,8 @@ Navigation groups and the default layout are declarative:
   "type": "timeseries",
   "page": "overview",
   "title": "Network throughput",
-  "metrics": ["network/rx_mbps", "network/tx_mbps"]
+  "metrics": ["network/rx_mbps", "network/tx_mbps"],
+  "section": "Charts"
 }
 ```
 

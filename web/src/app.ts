@@ -110,7 +110,7 @@ export class DashboardApp {
               <button id="customize-button" class="button" type="button">Layout</button>
             </div>
           </header>
-          <main><div id="panels" class="panel-grid"></div></main>
+          <main><div id="panels" class="panel-sections"></div></main>
           <footer class="statusbar">
             <div class="connection"><span id="connection-dot" class="connection-dot"></span><span id="connection-text">connecting</span></div>
             <span id="operation-latency">API -- ms</span>
@@ -380,6 +380,22 @@ export class DashboardApp {
     this.panels.length = 0;
     this.panelsRoot.replaceChildren();
     const definitions = this.preferences.visiblePanels();
+    const sections = new Map<string, HTMLElement>();
+    for (const definition of definitions) {
+      const name = this.panelSection(definition);
+      if (sections.has(name)) continue;
+      const section = document.createElement("section");
+      section.className = "panel-section";
+      section.dataset.section = name;
+      const title = document.createElement("h2");
+      title.className = "panel-section-title";
+      title.textContent = name;
+      const grid = document.createElement("div");
+      grid.className = "panel-grid";
+      section.append(title, grid);
+      sections.set(name, grid);
+      this.panelsRoot.append(section);
+    }
     const renderNext = (index: number): void => {
       if (generation !== this.renderGeneration || index >= definitions.length) {
         return;
@@ -406,7 +422,7 @@ export class DashboardApp {
         },
       });
       this.panels.push(panel);
-      this.panelsRoot.append(panel.element);
+      sections.get(this.panelSection(definition))?.append(panel.element);
       this.bindPanelDrag(panel.element, definition.id);
       panel.update();
       if (index + 1 < definitions.length) {
@@ -414,6 +430,13 @@ export class DashboardApp {
       }
     };
     renderNext(0);
+  }
+
+  private panelSection(definition: PanelDefinition): string {
+    if (definition.section) return definition.section;
+    if (definition.type === "timeseries") return "Charts";
+    if (definition.type === "stats") return "Summary";
+    return "Tables";
   }
 
   private focusPanel(panelId: string, attempts = 20): void {
@@ -475,6 +498,44 @@ export class DashboardApp {
         orderButton("Down", () => this.movePanel(definition.id, 1)),
       );
       row.append(label, actions);
+      const available = DASHBOARD.panels.find(
+        panel => panel.id === definition.id,
+      )?.columns;
+      if (available?.length) {
+        const details = document.createElement("details");
+        details.className = "column-setting";
+        const summary = document.createElement("summary");
+        summary.textContent = "Columns";
+        const options = document.createElement("div");
+        options.className = "column-options";
+        const selected = new Set(
+          preferences.panelColumns[definition.id] ?? definition.columns,
+        );
+        for (const column of available) {
+          const option = document.createElement("label");
+          const input = document.createElement("input");
+          input.type = "checkbox";
+          input.checked = selected.has(column);
+          input.addEventListener("change", () => {
+            if (input.checked) selected.add(column);
+            else selected.delete(column);
+            if (!selected.size) {
+              input.checked = true;
+              selected.add(column);
+              return;
+            }
+            this.preferences.setPanelColumns(
+              definition.id,
+              available.filter(item => selected.has(item)),
+            );
+            this.renderPanels();
+          });
+          option.append(input, document.createTextNode(column));
+          options.append(option);
+        }
+        details.append(summary, options);
+        row.append(details);
+      }
       fragment.append(row);
     }
     root.replaceChildren(fragment);

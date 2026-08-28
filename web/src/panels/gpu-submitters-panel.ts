@@ -8,16 +8,14 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
-import {
-  bindSortHeaders,
-  pageButton,
-  TABLE_PAGE_SIZE,
-} from "./table-controls";
+import { DataTable, type DataColumn } from "./data-table";
+import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
 import { compareWorkloads } from "./workload-order";
 
 export class GPUSubmittersPanel implements PanelRenderer {
   readonly element: HTMLElement;
-  private readonly tableBody: HTMLTableSectionElement;
+  private readonly table: DataTable<ClusterGPUWorkloadRow>;
+  private readonly columns: DataColumn<ClusterGPUWorkloadRow>[];
   private readonly search: HTMLInputElement;
   private readonly queue: HTMLSelectElement;
   private readonly state: HTMLSelectElement;
@@ -103,24 +101,26 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.next,
     );
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "table-scroll";
-    const table = document.createElement("table");
-    table.className = "metric-table submitter-table";
-    const head = document.createElement("thead");
-    head.innerHTML = `
-      <tr><th><button data-sort-value="queue">Queue</button></th>
-      <th><button data-sort-value="name">Workload</button></th><th>State</th>
-      <th><button data-sort-value="submitter">Submitter</button></th>
-      <th><button data-sort-value="running-gpus">Running GPUs</button></th>
-      <th>GPU nodes</th>
-      <th><button data-sort-value="pending-gpus">Pending GPUs</button></th></tr>
-    `;
-    this.tableBody = document.createElement("tbody");
-    table.append(head, this.tableBody);
-    bindSortHeaders(table, this.sort);
-    wrapper.append(table);
-    shell.body.append(controls, wrapper);
+    this.columns = this.workloadColumns(
+      definition.columns ?? [
+        "queue",
+        "name",
+        "status",
+        "submitter",
+        "running_gpus",
+        "running_gpu_nodes",
+        "pending_gpus",
+      ],
+    );
+    this.table = new DataTable(
+      this.columns,
+      "submitter-table",
+      value => {
+        this.sort.value = value;
+        this.sort.dispatchEvent(new Event("change"));
+      },
+    );
+    shell.body.append(controls, this.table.element);
 
     this.drawer = document.createElement("aside");
     this.drawer.className = "workload-drawer";
@@ -202,21 +202,68 @@ export class GPUSubmittersPanel implements PanelRenderer {
       `${rows.length} workloads | ${this.page + 1}/${pages}`;
     this.previous.disabled = this.page === 0;
     this.next.disabled = this.page >= pages - 1;
-    if (pageRows.length === 0) {
-      const row = document.createElement("tr");
-      const cell = document.createElement("td");
-      cell.colSpan = 7;
-      cell.className = "table-empty";
-      cell.textContent = "No workloads match the current filters";
-      row.append(cell);
-      this.tableBody.replaceChildren(row);
-      return;
-    }
+    this.table.setRows(
+      pageRows,
+      this.columns,
+      "No workloads match the current filters",
+    );
+  }
 
-    this.tableBody.replaceChildren(
-      ...pageRows.map(row =>
-        workloadRow(row, selected => this.openDetails(selected)),
+  private workloadColumns(
+    ids: string[],
+  ): DataColumn<ClusterGPUWorkloadRow>[] {
+    const numeric = (
+      id: "running_gpus" | "running_gpu_nodes" | "pending_gpus",
+      label: string,
+      sortValue?: string,
+    ): DataColumn<ClusterGPUWorkloadRow> => ({
+      id,
+      label,
+      ...(sortValue ? {sortValue} : {}),
+      render: row => String(row[id]),
+    });
+    const columns: Record<string, DataColumn<ClusterGPUWorkloadRow>> = {
+      queue: {
+        id: "queue",
+        label: "Queue",
+        sortValue: "queue",
+        render: row => row.queue,
+      },
+      name: {
+        id: "name",
+        label: "Workload",
+        sortValue: "name",
+        render: row => {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "workload-link";
+          button.textContent = row.name;
+          button.addEventListener("click", () => this.openDetails(row));
+          return button;
+        },
+      },
+      status: {
+        id: "status",
+        label: "State",
+        render: row => workloadState(row.status),
+      },
+      submitter: {
+        id: "submitter",
+        label: "Submitter",
+        sortValue: "submitter",
+        render: row => row.submitter,
+      },
+      running_gpus: numeric(
+        "running_gpus",
+        "Running GPUs",
+        "running-gpus",
       ),
+      running_gpu_nodes: numeric("running_gpu_nodes", "GPU nodes"),
+      pending_gpus: numeric("pending_gpus", "Pending GPUs", "pending-gpus"),
+    };
+    return ids.map(id => columns[id]).filter(
+      (column): column is DataColumn<ClusterGPUWorkloadRow> =>
+        column !== undefined,
     );
   }
 
@@ -321,46 +368,17 @@ function selectControl(
   return select;
 }
 
-function workloadRow(
-  row: ClusterGPUWorkloadRow,
-  select: (row: ClusterGPUWorkloadRow) => void,
-): HTMLTableRowElement {
-  const output = document.createElement("tr");
-  const values = [
-    row.queue,
-    row.name,
-    row.status,
-    row.submitter,
-    row.running_gpus,
-    row.running_gpu_nodes,
-    row.pending_gpus,
-  ];
-  for (const [index, value] of values.entries()) {
-    const cell = document.createElement("td");
-    if (index === 1) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "workload-link";
-      button.textContent = String(value);
-      button.addEventListener("click", () => select(row));
-      cell.append(button);
-    } else if (index === 2) {
-      const state = document.createElement("span");
-      state.className = `state ${
-        value === "Running"
-          ? "state-up"
-          : value === "Pending"
-            ? "state-stale"
-            : "state-mixed"
-      }`;
-      state.textContent = String(value);
-      cell.append(state);
-    } else {
-      cell.textContent = String(value);
-    }
-    output.append(cell);
-  }
-  return output;
+function workloadState(value: ClusterGPUWorkloadRow["status"]): HTMLElement {
+  const state = document.createElement("span");
+  state.className = `state ${
+    value === "Running"
+      ? "state-up"
+      : value === "Pending"
+        ? "state-stale"
+        : "state-mixed"
+  }`;
+  state.textContent = value;
+  return state;
 }
 
 function detailCell(

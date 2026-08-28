@@ -91,8 +91,22 @@
         "cluster_gpu/queue/total/no_job_node_equivalents"
       ]
     },
-    {"id": "gpu-submitters", "type": "gpu-submitters", "page": "workloads", "title": "GPU workloads", "columnSpan": 2},
-    {"id": "metric-explorer", "type": "metrics", "page": "metrics", "title": "Metric explorer", "columnSpan": 2},
+    {
+      "id": "gpu-submitters",
+      "type": "gpu-submitters",
+      "page": "workloads",
+      "title": "GPU workloads",
+      "columnSpan": 2,
+      "columns": ["queue", "name", "status", "submitter", "running_gpus", "running_gpu_nodes", "pending_gpus"]
+    },
+    {
+      "id": "metric-explorer",
+      "type": "metrics",
+      "page": "metrics",
+      "title": "Metric explorer",
+      "columnSpan": 2,
+      "columns": ["select", "name", "current", "minimum", "average", "p95", "maximum", "samples"]
+    },
     {"id": "alert-rules", "type": "rules", "page": "settings", "title": "Alert rules", "columnSpan": 2},
     {"id": "system", "type": "system", "page": "system", "title": "System and API status", "columnSpan": 2}
   ]

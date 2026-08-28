@@ -241,6 +241,10 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
 
   await page.getByRole("button", { name: "GPU Fleet" }).click();
   await expect(page.locator(".fleet-table")).toContainText("56 / 64");
+  await expect(page.locator(".panel-section-title")).toHaveText([
+    "Tables",
+    "Charts",
+  ]);
 
   await page.getByRole("button", { name: "Workloads" }).click();
   await expect(page.locator(".submitter-table tbody tr")).toHaveCount(75);
@@ -471,4 +475,23 @@ test("creates and toggles alert rules from settings", async ({ page }) => {
   await expect(page.locator(".rules-table")).toContainText("gpu-hot");
   await page.getByLabel("Enable gpu-hot").uncheck();
   await expect(page.getByLabel("Enable gpu-hot")).not.toBeChecked();
+});
+
+test("configures visible workload table columns", async ({ page }) => {
+  await page.goto("/?page=workloads");
+  await page.getByRole("button", { name: "Layout" }).click();
+  const setting = page.locator(".panel-setting").filter({
+    hasText: "GPU workloads",
+  });
+  await setting.locator("summary").click();
+  await setting.getByText("pending_gpus").locator("input").uncheck();
+  await page.getByRole("button", { name: "Close" }).click();
+
+  await expect(
+    page.locator(".submitter-table thead"),
+  ).not.toContainText("Pending GPUs");
+  await page.reload();
+  await expect(
+    page.locator(".submitter-table thead"),
+  ).not.toContainText("Pending GPUs");
 });

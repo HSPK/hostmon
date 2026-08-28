@@ -126,4 +126,16 @@ describe("PreferenceStore", () => {
     expect(panels).toHaveLength(1);
     expect(panels[0]?.title).toBe("Edited utilization");
   });
+
+  it("persists configured table columns", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    preferences.setPanelColumns("gpu-submitters", ["queue", "name"]);
+
+    const restored = new PreferenceStore(DASHBOARD);
+    const panel = restored
+      .visiblePanels("workloads")
+      .find(item => item.id === "gpu-submitters");
+
+    expect(panel?.columns).toEqual(["queue", "name"]);
+  });
 });

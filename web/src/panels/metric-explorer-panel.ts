@@ -4,17 +4,15 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
-import {
-  bindSortHeaders,
-  pageButton,
-  TABLE_PAGE_SIZE,
-} from "./table-controls";
+import { DataTable, type DataColumn } from "./data-table";
+import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
 
 type SortKey = "name" | "current" | "average" | "p95" | "maximum";
 
 export class MetricExplorerPanel implements PanelRenderer {
   readonly element: HTMLElement;
-  private readonly tableBody: HTMLTableSectionElement;
+  private readonly table: DataTable<MetricCatalogEntry>;
+  private readonly columns: DataColumn<MetricCatalogEntry>[];
   private readonly search: HTMLInputElement;
   private readonly sort: HTMLSelectElement;
   private readonly create: HTMLButtonElement;
@@ -89,23 +87,28 @@ export class MetricExplorerPanel implements PanelRenderer {
       this.create,
     );
 
-    const wrapper = document.createElement("div");
-    wrapper.className = "table-scroll";
-    const table = document.createElement("table");
-    table.className = "metric-table";
-    const head = document.createElement("thead");
-    head.innerHTML = `
-      <tr><th></th><th><button data-sort-value="name">Metric</button></th>
-      <th><button data-sort-value="current">Current</button></th><th>Min</th>
-      <th><button data-sort-value="average">Average</button></th>
-      <th><button data-sort-value="p95">P95</button></th>
-      <th><button data-sort-value="maximum">Max</button></th><th>Samples</th></tr>
-    `;
-    this.tableBody = document.createElement("tbody");
-    table.append(head, this.tableBody);
-    bindSortHeaders(table, this.sort);
-    wrapper.append(table);
-    shell.body.append(controls, wrapper);
+    this.columns = this.metricColumns(
+      definition.columns ?? [
+        "select",
+        "name",
+        "current",
+        "minimum",
+        "average",
+        "p95",
+        "maximum",
+        "samples",
+      ],
+    );
+    this.table = new DataTable(
+      this.columns,
+      "metric-explorer-table",
+      value => {
+        this.sort.value = value;
+        this.sort.dispatchEvent(new Event("change"));
+      },
+      item => this.context.actions.createChart([item.name]),
+    );
+    shell.body.append(controls, this.table.element);
     void this.load();
   }
 
@@ -147,44 +150,60 @@ export class MetricExplorerPanel implements PanelRenderer {
       `${filtered.length} / ${this.catalog.length} | ${this.page + 1}/${pages}`;
     this.previous.disabled = this.page === 0;
     this.next.disabled = this.page >= pages - 1;
-    const fragment = document.createDocumentFragment();
-    for (const item of pageRows) {
-      const row = document.createElement("tr");
-      const selectCell = document.createElement("td");
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = this.selected.has(item.name);
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) this.selected.add(item.name);
-        else this.selected.delete(item.name);
-        this.create.disabled = this.selected.size === 0;
-      });
-      selectCell.append(checkbox);
-      row.append(
-        selectCell,
-        cell(item.name, "metric-name"),
-        cell(format(item.current, item.metadata.unit)),
-        cell(format(item.minimum, item.metadata.unit)),
-        cell(format(item.average, item.metadata.unit)),
-        cell(format(item.p95, item.metadata.unit)),
-        cell(format(item.maximum, item.metadata.unit)),
-        cell(String(item.samples)),
-      );
-      row.addEventListener("dblclick", () =>
-        this.context.actions.createChart([item.name]),
-      );
-      fragment.append(row);
-    }
+    this.table.setRows(pageRows, this.columns, "No metrics match the filter");
+  }
 
-    this.tableBody.replaceChildren(fragment);
+  private metricColumns(ids: string[]): DataColumn<MetricCatalogEntry>[] {
+    const columns: Record<string, DataColumn<MetricCatalogEntry>> = {
+      select: {
+        id: "select",
+        label: "",
+        render: item => {
+          const checkbox = document.createElement("input");
+          checkbox.type = "checkbox";
+          checkbox.checked = this.selected.has(item.name);
+          checkbox.addEventListener("change", () => {
+            if (checkbox.checked) this.selected.add(item.name);
+            else this.selected.delete(item.name);
+            this.create.disabled = this.selected.size === 0;
+          });
+          return checkbox;
+        },
+      },
+      name: {
+        id: "name",
+        label: "Metric",
+        sortValue: "name",
+        className: "metric-name",
+        render: item => item.name,
+      },
+      current: metricValueColumn("current", "Current"),
+      minimum: metricValueColumn("minimum", "Min"),
+      average: metricValueColumn("average", "Average"),
+      p95: metricValueColumn("p95", "P95"),
+      maximum: metricValueColumn("maximum", "Max"),
+      samples: {
+        id: "samples",
+        label: "Samples",
+        render: item => String(item.samples),
+      },
+    };
+    return ids.map(id => columns[id]).filter(
+      (column): column is DataColumn<MetricCatalogEntry> => column !== undefined,
+    );
   }
 }
 
-function cell(value: string, className = ""): HTMLTableCellElement {
-  const output = document.createElement("td");
-  output.className = className;
-  output.textContent = value;
-  return output;
+function metricValueColumn(
+  id: "current" | "minimum" | "average" | "p95" | "maximum",
+  label: string,
+): DataColumn<MetricCatalogEntry> {
+  return {
+    id,
+    label,
+    ...(id === "minimum" ? {} : {sortValue: id}),
+    render: item => format(item[id], item.metadata.unit),
+  };
 }
 
 function format(value: number, unit: string): string {
