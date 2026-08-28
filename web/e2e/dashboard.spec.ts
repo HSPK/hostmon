@@ -213,6 +213,26 @@ test.beforeEach(async ({ page }) => {
     }
     await route.fulfill({json: {rules: alertRules}});
   });
+  await page.route("**/api/collectors", route =>
+    route.fulfill({
+      json: {
+        collectors: [
+          {
+            name: "cpu",
+            enabled: true,
+            required: true,
+            refresh_seconds: 10,
+            deadline_seconds: 2,
+            max_stale_seconds: 0,
+            last_success_at: now,
+            last_failure_at: null,
+            last_error: null,
+            options: {},
+          },
+        ],
+      },
+    }),
+  );
   await page.routeWebSocket("**/api/ws", socket => {
     socket.send(
       JSON.stringify({
@@ -234,10 +254,23 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator("#connection-text")).toHaveText("connected");
   await expect(page.locator(".statusbar")).toContainText("API ");
   await expect(page.locator(".statusbar")).toContainText("UTC+8");
+  await expect(page.locator(".sidebar nav h3")).toHaveText([
+    "Charts",
+    "Tables",
+    "Manage",
+  ]);
 
   await page.getByRole("button", { name: "Collectors" }).click();
   await expect(page.locator("#page-title")).toHaveText("Collectors");
   await expect(page.locator(".health-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".health-table")).toContainText("10.0 s");
+  await page.getByRole("button", { name: "View", exact: true }).click();
+  await expect(page.locator(".collector-dialog")).toContainText(
+    "deadline_seconds",
+  );
+  await page.locator(".collector-dialog").getByRole("button", {
+    name: "Close",
+  }).click();
 
   await page.getByRole("button", { name: "GPU Fleet" }).click();
   await expect(page.locator(".fleet-table")).toContainText("56 / 64");
@@ -280,6 +313,9 @@ test("searches metrics and persists a custom chart", async ({ page }) => {
   await page.getByRole("button", { name: "Add chart" }).click();
   await page.locator("#chart-metric-filter").fill("custom/latency");
   await page.locator(".metric-option").filter({ hasText: "custom/latency_ms" }).click();
+  await expect(page.locator("#chart-metric-selected")).toContainText(
+    "custom/latency_ms",
+  );
   await page.locator("#chart-title").fill("Request latency");
   await page.locator("#chart-style").selectOption("area");
   await page.getByRole("button", { name: "Save chart" }).click();
@@ -296,6 +332,7 @@ test("searches metrics and persists a custom chart", async ({ page }) => {
 
 test("supports deep links and browser workspace history", async ({ page }) => {
   await page.goto("/?page=workloads");
+  await expect(page.locator(".table-controls select")).toHaveCount(2);
   await expect(page.locator("#page-title")).toHaveText("Workloads");
   await expect(page.locator(".submitter-table tbody tr")).toHaveCount(75);
 
@@ -330,7 +367,10 @@ test("supports deep links and browser workspace history", async ({ page }) => {
 test("filters and sorts workload triage views", async ({ page }) => {
   await page.goto("/?page=workloads");
   await page.getByRole("button", { name: "Pending GPUs" }).click();
-  await expect(page.getByLabel("Sort workloads")).toHaveValue("pending-gpus");
+  await page.getByRole("button", { name: "Pending GPUs" }).click();
+  await expect(
+    page.getByRole("columnheader", { name: "Pending GPUs" }),
+  ).toHaveAttribute("aria-sort", "descending");
   await expect(page.locator(".submitter-table tbody tr").first()).toContainText(
     "queued-job-001",
   );
@@ -352,7 +392,9 @@ test("filters and sorts workload triage views", async ({ page }) => {
   );
   await page.reload();
   await expect(page.getByLabel("Workload state")).toHaveValue("attention");
-  await expect(page.getByLabel("Sort workloads")).toHaveValue("pending-gpus");
+  await expect(
+    page.getByRole("columnheader", { name: "Pending GPUs" }),
+  ).toHaveAttribute("aria-sort", "descending");
   await expect(page.locator(".table-count")).toContainText("2 workloads");
 });
 
@@ -379,6 +421,15 @@ test("remains responsive on narrow screens", async ({ page }) => {
     .locator("body")
     .evaluate(element => element.scrollWidth > element.clientWidth);
   expect(bodyHasHorizontalOverflow).toBe(false);
+  const viewport = await page.locator("body").evaluate(element => ({
+    client: element.clientHeight,
+    scroll: element.scrollHeight,
+  }));
+  expect(viewport.scroll).toBe(viewport.client);
+  const internalTableScrolls = await page
+    .locator(".gpu-submitters-panel .table-scroll")
+    .evaluate(element => element.scrollHeight > element.clientHeight);
+  expect(internalTableScrolls).toBe(true);
 
   await page.getByRole("button", { name: "training-job-001" }).click();
   const closeButton = page
@@ -464,7 +515,7 @@ test("drags panels and edits built-in chart configuration", async ({ page }) => 
 });
 
 test("creates and toggles alert rules from settings", async ({ page }) => {
-  await page.goto("/?page=settings");
+  await page.goto("/?page=alerts");
   await expect(page.locator(".rules-table")).toContainText("high-cpu");
   await page.getByRole("button", { name: "Add rule" }).click();
   await page.locator('[name="alert"]').fill("gpu-hot");
@@ -475,6 +526,23 @@ test("creates and toggles alert rules from settings", async ({ page }) => {
   await expect(page.locator(".rules-table")).toContainText("gpu-hot");
   await page.getByLabel("Enable gpu-hot").uncheck();
   await expect(page.getByLabel("Enable gpu-hot")).not.toBeChecked();
+});
+
+test("configures web theme and density", async ({ page }) => {
+  await page.goto("/?page=settings");
+  await page.locator(".web-settings-grid label").filter({
+    hasText: "Theme",
+  }).locator("select").selectOption("light");
+  await page.locator(".web-settings-grid label").filter({
+    hasText: "Density",
+  }).locator("select").selectOption("comfortable");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator("html")).toHaveAttribute(
+    "data-density",
+    "comfortable",
+  );
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });
 
 test("configures visible workload table columns", async ({ page }) => {

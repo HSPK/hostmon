@@ -4,7 +4,11 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
-import { DataTable, type DataColumn } from "./data-table";
+import {
+  DataTable,
+  type DataColumn,
+  type SortDirection,
+} from "./data-table";
 import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
 
 type SortKey = "name" | "current" | "average" | "p95" | "maximum";
@@ -14,7 +18,8 @@ export class MetricExplorerPanel implements PanelRenderer {
   private readonly table: DataTable<MetricCatalogEntry>;
   private readonly columns: DataColumn<MetricCatalogEntry>[];
   private readonly search: HTMLInputElement;
-  private readonly sort: HTMLSelectElement;
+  private sort: SortKey = "name";
+  private sortDirection: SortDirection = "asc";
   private readonly create: HTMLButtonElement;
   private readonly count: HTMLElement;
   private readonly previous: HTMLButtonElement;
@@ -41,25 +46,6 @@ export class MetricExplorerPanel implements PanelRenderer {
       this.page = 0;
       this.render();
     });
-    this.sort = document.createElement("select");
-    this.sort.setAttribute("aria-label", "Sort metrics");
-    const sortOptions: Array<[SortKey, string]> = [
-      ["name", "Name"],
-      ["current", "Current"],
-      ["average", "Average"],
-      ["p95", "P95"],
-      ["maximum", "Maximum"],
-    ];
-    for (const [value, label] of sortOptions) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = `Sort: ${label}`;
-      this.sort.append(option);
-    }
-    this.sort.addEventListener("change", () => {
-      this.page = 0;
-      this.render();
-    });
     this.create = document.createElement("button");
     this.create.type = "button";
     this.create.className = "button button-primary";
@@ -80,7 +66,6 @@ export class MetricExplorerPanel implements PanelRenderer {
     });
     controls.append(
       this.search,
-      this.sort,
       this.count,
       this.previous,
       this.next,
@@ -102,11 +87,14 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.table = new DataTable(
       this.columns,
       "metric-explorer-table",
-      value => {
-        this.sort.value = value;
-        this.sort.dispatchEvent(new Event("change"));
+      (value, direction) => {
+        this.sort = value as SortKey;
+        this.sortDirection = direction;
+        this.page = 0;
+        this.render();
       },
       item => this.context.actions.createChart([item.name]),
+      {value: this.sort, direction: this.sortDirection},
     );
     shell.body.append(controls, this.table.element);
     void this.load();
@@ -132,14 +120,14 @@ export class MetricExplorerPanel implements PanelRenderer {
 
   private render(): void {
     const query = this.search.value.trim().toLowerCase();
-    const sort = this.sort.value as SortKey;
     const filtered = this.catalog
       .filter(item => !query || item.name.toLowerCase().includes(query))
-      .sort((left, right) =>
-        sort === "name"
+      .sort((left, right) => {
+        const result = this.sort === "name"
           ? left.name.localeCompare(right.name)
-          : right[sort] - left[sort],
-      );
+          : left[this.sort] - right[this.sort];
+        return this.sortDirection === "asc" ? result : -result;
+      });
     const pages = Math.max(1, Math.ceil(filtered.length / TABLE_PAGE_SIZE));
     this.page = Math.min(this.page, pages - 1);
     const pageRows = filtered.slice(

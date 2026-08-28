@@ -81,6 +81,7 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
     "gpu-fleet",
     "gpu-submitters",
     "rules",
+    "web-settings",
   ].includes(value.type);
 }
 

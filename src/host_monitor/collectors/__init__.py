@@ -303,7 +303,13 @@ class CollectorManager:
             )
             if result is not None:
                 self._merge_result(binding.name, result, metrics, fields)
+                previous_failure = {
+                    key: prior_envelope[key]
+                    for key in ("last_failure_at", "last_error")
+                    if prior_envelope is not None and key in prior_envelope
+                }
                 envelope = {
+                    **previous_failure,
                     "_hostmon_envelope": ENVELOPE_VERSION,
                     "plugin_state": result.state,
                     "last_success_at": now,

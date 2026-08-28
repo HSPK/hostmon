@@ -9,10 +9,10 @@ const pending = workload("pending", 0, 8);
 describe("compareWorkloads", () => {
   it("orders by running or pending GPU demand", () => {
     expect([pending, running].sort((a, b) =>
-      compareWorkloads(a, b, "running-gpus"),
+      compareWorkloads(a, b, "running-gpus", "desc"),
     )[0]?.name).toBe("running");
     expect([running, pending].sort((a, b) =>
-      compareWorkloads(a, b, "pending-gpus"),
+      compareWorkloads(a, b, "pending-gpus", "desc"),
     )[0]?.name).toBe("pending");
   });
 });

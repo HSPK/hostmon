@@ -29,6 +29,8 @@ export class PreferenceStore {
           [...columns],
         ]),
       ),
+      theme: this.value.theme,
+      density: this.value.density,
       customPanels: this.value.customPanels.map(panel => ({...panel})),
     };
   }
@@ -109,6 +111,15 @@ export class PreferenceStore {
     this.save();
   }
 
+  setAppearance(
+    theme: DashboardPreferences["theme"],
+    density: DashboardPreferences["density"],
+  ): void {
+    this.value.theme = theme;
+    this.value.density = density;
+    this.save();
+  }
+
   saveCustomPanel(panel: TimeSeriesPanelDefinition): void {
     const index = this.value.customPanels.findIndex(item => item.id === panel.id);
     if (index >= 0) this.value.customPanels[index] = panel;
@@ -143,6 +154,8 @@ export class PreferenceStore {
       activePage: "overview",
       workloadView: defaultWorkloadView(),
       panelColumns: {},
+      theme: "dark",
+      density: "compact",
       customPanels: [],
     };
   }
@@ -166,12 +179,18 @@ export class PreferenceStore {
         activePage: isPageId(parsed.activePage, this.definition)
           ? parsed.activePage
           : "overview",
-        workloadView: isWorkloadView(parsed.workloadView)
-          ? parsed.workloadView
-          : defaultWorkloadView(),
+        workloadView: parseWorkloadView(parsed.workloadView),
         panelColumns: isPanelColumns(parsed.panelColumns)
           ? parsed.panelColumns
           : {},
+        theme:
+          parsed.theme === "dark" ||
+          parsed.theme === "light" ||
+          parsed.theme === "system"
+            ? parsed.theme
+            : "dark",
+        density:
+          parsed.density === "comfortable" ? "comfortable" : "compact",
         customPanels: Array.isArray(parsed.customPanels)
           ? parsed.customPanels.filter(isCustomPanel)
           : [],
@@ -192,7 +211,12 @@ export class PreferenceStore {
 }
 
 function defaultWorkloadView(): WorkloadView {
-  return {queue: "all", state: "all", sort: "running-gpus"};
+  return {
+    queue: "all",
+    state: "all",
+    sort: "running-gpus",
+    sortDirection: "desc",
+  };
 }
 
 function isPanelColumns(
@@ -210,18 +234,27 @@ function isPanelColumns(
   );
 }
 
-function isWorkloadView(value: unknown): value is WorkloadView {
-  if (!value || typeof value !== "object") return false;
+function parseWorkloadView(value: unknown): WorkloadView {
+  if (!value || typeof value !== "object") return defaultWorkloadView();
   const view = value as Partial<WorkloadView>;
-  return (
+  const valid =
     typeof view.queue === "string" &&
     ["all", "attention", "Running", "Pending", "Mixed"].includes(
       String(view.state),
     ) &&
     ["running-gpus", "pending-gpus", "name", "submitter", "queue"].includes(
       String(view.sort),
-    )
-  );
+    );
+  if (!valid) return defaultWorkloadView();
+  return {
+    queue: view.queue!,
+    state: view.state!,
+    sort: view.sort!,
+    sortDirection:
+      view.sortDirection === "asc" || view.sortDirection === "desc"
+        ? view.sortDirection
+        : "desc",
+  };
 }
 
 function isPageId(

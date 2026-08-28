@@ -86,6 +86,17 @@ All notable changes to this project are documented here.
 - Added a generic typed data-table renderer, JSON-configured Workload/Metric
   columns, persistent column visibility controls, and semantic table/chart
   page sections.
+- Replaced table sort dropdowns with reusable ascending/descending header
+  sorting and constrained table-only pages to internal scrolling.
+- Reworked chart metric selection into bounded search results and a separate
+  selected-metric list.
+- Grouped sidebar navigation into Charts, Tables, and Manage, moved Settings
+  and System to the bottom, and split Alerts into its own page.
+- Added persistent light/dark/system themes and compact/comfortable density.
+- Added collector diagnostics with configured refresh/deadline/stale policy,
+  absolute UTC+8 refresh time, recent errors, and detailed options.
+- Retained the most recent collector failure details after recovery so
+  intermittent errors remain inspectable.
 
 ## [0.1.0] - 2026-08-17
 

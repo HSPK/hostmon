@@ -6,6 +6,8 @@ import type {
   WorkloadSelection,
   WorkloadView,
   AlertRuleConfig,
+  DashboardPreferences,
+  CollectorDiagnostic,
 } from "../domain/types";
 import type { TimeSeriesStore } from "../core/time-series-store";
 
@@ -25,6 +27,12 @@ export interface PanelContext {
     createRule(rule: AlertRuleConfig): Promise<void>;
     updateRule(name: string, rule: AlertRuleConfig): Promise<void>;
     deleteRule(name: string): Promise<void>;
+    loadCollectors(): Promise<CollectorDiagnostic[]>;
+    appearance(): Pick<DashboardPreferences, "theme" | "density">;
+    setAppearance(
+      theme: DashboardPreferences["theme"],
+      density: DashboardPreferences["density"],
+    ): void;
     createChart(metrics?: string[]): void;
     editChart(panel: TimeSeriesPanelDefinition): void;
     removeChart(panelId: string): void;

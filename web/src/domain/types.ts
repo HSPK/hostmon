@@ -81,6 +81,7 @@ export interface WorkloadView {
   queue: string;
   state: WorkloadStateFilter;
   sort: WorkloadSort;
+  sortDirection: "asc" | "desc";
 }
 
 export interface ClusterGPUCapacityRow {
@@ -118,6 +119,19 @@ export interface AlertRuleConfig {
   message: string;
   enabled: boolean;
   [key: string]: unknown;
+}
+
+export interface CollectorDiagnostic {
+  name: string;
+  enabled: boolean;
+  required: boolean;
+  refresh_seconds: number;
+  deadline_seconds: number;
+  max_stale_seconds: number;
+  last_success_at: number | null;
+  last_failure_at: number | null;
+  last_error: string | null;
+  options: Record<string, unknown>;
 }
 
 export interface MetricMetadata {
@@ -192,6 +206,10 @@ export interface RulesPanelDefinition extends BasePanelDefinition {
   type: "rules";
 }
 
+export interface WebSettingsPanelDefinition extends BasePanelDefinition {
+  type: "web-settings";
+}
+
 export type PanelDefinition =
   | StatPanelDefinition
   | TimeSeriesPanelDefinition
@@ -201,13 +219,16 @@ export type PanelDefinition =
   | SystemPanelDefinition
   | GPUFleetPanelDefinition
   | GPUSubmittersPanelDefinition
-  | RulesPanelDefinition;
+  | RulesPanelDefinition
+  | WebSettingsPanelDefinition;
 
 export type PageId = string;
 
 export interface NavigationItem {
   id: PageId;
   label: string;
+  group?: string;
+  placement?: "main" | "bottom";
 }
 
 export interface DashboardDefinition {
@@ -224,5 +245,7 @@ export interface DashboardPreferences {
   activePage: PageId;
   workloadView: WorkloadView;
   panelColumns: Record<string, string[]>;
+  theme: "dark" | "light" | "system";
+  density: "compact" | "comfortable";
   customPanels: TimeSeriesPanelDefinition[];
 }

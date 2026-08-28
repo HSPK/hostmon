@@ -15,6 +15,7 @@ describe("dashboard definition", () => {
       "gpu-fleet",
       "gpu-submitters",
       "rules",
+      "web-settings",
     ]);
 
     expect(new Set(ids).size).toBe(ids.length);

@@ -6,15 +6,24 @@ export interface DataColumn<T> {
   render(row: T): string | Node;
 }
 
+export type SortDirection = "asc" | "desc";
+
 export class DataTable<T> {
   readonly element: HTMLElement;
   private readonly body: HTMLTableSectionElement;
+  private readonly sortHeaders = new Map<
+    string,
+    HTMLTableCellElement
+  >();
+  private sortValue = "";
+  private sortDirection: SortDirection = "asc";
 
   constructor(
     columns: DataColumn<T>[],
     className = "",
-    onSort?: (value: string) => void,
+    onSort?: (value: string, direction: SortDirection) => void,
     private readonly onRowDoubleClick?: (row: T) => void,
+    initialSort?: {value: string; direction: SortDirection},
   ) {
     this.element = document.createElement("div");
     this.element.className = "table-scroll";
@@ -28,7 +37,16 @@ export class DataTable<T> {
         const button = document.createElement("button");
         button.type = "button";
         button.textContent = column.label;
-        button.addEventListener("click", () => onSort(column.sortValue!));
+        this.sortHeaders.set(column.sortValue, cell);
+        button.addEventListener("click", () => {
+          const direction =
+            this.sortValue === column.sortValue &&
+            this.sortDirection === "asc"
+              ? "desc"
+              : "asc";
+          this.setSort(column.sortValue!, direction);
+          onSort(column.sortValue!, direction);
+        });
         cell.append(button);
       } else {
         cell.textContent = column.label;
@@ -39,6 +57,24 @@ export class DataTable<T> {
     this.body = document.createElement("tbody");
     table.append(head, this.body);
     this.element.append(table);
+    if (initialSort) {
+      this.setSort(initialSort.value, initialSort.direction);
+    }
+  }
+
+  setSort(value: string, direction: SortDirection): void {
+    this.sortValue = value;
+    this.sortDirection = direction;
+    for (const [key, header] of this.sortHeaders) {
+      header.setAttribute(
+        "aria-sort",
+        key === value
+          ? direction === "asc"
+            ? "ascending"
+            : "descending"
+          : "none",
+      );
+    }
   }
 
   setRows(rows: T[], columns: DataColumn<T>[], emptyMessage: string): void {

@@ -49,6 +49,7 @@ describe("PreferenceStore", () => {
       queue: "queue-a",
       state: "attention",
       sort: "pending-gpus",
+      sortDirection: "desc",
     });
 
     const restored = new PreferenceStore(DASHBOARD);
@@ -59,6 +60,7 @@ describe("PreferenceStore", () => {
       queue: "queue-a",
       state: "attention",
       sort: "pending-gpus",
+      sortDirection: "desc",
     });
     expect(restored.visiblePanels().some(panel => panel.id === "network")).toBe(false);
   });

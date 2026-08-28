@@ -1,6 +1,7 @@
 import type {
   HistoryResponse,
   AlertRuleConfig,
+  CollectorDiagnostic,
   PluginDocument,
   MetricCatalogResponse,
   StatusResponse,
@@ -71,6 +72,13 @@ export class ApiClient {
       `/api/rules/${encodeURIComponent(name)}`,
       "DELETE",
     );
+  }
+
+  async collectors(): Promise<CollectorDiagnostic[]> {
+    const response = await this.getJson<{collectors: CollectorDiagnostic[]}>(
+      "/api/collectors",
+    );
+    return response.collectors;
   }
 
   private async getJson<T>(url: string, signal?: AbortSignal): Promise<T> {

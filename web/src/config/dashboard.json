@@ -2,14 +2,15 @@
   "title": "hostmon operations",
   "defaultWindowSeconds": 3600,
   "navigation": [
-    {"id": "overview", "label": "Overview"},
-    {"id": "gpu-fleet", "label": "GPU Fleet"},
-    {"id": "workloads", "label": "Workloads"},
-    {"id": "metrics", "label": "Metrics"},
-    {"id": "collectors", "label": "Collectors"},
-    {"id": "kubernetes", "label": "Kubernetes"},
-    {"id": "settings", "label": "Settings"},
-    {"id": "system", "label": "System"}
+    {"id": "overview", "label": "Overview", "group": "Charts"},
+    {"id": "gpu-fleet", "label": "GPU Fleet", "group": "Charts"},
+    {"id": "workloads", "label": "Workloads", "group": "Tables"},
+    {"id": "metrics", "label": "Metrics", "group": "Tables"},
+    {"id": "collectors", "label": "Collectors", "group": "Tables"},
+    {"id": "kubernetes", "label": "Kubernetes", "group": "Tables"},
+    {"id": "alerts", "label": "Alerts", "group": "Manage"},
+    {"id": "settings", "label": "Settings", "placement": "bottom"},
+    {"id": "system", "label": "System", "placement": "bottom"}
   ],
   "panels": [
     {
@@ -107,7 +108,8 @@
       "columnSpan": 2,
       "columns": ["select", "name", "current", "minimum", "average", "p95", "maximum", "samples"]
     },
-    {"id": "alert-rules", "type": "rules", "page": "settings", "title": "Alert rules", "columnSpan": 2},
+    {"id": "alert-rules", "type": "rules", "page": "alerts", "title": "Alert rules", "columnSpan": 2},
+    {"id": "web-settings", "type": "web-settings", "page": "settings", "title": "Web settings", "columnSpan": 2},
     {"id": "system", "type": "system", "page": "system", "title": "System and API status", "columnSpan": 2}
   ]
 }

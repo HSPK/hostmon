@@ -8,7 +8,11 @@ import type {
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
-import { DataTable, type DataColumn } from "./data-table";
+import {
+  DataTable,
+  type DataColumn,
+  type SortDirection,
+} from "./data-table";
 import { pageButton, TABLE_PAGE_SIZE } from "./table-controls";
 import { compareWorkloads } from "./workload-order";
 
@@ -19,7 +23,8 @@ export class GPUSubmittersPanel implements PanelRenderer {
   private readonly search: HTMLInputElement;
   private readonly queue: HTMLSelectElement;
   private readonly state: HTMLSelectElement;
-  private readonly sort: HTMLSelectElement;
+  private sort: WorkloadSort;
+  private sortDirection: SortDirection;
   private readonly count: HTMLElement;
   private readonly previous: HTMLButtonElement;
   private readonly next: HTMLButtonElement;
@@ -66,21 +71,10 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.persistView();
       this.renderRows();
     });
-    this.sort = selectControl("Sort workloads", [
-      ["running-gpus", "Sort: Running GPUs"],
-      ["pending-gpus", "Sort: Pending GPUs"],
-      ["name", "Sort: Workload name"],
-      ["submitter", "Sort: Submitter"],
-      ["queue", "Sort: Queue"],
-    ]);
-    this.sort.addEventListener("change", () => {
-      this.page = 0;
-      this.persistView();
-      this.renderRows();
-    });
     const view = this.context.actions.workloadView();
     this.state.value = view.state;
-    this.sort.value = view.sort;
+    this.sort = view.sort;
+    this.sortDirection = view.sortDirection;
     this.count = document.createElement("span");
     this.count.className = "table-count";
     this.previous = pageButton("Previous", () => {
@@ -95,7 +89,6 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.search,
       this.queue,
       this.state,
-      this.sort,
       this.count,
       this.previous,
       this.next,
@@ -115,10 +108,15 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.table = new DataTable(
       this.columns,
       "submitter-table",
-      value => {
-        this.sort.value = value;
-        this.sort.dispatchEvent(new Event("change"));
+      (value, direction) => {
+        this.sort = value as WorkloadSort;
+        this.sortDirection = direction;
+        this.page = 0;
+        this.persistView();
+        this.renderRows();
       },
+      undefined,
+      {value: this.sort, direction: this.sortDirection},
     );
     shell.body.append(controls, this.table.element);
 
@@ -177,7 +175,6 @@ export class GPUSubmittersPanel implements PanelRenderer {
     const query = this.search.value.trim().toLowerCase();
     const queue = this.queue.value;
     const state = this.state.value;
-    const sort = this.sort.value as WorkloadSort;
     const rows = (this.report.workloads ?? [])
       .filter(
         row =>
@@ -191,7 +188,9 @@ export class GPUSubmittersPanel implements PanelRenderer {
             row.submitter.toLowerCase().includes(query) ||
             row.creator_id.toLowerCase().includes(query)),
       )
-      .sort((left, right) => compareWorkloads(left, right, sort));
+      .sort((left, right) =>
+        compareWorkloads(left, right, this.sort, this.sortDirection),
+      );
     const pages = Math.max(1, Math.ceil(rows.length / TABLE_PAGE_SIZE));
     this.page = Math.min(this.page, pages - 1);
     const pageRows = rows.slice(
@@ -271,7 +270,8 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.context.actions.setWorkloadView({
       queue: this.queue.value || "all",
       state: this.state.value as WorkloadStateFilter,
-      sort: this.sort.value as WorkloadSort,
+      sort: this.sort,
+      sortDirection: this.sortDirection,
     });
   }
 

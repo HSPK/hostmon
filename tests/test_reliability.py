@@ -67,6 +67,8 @@ class CollectorReliabilityTests(unittest.TestCase):
             first = manager.collect({}, now=100)
             collector.error = CollectorError("remote unavailable")
             second = manager.collect(first.states, now=120)
+            collector.error = None
+            third = manager.collect(second.states, now=130)
         finally:
             manager.close()
 
@@ -74,6 +76,11 @@ class CollectorReliabilityTests(unittest.TestCase):
         self.assertEqual(second.metrics["monitor/collector/remote/up"], 0)
         self.assertEqual(second.metrics["monitor/collector/remote/stale"], 1)
         self.assertIn("using stale data", second.warnings[0])
+        self.assertEqual(
+            third.states["remote"]["last_error"],
+            "CollectorError: remote unavailable",
+        )
+        self.assertEqual(third.states["remote"]["last_failure_at"], 120)
 
     def test_required_failure_without_stale_data_fails_cycle(self):
         collector = MutableCollector("required", "required/value", 1)

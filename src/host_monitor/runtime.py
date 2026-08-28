@@ -65,6 +65,8 @@ class MonitorRuntime:
             settings.state_file,
             settings.history.directory if settings.history.enabled else None,
             settings.rules_file,
+            settings.collectors,
+            settings.interval_seconds,
         )
         try:
             self.prometheus.start()

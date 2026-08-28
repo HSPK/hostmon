@@ -20,7 +20,7 @@ from urllib.parse import urlsplit
 from aiohttp import WSMsgType, web
 
 from . import __version__
-from .config import PrometheusSettings
+from .config import CollectorSettings, PrometheusSettings
 from .dashboard import (
     DASHBOARD_CAPACITY,
     DEFAULT_DASHBOARD_SERIES,
@@ -159,11 +159,15 @@ class PrometheusExporter:
         state_file: Path,
         history_directory: Path | None = None,
         rules_file: Path | None = None,
+        collector_settings: tuple[CollectorSettings, ...] = (),
+        interval_seconds: float = 10.0,
     ):
         self.settings = settings
         self.state_file = state_file
         self.history_directory = history_directory
         self.rules = RuleStore(rules_file) if rules_file is not None else None
+        self.collector_settings = collector_settings
+        self.interval_seconds = interval_seconds
         self.reader = StateSnapshotReader(state_file)
         self.dashboard = DashboardStore()
         self.thread: threading.Thread | None = None
@@ -436,6 +440,44 @@ class PrometheusExporter:
         except RuleError as error:
             return self._json_response({"error": str(error)}, status=404)
 
+    async def _collector_diagnostics(
+        self,
+        request: web.Request,
+    ) -> web.Response:
+        try:
+            state = self.reader.store.load()
+        except MonitorError as error:
+            return self._error(error)
+        envelopes = state.get("collectors", {})
+        diagnostics = []
+        for setting in self.collector_settings:
+            envelope = (
+                envelopes.get(setting.name, {})
+                if isinstance(envelopes, dict)
+                else {}
+            )
+            if not isinstance(envelope, dict):
+                envelope = {}
+            refresh = setting.options.get(
+                "poll_interval_seconds",
+                self.interval_seconds,
+            )
+            diagnostics.append(
+                {
+                    "name": setting.name,
+                    "enabled": setting.enabled,
+                    "required": setting.required,
+                    "refresh_seconds": float(refresh),
+                    "deadline_seconds": setting.deadline_seconds,
+                    "max_stale_seconds": setting.max_stale_seconds,
+                    "last_success_at": envelope.get("last_success_at"),
+                    "last_failure_at": envelope.get("last_failure_at"),
+                    "last_error": envelope.get("last_error"),
+                    "options": setting.options,
+                }
+            )
+        return self._json_response({"collectors": diagnostics})
+
     async def _websocket(self, request: web.Request) -> web.StreamResponse:
         origin = request.headers.get("Origin")
         if origin and urlsplit(origin).netloc != request.host:
@@ -551,6 +593,7 @@ class PrometheusExporter:
                 web.post("/api/rules", self._rules_add),
                 web.put("/api/rules/{name}", self._rules_replace),
                 web.delete("/api/rules/{name}", self._rules_delete),
+                web.get("/api/collectors", self._collector_diagnostics),
                 web.get("/api/plugins/{name}", self._plugin_document),
                 web.get("/api/ws", self._websocket),
                 web.get("/{path:.*}", self._asset),

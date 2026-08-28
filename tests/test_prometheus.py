@@ -13,7 +13,7 @@ from pathlib import Path
 
 from aiohttp import ClientSession, WSMsgType, WSServerHandshakeError
 
-from host_monitor.config import PrometheusSettings
+from host_monitor.config import CollectorSettings, PrometheusSettings
 from host_monitor.dashboard import DashboardStore, infer_metric_metadata
 from host_monitor.dashboard import load_history_window, load_recent_history
 from host_monitor.errors import MonitorError
@@ -193,6 +193,17 @@ class PrometheusHTTPTests(unittest.TestCase):
             self.settings,
             self.state_file,
             rules_file=self.rules_file,
+            collector_settings=(
+                CollectorSettings(
+                    name="cpu",
+                    enabled=True,
+                    required=True,
+                    deadline_seconds=2,
+                    max_stale_seconds=0,
+                    options={},
+                ),
+            ),
+            interval_seconds=10,
         )
 
     def tearDown(self):
@@ -410,6 +421,20 @@ class PrometheusHTTPTests(unittest.TestCase):
         )
         with urllib.request.urlopen(request, timeout=5) as response:
             self.assertEqual(response.status, 204)
+
+    def test_serves_collector_diagnostics(self):
+        self.save_state(time.time())
+        self.exporter.start()
+
+        with urllib.request.urlopen(
+            self.url("/api/collectors"),
+            timeout=5,
+        ) as response:
+            collectors = json.load(response)["collectors"]
+
+        self.assertEqual(collectors[0]["name"], "cpu")
+        self.assertEqual(collectors[0]["refresh_seconds"], 10)
+        self.assertEqual(collectors[0]["deadline_seconds"], 2)
 
     def test_multiple_websocket_clients_receive_broadcast(self):
         self.save_state(time.time())

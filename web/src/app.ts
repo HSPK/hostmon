@@ -70,6 +70,7 @@ export class DashboardApp {
   }
 
   async start(): Promise<void> {
+    this.applyAppearance();
     this.buildShell();
     const routedPage = this.pageFromLocation();
     if (routedPage) {
@@ -136,7 +137,10 @@ export class DashboardApp {
             <label>Y maximum<input id="chart-max" type="number" step="any" placeholder="Auto"></label>
             <label class="metric-filter-label">Filter metrics<input id="chart-metric-filter" type="search" placeholder="cpu, gpu, latency..."></label>
           </div>
-          <div id="chart-metrics" class="metric-picker"></div>
+          <div class="metric-picker-layout">
+            <section><h3>Search results</h3><div id="chart-metric-results" class="metric-list"></div></section>
+            <section><h3>Selected metrics</h3><div id="chart-metric-selected" class="metric-list"></div></section>
+          </div>
           <footer><span id="chart-selection-count">0 selected</span><div><button class="button" value="cancel">Cancel</button><button id="chart-save" class="button button-primary" value="default">Save chart</button></div></footer>
         </form>
       </dialog>
@@ -302,14 +306,34 @@ export class DashboardApp {
     const active = this.preferences.get().activePage;
     const root = this.required("navigation");
     const fragment = document.createDocumentFragment();
-    for (const item of NAVIGATION) {
-      const button = document.createElement("button");
-      button.type = "button";
-      button.className = "nav-item";
-      button.classList.toggle("active", item.id === active);
-      button.textContent = item.label;
-      button.addEventListener("click", () => this.navigate(item.id));
-      fragment.append(button);
+    for (const placement of ["main", "bottom"] as const) {
+      const container = document.createElement("div");
+      container.className = `nav-${placement}`;
+      const items = NAVIGATION.filter(
+        item => (item.placement ?? "main") === placement,
+      );
+      const groups = new Map<string, typeof items>();
+      for (const item of items) {
+        const group = item.group ?? "";
+        groups.set(group, [...(groups.get(group) ?? []), item]);
+      }
+      for (const [group, entries] of groups) {
+        if (group) {
+          const title = document.createElement("h3");
+          title.textContent = group;
+          container.append(title);
+        }
+        for (const item of entries) {
+          const button = document.createElement("button");
+          button.type = "button";
+          button.className = "nav-item";
+          button.classList.toggle("active", item.id === active);
+          button.textContent = item.label;
+          button.addEventListener("click", () => this.navigate(item.id));
+          container.append(button);
+        }
+      }
+      fragment.append(container);
     }
     root.replaceChildren(fragment);
     const current = NAVIGATION.find(item => item.id === active);
@@ -380,6 +404,11 @@ export class DashboardApp {
     this.panels.length = 0;
     this.panelsRoot.replaceChildren();
     const definitions = this.preferences.visiblePanels();
+    document.body.classList.toggle(
+      "table-page",
+      definitions.length > 0 &&
+        definitions.every(definition => this.panelSection(definition) === "Tables"),
+    );
     const sections = new Map<string, HTMLElement>();
     for (const definition of definitions) {
       const name = this.panelSection(definition);
@@ -416,6 +445,15 @@ export class DashboardApp {
           createRule: rule => this.api.createRule(rule),
           updateRule: (name, rule) => this.api.updateRule(name, rule),
           deleteRule: name => this.api.deleteRule(name),
+          loadCollectors: () => this.api.collectors(),
+          appearance: () => {
+            const {theme, density} = this.preferences.get();
+            return {theme, density};
+          },
+          setAppearance: (theme, density) => {
+            this.preferences.setAppearance(theme, density);
+            this.applyAppearance();
+          },
           createChart: metrics => this.openChartEditor(undefined, metrics),
           editChart: chart => this.openChartEditor(chart),
           removeChart: id => this.removeChart(id),
@@ -437,6 +475,18 @@ export class DashboardApp {
     if (definition.type === "timeseries") return "Charts";
     if (definition.type === "stats") return "Summary";
     return "Tables";
+  }
+
+  private applyAppearance(): void {
+    const {theme, density} = this.preferences.get();
+    const resolved =
+      theme === "system"
+        ? window.matchMedia("(prefers-color-scheme: light)").matches
+          ? "light"
+          : "dark"
+        : theme;
+    document.documentElement.dataset.theme = resolved;
+    document.documentElement.dataset.density = density;
   }
 
   private focusPanel(panelId: string, attempts = 20): void {
@@ -615,32 +665,59 @@ export class DashboardApp {
     const filter = (
       this.required("chart-metric-filter") as HTMLInputElement
     ).value.toLowerCase();
-    const selected = new Set<string>(
-      JSON.parse(this.chartDialog.dataset.selected ?? "[]") as string[],
+    const selected = JSON.parse(
+      this.chartDialog.dataset.selected ?? "[]",
+    ) as string[];
+    const selectedSet = new Set<string>(
+      selected,
     );
-    const metrics = Object.keys(this.store.latestMetrics)
-      .filter(name => !filter || name.toLowerCase().includes(filter))
-      .sort();
-    const fragment = document.createDocumentFragment();
-    for (const metric of metrics) {
-      const label = document.createElement("label");
-      label.className = "metric-option";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = selected.has(metric);
-      checkbox.disabled = !checkbox.checked && selected.size >= 8;
-      checkbox.addEventListener("change", () => {
-        if (checkbox.checked) selected.add(metric);
-        else selected.delete(metric);
-        this.chartDialog.dataset.selected = JSON.stringify([...selected]);
+    const results = Object.keys(this.store.latestMetrics)
+      .filter(
+        name =>
+          !selectedSet.has(name) &&
+          (!filter || name.toLowerCase().includes(filter)),
+      )
+      .sort()
+      .slice(0, 100);
+    const resultFragment = document.createDocumentFragment();
+    for (const metric of results) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "metric-option";
+      button.textContent = metric;
+      button.disabled = selected.length >= 8;
+      button.addEventListener("click", () => {
+        this.chartDialog.dataset.selected = JSON.stringify([
+          ...selected,
+          metric,
+        ]);
         this.renderMetricPicker();
       });
-      label.append(checkbox, document.createTextNode(metric));
-      fragment.append(label);
+      resultFragment.append(button);
     }
-    this.required("chart-metrics").replaceChildren(fragment);
+    const selectedFragment = document.createDocumentFragment();
+    for (const metric of selected) {
+      const item = document.createElement("div");
+      item.className = "selected-metric";
+      const name = document.createElement("span");
+      name.textContent = metric;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.className = "table-action";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => {
+        this.chartDialog.dataset.selected = JSON.stringify(
+          selected.filter(item => item !== metric),
+        );
+        this.renderMetricPicker();
+      });
+      item.append(name, remove);
+      selectedFragment.append(item);
+    }
+    this.required("chart-metric-results").replaceChildren(resultFragment);
+    this.required("chart-metric-selected").replaceChildren(selectedFragment);
     this.required("chart-selection-count").textContent =
-      `${selected.size} selected`;
+      `${selected.length} selected`;
   }
 
   private async saveChart(): Promise<void> {

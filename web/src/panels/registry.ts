@@ -8,6 +8,7 @@ import type {
   TimeSeriesPanelDefinition,
   SystemPanelDefinition,
   RulesPanelDefinition,
+  WebSettingsPanelDefinition,
 } from "../domain/types";
 import { CollectorPanel } from "./collector-panel";
 import { PanelRegistry } from "./panel";
@@ -19,6 +20,7 @@ import { TasksPanel } from "./tasks-panel";
 import { TimeSeriesPanel } from "./timeseries-panel";
 import { SystemPanel } from "./system-panel";
 import { RulesPanel } from "./rules-panel";
+import { WebSettingsPanel } from "./web-settings-panel";
 
 export function createPanelRegistry(): PanelRegistry {
   return new PanelRegistry()
@@ -69,5 +71,13 @@ export function createPanelRegistry(): PanelRegistry {
       "rules",
       (definition, context) =>
         new RulesPanel(definition as RulesPanelDefinition, context),
+    )
+    .register(
+      "web-settings",
+      (definition, context) =>
+        new WebSettingsPanel(
+          definition as WebSettingsPanelDefinition,
+          context,
+        ),
     );
 }

@@ -65,7 +65,8 @@ The navigation model separates operational workflows:
 - **Metrics**: complete metric catalog and custom chart builder.
 - **Collectors**: plugin health and stale/failure state.
 - **Kubernetes**: node and task state.
-- **Settings**: validated Expr Tracker alert rule CRUD.
+- **Alerts**: validated Expr Tracker alert rule CRUD.
+- **Settings**: web theme and density.
 - **System**: internal hostmon and API diagnostics.
 
 The **Metrics** page searches every metric exposed by hostmon and shows
