@@ -353,6 +353,15 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await page.getByRole("button", { name: "Workloads" }).click();
   await expect(page.locator(".submitter-table tbody tr")).toHaveCount(75);
   await expect(page.locator(".submitter-table")).toContainText("training-job-001");
+  const footerBox = await page
+    .locator(".gpu-submitters-panel .data-grid-footer")
+    .boundingBox();
+  const layoutNavBox = await page.locator(".layout-dock-nav").boundingBox();
+  expect(footerBox).not.toBeNull();
+  expect(layoutNavBox).not.toBeNull();
+  expect(layoutNavBox!.y).toBeGreaterThanOrEqual(
+    footerBox!.y + footerBox!.height,
+  );
   await page.getByRole("button", { name: "training-job-001" }).click();
   await expect(page).toHaveURL(
     /\?page=workloads&queue=queue-a&run=training-job-001$/,
@@ -607,6 +616,11 @@ test("remains responsive on narrow screens", async ({ page }) => {
     (layoutBox?.x ?? 400) + (layoutBox?.width ?? 0),
   ).toBeLessThanOrEqual(390);
   await page.locator("#layout-close").click();
+  const mobileDock = await page.locator(".layout-dock-nav").boundingBox();
+  const mobileStatus = await page.locator(".statusbar").boundingBox();
+  expect(mobileDock).not.toBeNull();
+  expect(mobileStatus).not.toBeNull();
+  expect(Math.abs(mobileDock!.y - mobileStatus!.y)).toBeLessThanOrEqual(1);
 
   await page.getByRole("button", { name: "Menu" }).click();
   await expect(page.locator(".sidebar")).toHaveClass(/open/);
