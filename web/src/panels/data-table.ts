@@ -7,7 +7,8 @@ export interface DataColumn<T> {
   className?: string;
   width?: string;
   align?: "left" | "center" | "right";
-  pinned?: boolean;
+  pinned?: "left" | "right";
+  pinnedOffset?: number;
   render(row: T): string | Node;
 }
 
@@ -18,27 +19,34 @@ export function configuredColumns<T extends object>(
   definitions: TableColumnDefinition[],
   actions: Record<string, ColumnAction<T>> = {},
 ): DataColumn<T>[] {
-  return definitions.map(definition => ({
-    id: definition.id,
-    label: definition.label,
-    ...(definition.width ? {width: definition.width} : {}),
-    ...(definition.align ? {align: definition.align} : {}),
-    ...(definition.pinned ? {pinned: true} : {}),
-    ...(definition.sort ? {sortValue: definition.sort} : {}),
-    render: row => {
-      if (definition.action && actions[definition.action]) {
-        return actions[definition.action]!(row);
-      }
-      const value = readPath(row, definition.path ?? definition.id);
-      return formatConfiguredValue(
-        value,
-        definition.format,
-        row,
-        definition.unit ?? "",
-        definition.fallback ?? "--",
-      );
-    },
-  }));
+  return withPinnedOffsets(
+    definitions.map(definition => ({
+      id: definition.id,
+      label: definition.label,
+      ...(definition.width ? {width: definition.width} : {}),
+      ...(definition.align ? {align: definition.align} : {}),
+      ...(definition.pinned
+        ? {
+            pinned:
+              definition.pinned === true ? "left" : definition.pinned,
+          }
+        : {}),
+      ...(definition.sort ? {sortValue: definition.sort} : {}),
+      render: row => {
+        if (definition.action && actions[definition.action]) {
+          return actions[definition.action]!(row);
+        }
+        const value = readPath(row, definition.path ?? definition.id);
+        return formatConfiguredValue(
+          value,
+          definition.format,
+          row,
+          definition.unit ?? "",
+          definition.fallback ?? "--",
+        );
+      },
+    })),
+  );
 }
 
 export function readPath(value: object, path: string): unknown {
@@ -169,10 +177,10 @@ export class DataTable<T> {
     this.viewport.className = "table-scroll data-grid-viewport";
     const table = document.createElement("table");
     table.className = `metric-table ${className}`.trim();
-    const configuredWidth = columns.reduce((total, column) => {
-      const match = column.width?.match(/^(\d+(?:\.\d+)?)px$/);
-      return total + (match ? Number(match[1]) : 0);
-    }, 0);
+    const configuredWidth = columns.reduce(
+      (total, column) => total + pixelWidth(column.width),
+      0,
+    );
     if (configuredWidth) table.style.minWidth = `${configuredWidth}px`;
     const head = document.createElement("thead");
     const row = document.createElement("tr");
@@ -185,7 +193,7 @@ export class DataTable<T> {
         cell.style.minWidth = column.width;
       }
       if (column.align) cell.style.textAlign = column.align;
-      if (column.pinned) cell.classList.add("column-pinned");
+      applyPinnedColumn(cell, column);
       if (column.sortValue && onSort) {
         const button = document.createElement("button");
         button.type = "button";
@@ -250,7 +258,7 @@ export class DataTable<T> {
           cell.dataset.column = column.id;
           if (column.className) cell.className = column.className;
           if (column.align) cell.style.textAlign = column.align;
-          if (column.pinned) cell.classList.add("column-pinned");
+          applyPinnedColumn(cell, column);
           const value = column.render(item);
           if (typeof value === "string") {
             cell.textContent = value;
@@ -266,4 +274,37 @@ export class DataTable<T> {
       }),
     );
   }
+}
+
+function withPinnedOffsets<T>(columns: DataColumn<T>[]): DataColumn<T>[] {
+  let left = 0;
+  for (const column of columns) {
+    if (column.pinned !== "left") continue;
+    column.pinnedOffset = left;
+    left += pixelWidth(column.width);
+  }
+  let right = 0;
+  for (const column of [...columns].reverse()) {
+    if (column.pinned !== "right") continue;
+    column.pinnedOffset = right;
+    right += pixelWidth(column.width);
+  }
+  return columns;
+}
+
+function applyPinnedColumn<T>(
+  cell: HTMLTableCellElement,
+  column: DataColumn<T>,
+): void {
+  if (!column.pinned) return;
+  cell.classList.add("column-pinned", `column-pinned-${column.pinned}`);
+  cell.style.setProperty(
+    "--column-pin-offset",
+    `${column.pinnedOffset ?? 0}px`,
+  );
+}
+
+function pixelWidth(value: string | undefined): number {
+  const match = value?.match(/^(\d+(?:\.\d+)?)px$/);
+  return match ? Number(match[1]) : 0;
 }

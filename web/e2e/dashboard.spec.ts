@@ -304,7 +304,21 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".health-table thead")).toContainText(
     "Last failure (UTC+8)",
   );
-  await page.getByRole("button", { name: "View", exact: true }).click();
+  const collectorView = page.getByRole("button", {
+    name: "View",
+    exact: true,
+  });
+  await expect(collectorView).toBeInViewport({ratio: 1});
+  await expect(
+    page.locator('.health-table td[data-column="details"]'),
+  ).toHaveClass(/column-pinned-right/);
+  await page
+    .locator(".collector-panel .data-grid-viewport")
+    .evaluate(element => {
+      element.scrollLeft = element.scrollWidth;
+    });
+  await expect(collectorView).toBeInViewport({ratio: 1});
+  await collectorView.click();
   await expect(page.locator(".collector-dialog")).toContainText(
     "deadline_seconds",
   );
@@ -821,6 +835,15 @@ test("creates and toggles alert rules from settings", async ({ page }) => {
 test("keeps the alert editor readable on narrow screens", async ({ page }) => {
   await page.setViewportSize({width: 390, height: 844});
   await page.goto("/?page=alerts");
+  const edit = page.getByRole("button", {name: "Edit"}).first();
+  await expect(edit).toBeInViewport({ratio: 1});
+  await expect(
+    page.locator('.rules-table td[data-column="actions"]').first(),
+  ).toHaveClass(/column-pinned-right/);
+  await page.locator(".rules-panel .data-grid-viewport").evaluate(element => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await expect(edit).toBeInViewport({ratio: 1});
   await page.getByRole("button", {name: "Add rule"}).click();
 
   const editor = page.locator(".rule-editor");

@@ -92,7 +92,7 @@
         {"id": "failures", "label": "Failures", "path": "failures", "width": "90px", "format": "number", "sort": "failures"},
         {"id": "failed", "label": "Last failure (UTC+8)", "path": "last_failure_at", "width": "180px", "format": "timestamp", "sort": "last_failure_at"},
         {"id": "log", "label": "Last error", "path": "last_error", "width": "300px", "align": "left", "fallback": "None"},
-        {"id": "details", "label": "", "width": "70px", "align": "center", "action": "details"}
+        {"id": "details", "label": "", "width": "70px", "align": "center", "pinned": "right", "action": "details"}
       ]
     },
     {
@@ -123,7 +123,7 @@
         {"id": "alert", "label": "Alert", "path": "alert", "width": "260px", "align": "left", "pinned": true, "sort": "alert"},
         {"id": "level", "label": "Level", "path": "level", "width": "110px", "align": "left", "sort": "level"},
         {"id": "expr", "label": "Expression", "path": "expr", "width": "620px", "align": "left", "sort": "expr"},
-        {"id": "actions", "label": "", "width": "120px", "action": "actions"}
+        {"id": "actions", "label": "", "width": "120px", "pinned": "right", "action": "actions"}
       ]
     },
     {"id": "web-settings", "type": "web-settings", "page": "settings", "title": "Web settings", "columnSpan": 2},

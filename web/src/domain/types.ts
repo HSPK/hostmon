@@ -181,7 +181,7 @@ export interface TableColumnDefinition {
   path?: string;
   width?: string;
   align?: "left" | "center" | "right";
-  pinned?: boolean;
+  pinned?: boolean | "left" | "right";
   sort?: string;
   format?: "text" | "number" | "state" | "metric" | "timestamp" | "duration";
   unit?: string;

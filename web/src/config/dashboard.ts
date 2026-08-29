@@ -100,7 +100,8 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
           (column.align === undefined ||
             ["left", "center", "right"].includes(String(column.align))) &&
           (column.pinned === undefined ||
-            typeof column.pinned === "boolean") &&
+            typeof column.pinned === "boolean" ||
+            ["left", "right"].includes(String(column.pinned))) &&
           (column.sort === undefined || typeof column.sort === "string") &&
           (column.action === undefined || typeof column.action === "string") &&
           (column.unit === undefined || typeof column.unit === "string") &&

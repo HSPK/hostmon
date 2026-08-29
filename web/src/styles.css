@@ -283,11 +283,18 @@ body.table-page .table-scroll {
   background: var(--surface-2); font-weight: 500;
   box-shadow: inset 0 -1px var(--border);
 }
-.metric-table .column-pinned, .health-table .column-pinned {
-  position: sticky; left: 0; z-index: 2;
+.metric-table .column-pinned {
+  position: sticky; z-index: 2;
+}
+.metric-table .column-pinned-left {
+  left: var(--column-pin-offset, 0);
   box-shadow: inset -1px 0 var(--border);
 }
-.metric-table th.column-pinned, .health-table th.column-pinned { z-index: 4; }
+.metric-table .column-pinned-right {
+  right: var(--column-pin-offset, 0);
+  box-shadow: inset 1px 0 var(--border);
+}
+.metric-table th.column-pinned { z-index: 4; }
 .metric-table tbody tr:hover td, .health-table tbody tr:hover td {
   background: var(--surface-2);
 }
