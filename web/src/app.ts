@@ -19,6 +19,8 @@ import type {
 import type { PanelRenderer } from "./panels/panel";
 import { createPanelRegistry } from "./panels/registry";
 
+type LayoutView = "pages" | "navigation" | "panels";
+
 export class DashboardApp {
   private readonly api: ApiClient;
   private readonly preferences: PreferenceStore;
@@ -30,7 +32,7 @@ export class DashboardApp {
   private readonly root: HTMLElement;
   private panelsRoot!: HTMLElement;
   private layoutPanel!: HTMLElement;
-  private layoutView: "navigation" | "panels" = "navigation";
+  private layoutView: LayoutView = "navigation";
   private chartDialog!: HTMLDialogElement;
   private connectionDot!: HTMLElement;
   private connectionText!: HTMLElement;
@@ -243,7 +245,7 @@ export class DashboardApp {
         </aside>
         <section class="workspace">
           <header class="toolbar">
-            <div class="toolbar-title"><button id="mobile-menu" class="icon-button mobile-menu" type="button">Menu</button><div><h1 id="page-title">Overview</h1><p id="host-text">waiting for data</p></div></div>
+            <div class="toolbar-title"><div><h1 id="page-title">Overview</h1><p id="host-text">waiting for data</p></div></div>
             <div class="toolbar-actions">
               <input id="chart-search" class="toolbar-search" type="search" placeholder="Find chart" aria-label="Find chart">
               <label class="control">Window<select id="window-select"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option><option value="43200">12h</option><option value="86400">24h</option><option value="604800">7d</option><option value="2592000">30d</option></select></label>
@@ -261,10 +263,14 @@ export class DashboardApp {
           </footer>
         </section>
       </div>
-      <aside id="layout-dock" class="layout-dock" aria-label="Dashboard layout controls">
+      <aside id="layout-dock" class="layout-dock" aria-label="Workspace controls">
         <section id="layout-panel" class="layout-dock-panel" aria-hidden="true" hidden>
-          <header><div><h2>Dashboard layout</h2><p>Changes are saved by this hostmon service.</p></div><button id="layout-close" class="icon-button" type="button">Close</button></header>
+          <header><div><h2 id="layout-panel-title">Dashboard layout</h2><p id="layout-panel-description">Changes are saved by this hostmon service.</p></div><button id="layout-close" class="icon-button" type="button">Close</button></header>
           <div class="layout-dock-content">
+            <section id="layout-pages-view" class="layout-dock-view" hidden>
+              <div class="layout-settings-heading"><div><h3>Pages</h3><p>Open a configured dashboard page.</p></div></div>
+              <nav id="mobile-navigation" class="mobile-page-navigation" aria-label="Mobile dashboard pages"></nav>
+            </section>
             <section id="layout-navigation-view" class="layout-dock-view">
               <div class="layout-settings-heading"><div><h3>Navigation sections</h3><p>Group pages and control their sidebar order.</p></div></div>
               <form id="navigation-section-form" class="navigation-section-form">
@@ -279,9 +285,10 @@ export class DashboardApp {
               <div id="panel-settings" class="panel-settings"></div>
             </section>
           </div>
-          <footer><button id="layout-reset" class="button" type="button">Reset layout</button></footer>
+          <footer id="layout-footer"><button id="layout-reset" class="button" type="button">Reset layout</button></footer>
         </section>
-        <nav class="layout-dock-nav" aria-label="Dashboard layout sections">
+        <nav class="layout-dock-nav" aria-label="Workspace tools">
+          <button id="layout-pages-button" class="layout-dock-button layout-pages-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Pages</button>
           <button id="layout-navigation-button" class="layout-dock-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Navigation</button>
           <button id="layout-panels-button" class="layout-dock-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Panels</button>
         </nav>
@@ -370,7 +377,7 @@ export class DashboardApp {
     this.required("layout-close").addEventListener("click", () =>
       this.setLayoutDock(null),
     );
-    for (const view of ["navigation", "panels"] as const) {
+    for (const view of ["pages", "navigation", "panels"] as const) {
       this.required(`layout-${view}-button`).addEventListener("click", () =>
         this.toggleLayoutDock(view),
       );
@@ -409,9 +416,6 @@ export class DashboardApp {
       this.navigate(panel.page);
       this.focusPanel(panel.id);
     });
-    this.required("mobile-menu").addEventListener("click", () =>
-      document.querySelector(".sidebar")?.classList.toggle("open"),
-    );
     this.required("chart-metric-filter").addEventListener("input", () =>
       this.renderMetricPicker(),
     );
@@ -489,12 +493,36 @@ export class DashboardApp {
   private renderNavigation(): void {
     const preferences = this.preferences.get();
     const active = preferences.activePage;
-    const root = this.required("navigation");
-    const fragment = document.createDocumentFragment();
     const items = new Map(
       this.dashboard.navigation.map(item => [item.id, item]),
     );
     const sections = preferences.navigationSections;
+    this.renderNavigationRoot(
+      this.required("navigation"),
+      active,
+      items,
+      sections,
+      false,
+    );
+    this.renderNavigationRoot(
+      this.required("mobile-navigation"),
+      active,
+      items,
+      sections,
+      true,
+    );
+    const current = this.dashboard.navigation.find(item => item.id === active);
+    this.required("page-title").textContent = current?.label ?? "Overview";
+  }
+
+  private renderNavigationRoot(
+    root: HTMLElement,
+    active: PageId,
+    items: Map<PageId, DashboardDefinition["navigation"][number]>,
+    sections: DashboardPreferences["navigationSections"],
+    closeAfterNavigation: boolean,
+  ): void {
+    const fragment = document.createDocumentFragment();
     for (const placement of ["main", "bottom"] as const) {
       const container = document.createElement("div");
       container.className = `nav-${placement}`;
@@ -519,7 +547,10 @@ export class DashboardApp {
           button.className = "nav-item";
           button.classList.toggle("active", item.id === active);
           button.textContent = item.label;
-          button.addEventListener("click", () => this.navigate(item.id));
+          button.addEventListener("click", () => {
+            this.navigate(item.id);
+            if (closeAfterNavigation) this.setLayoutDock(null);
+          });
           sectionRoot.append(button);
         }
         container.append(sectionRoot);
@@ -527,8 +558,6 @@ export class DashboardApp {
       fragment.append(container);
     }
     root.replaceChildren(fragment);
-    const current = this.dashboard.navigation.find(item => item.id === active);
-    this.required("page-title").textContent = current?.label ?? "Overview";
   }
 
   private navigate(page: PageId, updateHistory = true): void {
@@ -537,7 +566,6 @@ export class DashboardApp {
     if (updateHistory && changed) this.updatePageRoute(page);
     this.renderNavigation();
     this.renderPanels();
-    document.querySelector(".sidebar")?.classList.remove("open");
   }
 
   private pageFromLocation(): PageId | null {
@@ -1126,20 +1154,37 @@ export class DashboardApp {
     this.renderPanels();
   }
 
-  private toggleLayoutDock(view: "navigation" | "panels"): void {
+  private toggleLayoutDock(view: LayoutView): void {
     const isActive = !this.layoutPanel.hidden && this.layoutView === view;
     this.setLayoutDock(isActive ? null : view);
   }
 
-  private setLayoutDock(view: "navigation" | "panels" | null): void {
+  private setLayoutDock(view: LayoutView | null): void {
     if (view) {
       this.layoutView = view;
-      this.renderLayoutSettings();
+      if (view === "pages") this.renderNavigation();
+      else this.renderLayoutSettings();
     }
     const open = view !== null;
     this.layoutPanel.hidden = !open;
     this.layoutPanel.setAttribute("aria-hidden", String(!open));
-    for (const candidate of ["navigation", "panels"] as const) {
+    const copy =
+      this.layoutView === "pages"
+        ? {
+            title: "Dashboard pages",
+            description: "Navigate without leaving the workspace.",
+          }
+        : {
+            title: "Dashboard layout",
+            description: "Changes are saved by this hostmon service.",
+          };
+    this.required("layout-panel-title").textContent = copy.title;
+    this.required("layout-panel-description").textContent = copy.description;
+    this.required("layout-footer").toggleAttribute(
+      "hidden",
+      this.layoutView === "pages",
+    );
+    for (const candidate of ["pages", "navigation", "panels"] as const) {
       const active = open && this.layoutView === candidate;
       this.required(`layout-${candidate}-view`).toggleAttribute(
         "hidden",

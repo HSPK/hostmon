@@ -650,9 +650,14 @@ test("remains responsive on narrow screens", async ({ page }) => {
   expect(mobileStatus).not.toBeNull();
   expect(Math.abs(mobileDock!.y - mobileStatus!.y)).toBeLessThanOrEqual(1);
 
-  await page.getByRole("button", { name: "Menu" }).click();
-  await expect(page.locator(".sidebar")).toHaveClass(/open/);
-  await page.getByRole("button", { name: "Metrics" }).click();
+  await expect(page.getByRole("button", {name: "Menu"})).toHaveCount(0);
+  await expect(page.locator(".sidebar")).not.toBeVisible();
+  await page.locator("#layout-pages-button").click();
+  await page
+    .locator("#mobile-navigation")
+    .getByRole("button", {name: "Metrics"})
+    .click();
+  await expect(page.locator("#layout-panel")).not.toBeVisible();
   await expect(page.locator("#page-title")).toHaveText("Metrics");
   const metricViewport = page.locator(
     ".metric-explorer-panel .data-grid-viewport",
@@ -682,8 +687,11 @@ test("remains responsive on narrow screens", async ({ page }) => {
     page.locator('.metric-table td[data-column="current"]').first(),
   ).toBeInViewport({ratio: 1});
 
-  await page.getByRole("button", { name: "Menu" }).click();
-  await page.getByRole("button", { name: "Workloads" }).click();
+  await page.locator("#layout-pages-button").click();
+  await page
+    .locator("#mobile-navigation")
+    .getByRole("button", {name: "Workloads"})
+    .click();
   const tableScrollsInsidePanel = await page
     .locator(".gpu-submitters-panel .table-scroll")
     .evaluate(element => element.scrollWidth > element.clientWidth);
@@ -737,8 +745,11 @@ test("remains responsive on narrow screens", async ({ page }) => {
   expect(closeBox).not.toBeNull();
   expect((closeBox?.x ?? 400) + (closeBox?.width ?? 0)).toBeLessThanOrEqual(390);
   await closeButton.click();
-  await page.getByRole("button", { name: "Menu" }).click();
-  await page.getByRole("button", { name: "Overview" }).click();
+  await page.locator("#layout-pages-button").click();
+  await page
+    .locator("#mobile-navigation")
+    .getByRole("button", {name: "Overview"})
+    .click();
   await page.getByRole("button", { name: "Edit" }).first().click();
   await expect(page.getByRole("button", { name: "Save chart" }))
     .toBeInViewport({ratio: 1});
