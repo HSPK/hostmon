@@ -1,5 +1,6 @@
 import type { SystemPanelDefinition } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
+import { formatConfiguredValue } from "./data-table";
 import { panelShell } from "./panel";
 import { renderDisplayItem } from "./display-values";
 
@@ -47,7 +48,15 @@ export class SystemPanel implements PanelRenderer {
       const metric = document.createElement("td");
       metric.textContent = name;
       const output = document.createElement("td");
-      output.textContent = String(value);
+      const formatted = formatConfiguredValue(
+        value,
+        "number",
+        {},
+        "",
+        "--",
+      );
+      output.textContent =
+        typeof formatted === "string" ? formatted : String(value);
       row.append(metric, output);
       body.append(row);
     }

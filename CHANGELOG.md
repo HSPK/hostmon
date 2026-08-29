@@ -32,6 +32,8 @@ All notable changes to this project are documented here.
   the configured sampling cadence without blocking the main cycle.
 - Removed the empty workload-detail grid cell and included explicit run state.
 - Included kubectl exit codes when failed commands produce no output.
+- Filled the System status grid with the health endpoint and applied bounded
+  shared number formatting to raw internal metrics.
 - Removed the duplicate state fsync and made the scheduler catch up after a
   slight overrun instead of adding another full interval.
 - Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,

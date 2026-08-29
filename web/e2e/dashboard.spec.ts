@@ -337,6 +337,7 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
 
   await page.getByRole("button", { name: "System" }).click();
   await expect(page.locator(".system-grid")).toContainText("/api/ws");
+  await expect(page.locator(".system-grid")).toContainText("/healthz");
 });
 
 test("searches metrics and persists a custom chart", async ({ page }) => {
