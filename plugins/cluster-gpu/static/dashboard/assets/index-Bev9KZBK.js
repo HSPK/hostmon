@@ -26,7 +26,7 @@ const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/plugin-Lg8V6gA4
             <div class="toolbar-title"><div><h1 id="page-title">Overview</h1><p id="host-text">waiting for data</p></div></div>
             <div class="toolbar-actions">
               <input id="chart-search" class="toolbar-search" type="search" placeholder="Find chart" aria-label="Find chart">
-              <label class="control">Window<select id="window-select"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option><option value="43200">12h</option><option value="86400">24h</option><option value="604800">7d</option><option value="2592000">30d</option></select></label>
+              <label class="control"><span class="control-label">Window</span><select id="window-select" aria-label="Time window"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option><option value="43200">12h</option><option value="86400">24h</option><option value="604800">7d</option><option value="2592000">30d</option></select></label>
               <button id="refresh-button" class="button" type="button">Refresh</button>
               <button id="pause-button" class="button" type="button">Pause</button>
               <button id="add-chart-button" class="button" type="button">Add chart</button>
@@ -41,7 +41,7 @@ const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/plugin-Lg8V6gA4
           </footer>
         </section>
       </div>
-      <aside id="layout-dock" class="layout-dock" aria-label="Dashboard layout controls">
+      <aside id="layout-dock" class="layout-dock" aria-label="Workspace controls">
         <section id="layout-panel" class="layout-dock-panel" aria-hidden="true" hidden>
           <header><div><h2 id="layout-panel-title">Dashboard layout</h2><p id="layout-panel-description">Changes are saved by this hostmon service.</p></div><button id="layout-close" class="icon-button" type="button">Close</button></header>
           <div class="layout-dock-content">
@@ -65,7 +65,7 @@ const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/plugin-Lg8V6gA4
           </div>
           <footer id="layout-footer"><button id="layout-reset" class="button" type="button">Reset layout</button></footer>
         </section>
-        <nav class="layout-dock-nav" aria-label="Dashboard layout sections">
+        <nav class="layout-dock-nav" aria-label="Workspace tools">
           <button id="layout-pages-button" class="layout-dock-button layout-pages-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Pages</button>
           <button id="layout-navigation-button" class="layout-dock-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Navigation</button>
           <button id="layout-panels-button" class="layout-dock-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Panels</button>

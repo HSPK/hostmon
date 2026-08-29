@@ -587,6 +587,16 @@ body.table-page .table-scroll {
   main { padding: var(--space-2); }
   *::-webkit-scrollbar { width: 8px; height: 8px; }
 }
+@media (max-width: 360px) {
+  .toolbar-actions {
+    grid-template-columns: 58px repeat(4, max-content);
+  }
+  .toolbar-actions .control { min-width: 58px; gap: 0; }
+  .toolbar-actions .control-label { display: none; }
+  .toolbar-actions .control select {
+    width: 58px; min-width: 58px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   * { transition: none !important; }
 }

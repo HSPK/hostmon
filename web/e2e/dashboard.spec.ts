@@ -759,6 +759,31 @@ test("remains responsive on narrow screens", async ({ page }) => {
   expect(editorBodyScrolls).toBe(true);
 });
 
+test("keeps all toolbar controls readable at 320px", async ({ page }) => {
+  await page.setViewportSize({width: 320, height: 720});
+  await page.goto("/?page=overview");
+
+  const toolbarRows = await page
+    .locator(".toolbar-actions > .control, .toolbar-actions > .button")
+    .evaluateAll(elements =>
+      new Set(
+        elements.map(element =>
+          Math.round(element.getBoundingClientRect().top),
+        ),
+      ).size,
+    );
+  const windowBox = await page.locator("#window-select").boundingBox();
+  const actionsFit = await page.locator(".toolbar-actions").evaluate(
+    element => element.scrollWidth <= element.clientWidth,
+  );
+
+  expect(toolbarRows).toBe(1);
+  expect(windowBox).not.toBeNull();
+  expect(windowBox!.width).toBeGreaterThanOrEqual(58);
+  expect(actionsFit).toBe(true);
+  await expect(page.getByLabel("Time window")).toHaveValue("3600");
+});
+
 test("maintains smooth animation frame cadence", async ({ page }) => {
   await page.goto("/");
   const frameDurations = await page.evaluate(

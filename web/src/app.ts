@@ -248,7 +248,7 @@ export class DashboardApp {
             <div class="toolbar-title"><div><h1 id="page-title">Overview</h1><p id="host-text">waiting for data</p></div></div>
             <div class="toolbar-actions">
               <input id="chart-search" class="toolbar-search" type="search" placeholder="Find chart" aria-label="Find chart">
-              <label class="control">Window<select id="window-select"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option><option value="43200">12h</option><option value="86400">24h</option><option value="604800">7d</option><option value="2592000">30d</option></select></label>
+              <label class="control"><span class="control-label">Window</span><select id="window-select" aria-label="Time window"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option><option value="43200">12h</option><option value="86400">24h</option><option value="604800">7d</option><option value="2592000">30d</option></select></label>
               <button id="refresh-button" class="button" type="button">Refresh</button>
               <button id="pause-button" class="button" type="button">Pause</button>
               <button id="add-chart-button" class="button" type="button">Add chart</button>
