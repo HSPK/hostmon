@@ -295,7 +295,7 @@ export class PreferenceStore {
         customPanels: Array.isArray(parsed.customPanels)
           ? parsed.customPanels.filter(panel =>
               isCustomPanel(panel, this.definition),
-            )
+            ).map(normalizeCustomPanel)
           : [],
     };
   }
@@ -433,4 +433,22 @@ function isCustomPanel(
     Array.isArray(panel.metrics) &&
     panel.metrics.every(metric => typeof metric === "string")
   );
+}
+
+function normalizeCustomPanel(
+  panel: TimeSeriesPanelDefinition,
+): TimeSeriesPanelDefinition {
+  return {
+    ...panel,
+    height:
+      typeof panel.height === "number" && panel.height >= 180
+        ? panel.height
+        : 270,
+    lineWidth:
+      typeof panel.lineWidth === "number" &&
+      panel.lineWidth >= 0.5 &&
+      panel.lineWidth <= 5
+        ? panel.lineWidth
+        : 1.5,
+  };
 }

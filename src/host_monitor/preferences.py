@@ -76,12 +76,21 @@ def _custom_panel(value: Any, index: int) -> dict[str, Any]:
         raise ValueError(f"{name}.style must be line or area")
     if panel.get("columnSpan") not in (None, 1, 2):
         raise ValueError(f"{name}.columnSpan must be 1 or 2")
-    for key in ("lineWidth", "height"):
-        item = panel.get(key)
-        if item is not None and (
-            isinstance(item, bool) or not isinstance(item, (int, float))
-        ):
-            raise ValueError(f"{name}.{key} must be numeric")
+    line_width = panel.get("lineWidth")
+    if line_width is not None and (
+        isinstance(line_width, bool)
+        or not isinstance(line_width, (int, float))
+    ):
+        raise ValueError(f"{name}.lineWidth must be numeric")
+    if isinstance(line_width, (int, float)) and not 0.5 <= line_width <= 5:
+        panel["lineWidth"] = 1.5
+    height = panel.get("height")
+    if height is not None and (
+        isinstance(height, bool) or not isinstance(height, (int, float))
+    ):
+        raise ValueError(f"{name}.height must be numeric")
+    if isinstance(height, (int, float)) and height < 180:
+        panel["height"] = 270
     range_value = panel.get("range")
     if range_value is not None and (
         not isinstance(range_value, list)
@@ -225,7 +234,10 @@ class DashboardPreferenceStore:
             return None
         try:
             payload = json.loads(self.path.read_text(encoding="utf-8"))
-            return validate_dashboard_preferences(payload)
+            preferences = validate_dashboard_preferences(payload)
+            if preferences != payload:
+                self._save(preferences)
+            return preferences
         except (OSError, json.JSONDecodeError, ValueError) as error:
             raise MonitorError(
                 f"cannot read dashboard preferences {self.path}: {error}"

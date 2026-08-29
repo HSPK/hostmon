@@ -46,6 +46,10 @@ All notable changes to this project are documented here.
   footer around an internally scrolling editor body.
 - Reflowed the Alert rule editor to a full-width single column on phones and
   prevented action labels from wrapping.
+- Kept table panel titles on the page background, visually separated from the
+  framed filter toolbar and table body.
+- Normalized legacy zero-height and invalid line-width chart overrides during
+  preference migration.
 - Removed the duplicate state fsync and made the scheduler catch up after a
   slight overrun instead of adding another full interval.
 - Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,

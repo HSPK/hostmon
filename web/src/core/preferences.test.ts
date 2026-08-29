@@ -92,6 +92,28 @@ describe("PreferenceStore", () => {
     expect(server.panelColumns.collectors).toEqual(["name"]);
   });
 
+  it("normalizes legacy zero-height chart overrides", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    preferences.hydrate({
+      ...preferences.get(),
+      customPanels: [
+        {
+          id: "host-utilization",
+          type: "timeseries",
+          page: "overview",
+          title: "Legacy chart",
+          metrics: ["cpu/percent"],
+          custom: true,
+          height: 0,
+          lineWidth: 0,
+        },
+      ],
+    });
+
+    expect(preferences.get().customPanels[0]?.height).toBe(270);
+    expect(preferences.get().customPanels[0]?.lineWidth).toBe(1.5);
+  });
+
   it("persists visibility, order, and time window", () => {
     const first = new PreferenceStore(DASHBOARD);
     first.setVisible("network", false);

@@ -291,6 +291,10 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator("#page-title")).toHaveText("Collectors");
   await expect(page.locator(".health-table tbody tr")).toHaveCount(1);
   await expect(page.locator(".health-table")).toContainText("10.0 s");
+  await expect(page.locator(".collector-panel")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
   await expect(page.locator(".health-table thead")).toContainText(
     "Last data refresh (UTC+8)",
   );
@@ -307,6 +311,24 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await page.locator(".collector-dialog").getByRole("button", {
     name: "Close",
   }).click();
+
+  await page.getByRole("button", { name: "Alerts" }).click();
+  const tableChrome = await page.locator(".rules-panel").evaluate(panel => {
+    const header = panel.querySelector(".panel-header")!;
+    const toolbar = panel.querySelector(".data-grid-toolbar")!;
+    return {
+      panelBackground: getComputedStyle(panel).backgroundColor,
+      toolbarBackground: getComputedStyle(toolbar).backgroundColor,
+      gap:
+        toolbar.getBoundingClientRect().top -
+        header.getBoundingClientRect().bottom,
+    };
+  });
+  expect(tableChrome.panelBackground).toBe("rgba(0, 0, 0, 0)");
+  expect(tableChrome.toolbarBackground).not.toBe(
+    tableChrome.panelBackground,
+  );
+  expect(tableChrome.gap).toBeGreaterThanOrEqual(8);
 
   await page.getByRole("button", { name: "GPU Fleet" }).click();
   await expect(page.locator(".fleet-table")).toContainText("56 / 64");

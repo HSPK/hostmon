@@ -61,6 +61,16 @@ class DashboardPreferenceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "must contain 1..8"):
             validate_dashboard_preferences(invalid)
 
+    def test_normalizes_legacy_chart_dimensions(self):
+        preferences = sample_preferences()
+        preferences["customPanels"][0]["height"] = 0
+        preferences["customPanels"][0]["lineWidth"] = 0
+
+        normalized = validate_dashboard_preferences(preferences)
+
+        self.assertEqual(normalized["customPanels"][0]["height"], 270)
+        self.assertEqual(normalized["customPanels"][0]["lineWidth"], 1.5)
+
     def test_load_returns_none_before_first_save(self):
         with tempfile.TemporaryDirectory() as directory:
             store = DashboardPreferenceStore(
