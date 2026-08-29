@@ -85,7 +85,11 @@ class KubectlClient:
         except (FileNotFoundError, subprocess.TimeoutExpired) as error:
             raise CollectorError(f"cannot run {command[0]}: {error}") from error
         if result.returncode != 0:
-            detail = result.stderr.strip() or result.stdout.strip()
+            detail = (
+                result.stderr.strip()
+                or result.stdout.strip()
+                or f"exit code {result.returncode}"
+            )
             raise CollectorError(f"kubectl failed: {detail}")
         return result
 
@@ -139,7 +143,11 @@ class KubectlClient:
             return True
         if answer == "no":
             return False
-        detail = result.stderr.strip() or result.stdout.strip()
+        detail = (
+            result.stderr.strip()
+            or result.stdout.strip()
+            or f"exit code {result.returncode}"
+        )
         raise CollectorError(
             f"kubectl auth can-i failed for {verb} {resource}: {detail}"
         )

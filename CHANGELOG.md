@@ -30,6 +30,8 @@ All notable changes to this project are documented here.
   accurate refresh timestamps and durations.
 - Pipelined completed background collectors so fast optional sources retain
   the configured sampling cadence without blocking the main cycle.
+- Removed the empty workload-detail grid cell and included explicit run state.
+- Included kubectl exit codes when failed commands produce no output.
 - Removed the duplicate state fsync and made the scheduler catch up after a
   slight overrun instead of adding another full interval.
 - Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,

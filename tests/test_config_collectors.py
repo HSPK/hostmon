@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import threading
 import unittest
@@ -21,6 +22,7 @@ from host_monitor.collectors.kubernetes import (
     analyze_workloads,
     stopped_gpu_tasks,
 )
+from host_monitor.collectors.kubectl_client import KubectlClient
 from host_monitor.collectors.memory import MemoryCollector, parse_meminfo
 from host_monitor.collectors.network import NetworkCollector, parse_net_dev
 from host_monitor.collectors.permissions import (
@@ -33,6 +35,7 @@ from host_monitor.config import (
     load_settings,
     update_prometheus_config,
 )
+from host_monitor.errors import CollectorError
 from host_monitor.rules import write_default_rules
 
 
@@ -420,6 +423,25 @@ class KubernetesPermissionCollectorTests(unittest.TestCase):
                     }
                 ]
             )
+
+
+class KubectlClientTests(unittest.TestCase):
+    def test_empty_command_errors_include_exit_code(self):
+        client = KubectlClient("kubectl")
+
+        with patch(
+            "host_monitor.collectors.kubectl_client.subprocess.run",
+            return_value=subprocess.CompletedProcess(
+                ["kubectl"],
+                7,
+                stdout="",
+                stderr="",
+            ),
+        ):
+            with self.assertRaisesRegex(CollectorError, "exit code 7"):
+                client.run("get", "pods")
+            with self.assertRaisesRegex(CollectorError, "exit code 7"):
+                client.can_i("get", "pods")
 
 
 class ClusterGPUUsageCollectorTests(unittest.TestCase):

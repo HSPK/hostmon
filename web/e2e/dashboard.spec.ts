@@ -320,6 +320,8 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".workload-drawer")).toContainText("user-a");
   await expect(page.locator(".workload-drawer")).toContainText("56");
   await expect(page.locator(".workload-drawer")).toContainText("gpu-node-01");
+  await expect(page.locator(".workload-detail-grid")).toContainText("State");
+  await expect(page.locator(".workload-detail-grid > div")).toHaveCount(9);
   await page
     .locator(".workload-drawer")
     .getByRole("button", { name: "Close" })

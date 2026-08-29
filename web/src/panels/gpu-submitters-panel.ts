@@ -266,6 +266,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     grid.append(
       detailCell("Submitter", row.submitter),
       detailCell("Creator ID", row.creator_id),
+      detailCell("State", row.status),
       detailCell("Running GPUs", row.running_gpus),
       detailCell("GPU nodes", row.running_gpu_nodes),
       detailCell("Running pods", row.running_pods),
