@@ -281,6 +281,9 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator("#connection-text")).toHaveText("connected");
   await expect(page.locator(".statusbar")).toContainText("API ");
   await expect(page.locator(".statusbar")).toContainText("UTC+8");
+  await expect(
+    page.locator('[class*="drawer"], [id*="drawer"]'),
+  ).toHaveCount(0);
   await expect(page.locator(".sidebar nav h3")).toHaveText([
     "Charts",
     "Tables",
@@ -354,19 +357,16 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page).toHaveURL(
     /\?page=workloads&queue=queue-a&run=training-job-001$/,
   );
-  await expect(page.locator(".workload-drawer")).toContainText("user-a");
-  await expect(page.locator(".workload-drawer")).toContainText("56");
-  await expect(page.locator(".workload-drawer")).toContainText("gpu-node-01");
+  await expect(page.locator(".workload-dialog")).toContainText("user-a");
+  await expect(page.locator(".workload-dialog")).toContainText("56");
+  await expect(page.locator(".workload-dialog")).toContainText("gpu-node-01");
   await expect(page.locator(".workload-detail-grid")).toContainText("State");
   await expect(page.locator(".workload-detail-grid > div")).toHaveCount(9);
   await page
-    .locator(".workload-drawer")
+    .locator(".workload-dialog")
     .getByRole("button", { name: "Close" })
     .click();
-  await expect(page.locator(".workload-drawer")).toHaveAttribute(
-    "aria-hidden",
-    "true",
-  );
+  await expect(page.locator(".workload-dialog")).not.toBeVisible();
 
   await page.getByRole("button", { name: "Kubernetes" }).click();
   await expect(page.locator("#page-title")).toHaveText("Kubernetes");
@@ -425,7 +425,17 @@ test("defaults new charts to the current chart page", async ({ page }) => {
 
 test("configures persistent sidebar sections", async ({ page }) => {
   await page.goto("/?page=settings");
-  await page.getByRole("button", { name: "Configure panels" }).click();
+  const dock = page.locator(".layout-dock-nav");
+  const dockBox = await dock.boundingBox();
+  expect(dockBox).not.toBeNull();
+  expect((dockBox?.x ?? 0) + (dockBox?.width ?? 0)).toBeLessThanOrEqual(1440);
+  expect(dockBox?.y ?? 0).toBeGreaterThan(450);
+  await page.locator("#layout-navigation-button").click();
+  await expect(page.locator("#layout-navigation-button")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator(".navigation-page-count")).toHaveCount(0);
   await page.getByLabel("New section name").fill("Operations");
   await page.getByRole("button", { name: "Add section" }).click();
 
@@ -445,7 +455,7 @@ test("configures persistent sidebar sections", async ({ page }) => {
   ).toHaveCount(1);
 
   await page.reload();
-  await page.getByRole("button", { name: "Configure panels" }).click();
+  await page.locator("#layout-navigation-button").click();
   await expect(page.getByLabel("Section for Metrics")).toHaveValue(
     "custom-operations",
   );
@@ -477,21 +487,15 @@ test("supports deep links and browser workspace history", async ({ page }) => {
   await expect(page.locator("#page-title")).toHaveText("Workloads");
 
   await page.getByRole("button", { name: "training-job-001" }).click();
-  await expect(page.locator(".workload-drawer")).toHaveAttribute(
-    "aria-hidden",
-    "false",
-  );
+  await expect(page.locator(".workload-dialog")).toBeVisible();
   await page.goBack();
   await expect(page).toHaveURL(/\?page=workloads$/);
-  await expect(page.locator(".workload-drawer")).toHaveAttribute(
-    "aria-hidden",
-    "true",
-  );
+  await expect(page.locator(".workload-dialog")).not.toBeVisible();
 
   await page.goto(
     "/?page=workloads&queue=queue-a&run=training-job-001",
   );
-  await expect(page.locator(".workload-drawer")).toContainText(
+  await expect(page.locator(".workload-dialog")).toContainText(
     "training-job-001",
   );
 });
@@ -595,6 +599,15 @@ test("remains responsive on narrow screens", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
+  await page.locator("#layout-navigation-button").click();
+  const layoutBox = await page.locator("#layout-panel").boundingBox();
+  expect(layoutBox).not.toBeNull();
+  expect(layoutBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+  expect(
+    (layoutBox?.x ?? 400) + (layoutBox?.width ?? 0),
+  ).toBeLessThanOrEqual(390);
+  await page.locator("#layout-close").click();
+
   await page.getByRole("button", { name: "Menu" }).click();
   await expect(page.locator(".sidebar")).toHaveClass(/open/);
   await page.getByRole("button", { name: "Metrics" }).click();
@@ -648,7 +661,7 @@ test("remains responsive on narrow screens", async ({ page }) => {
 
   await page.getByRole("button", { name: "training-job-001" }).click();
   const closeButton = page
-    .locator(".workload-drawer")
+    .locator(".workload-dialog")
     .getByRole("button", { name: "Close" });
   await expect(closeButton).toBeInViewport({ ratio: 1 });
   const closeBox = await closeButton.boundingBox();
@@ -963,14 +976,14 @@ test("retries initial local preference migration", async ({page}) => {
 
 test("configures visible workload table columns", async ({ page }) => {
   await page.goto("/?page=settings");
-  await page.getByRole("button", { name: "Configure panels" }).click();
+  await page.locator("#layout-panels-button").click();
   const setting = page.locator(".panel-setting").filter({
     hasText: "GPU workloads",
   });
 
   await setting.locator("summary").click();
   await setting.getByText("Pending GPUs").locator("input").uncheck();
-  await page.getByRole("button", { name: "Close" }).click();
+  await page.locator("#layout-close").click();
   await page.getByRole("button", { name: "Workloads" }).click();
 
   await expect(

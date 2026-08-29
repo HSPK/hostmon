@@ -29,7 +29,8 @@ export class DashboardApp {
   private readonly panels: PanelRenderer[] = [];
   private readonly root: HTMLElement;
   private panelsRoot!: HTMLElement;
-  private settingsDrawer!: HTMLElement;
+  private layoutPanel!: HTMLElement;
+  private layoutView: "navigation" | "panels" = "navigation";
   private chartDialog!: HTMLDialogElement;
   private connectionDot!: HTMLElement;
   private connectionText!: HTMLElement;
@@ -260,24 +261,31 @@ export class DashboardApp {
           </footer>
         </section>
       </div>
-      <aside id="settings-drawer" class="settings-drawer" aria-hidden="true">
-        <header><div><h2>Dashboard layout</h2><p>Navigation, panels, and chart changes are saved by this hostmon service.</p></div><button id="settings-close" class="icon-button" type="button">Close</button></header>
-        <section class="layout-settings-section">
-          <div class="layout-settings-heading"><div><h3>Navigation sections</h3><p>Group pages and control their sidebar order.</p></div></div>
-          <form id="navigation-section-form" class="navigation-section-form">
-            <input id="navigation-section-name" aria-label="New section name" maxlength="64" placeholder="New section" required>
-            <select id="navigation-section-placement" aria-label="New section placement"><option value="main">Main</option><option value="bottom">Bottom</option></select>
-            <button class="button" type="submit">Add section</button>
-          </form>
-          <div id="navigation-settings" class="navigation-settings"></div>
+      <aside id="layout-dock" class="layout-dock" aria-label="Dashboard layout controls">
+        <section id="layout-panel" class="layout-dock-panel" aria-hidden="true" hidden>
+          <header><div><h2>Dashboard layout</h2><p>Changes are saved by this hostmon service.</p></div><button id="layout-close" class="icon-button" type="button">Close</button></header>
+          <div class="layout-dock-content">
+            <section id="layout-navigation-view" class="layout-dock-view">
+              <div class="layout-settings-heading"><div><h3>Navigation sections</h3><p>Group pages and control their sidebar order.</p></div></div>
+              <form id="navigation-section-form" class="navigation-section-form">
+                <input id="navigation-section-name" aria-label="New section name" maxlength="64" placeholder="New section" required>
+                <select id="navigation-section-placement" aria-label="New section placement"><option value="main">Main</option><option value="bottom">Bottom</option></select>
+                <button class="button" type="submit">Add section</button>
+              </form>
+              <div id="navigation-settings" class="navigation-settings"></div>
+            </section>
+            <section id="layout-panels-view" class="layout-dock-view" hidden>
+              <div class="layout-settings-heading"><div><h3>Panels</h3><p>Control visibility, order, and table columns.</p></div></div>
+              <div id="panel-settings" class="panel-settings"></div>
+            </section>
+          </div>
+          <footer><button id="layout-reset" class="button" type="button">Reset layout</button></footer>
         </section>
-        <section class="layout-settings-section">
-          <div class="layout-settings-heading"><div><h3>Panels</h3><p>Control visibility, order, and table columns.</p></div></div>
-          <div id="panel-settings" class="panel-settings"></div>
-        </section>
-        <footer><button id="settings-reset" class="button" type="button">Reset layout</button></footer>
+        <nav class="layout-dock-nav" aria-label="Dashboard layout sections">
+          <button id="layout-navigation-button" class="layout-dock-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Navigation</button>
+          <button id="layout-panels-button" class="layout-dock-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Panels</button>
+        </nav>
       </aside>
-      <div id="drawer-backdrop" class="drawer-backdrop"></div>
       <dialog id="chart-dialog" class="chart-dialog">
         <form id="chart-form" method="dialog">
           <header><div><h2 id="chart-dialog-title">Create chart</h2><p>Choose up to eight metrics.</p></div><button id="chart-close" class="icon-button" type="button">Close</button></header>
@@ -303,7 +311,7 @@ export class DashboardApp {
       </dialog>
     `;
     this.panelsRoot = this.required("panels");
-    this.settingsDrawer = this.required("settings-drawer");
+    this.layoutPanel = this.required("layout-panel");
     this.chartDialog = this.required("chart-dialog") as HTMLDialogElement;
     this.connectionDot = this.required("connection-dot");
     this.connectionText = this.required("connection-text");
@@ -314,7 +322,7 @@ export class DashboardApp {
     (this.required("window-select") as HTMLSelectElement).value = String(
       this.preferences.get().windowSeconds,
     );
-    this.renderSettings();
+    this.renderLayoutSettings();
   }
 
   private bindControls(): void {
@@ -355,17 +363,19 @@ export class DashboardApp {
         }
         name.value = "";
         this.renderNavigation();
-        this.renderSettings();
+        this.renderLayoutSettings();
       },
     );
     this.required("export-button").addEventListener("click", () => this.exportCsv());
-    this.required("settings-close").addEventListener("click", () =>
-      this.toggleDrawer(false),
+    this.required("layout-close").addEventListener("click", () =>
+      this.setLayoutDock(null),
     );
-    this.required("drawer-backdrop").addEventListener("click", () =>
-      this.toggleDrawer(false),
-    );
-    this.required("settings-reset").addEventListener("click", () => {
+    for (const view of ["navigation", "panels"] as const) {
+      this.required(`layout-${view}-button`).addEventListener("click", () =>
+        this.toggleLayoutDock(view),
+      );
+    }
+    this.required("layout-reset").addEventListener("click", () => {
       this.preferences.reset();
       const preferences = this.preferences.get();
       this.store.setWindow(preferences.windowSeconds);
@@ -373,7 +383,7 @@ export class DashboardApp {
         preferences.windowSeconds,
       );
       this.renderNavigation();
-      this.renderSettings();
+      this.renderLayoutSettings();
       this.renderPanels();
       void this.reloadData();
     });
@@ -415,7 +425,7 @@ export class DashboardApp {
       void this.saveChart();
     });
     window.addEventListener("keydown", event => {
-      if (event.key === "Escape") this.toggleDrawer(false);
+      if (event.key === "Escape") this.setLayoutDock(null);
     });
   }
 
@@ -609,7 +619,6 @@ export class DashboardApp {
             this.preferences.setAppearance(theme, density);
             this.applyAppearance();
           },
-          openPanelSettings: () => this.toggleDrawer(true),
           createChart: metrics => this.openChartEditor(undefined, metrics),
           editChart: chart => this.openChartEditor(chart),
           removeChart: id => this.removeChart(id),
@@ -675,7 +684,7 @@ export class DashboardApp {
     });
   }
 
-  private renderSettings(): void {
+  private renderLayoutSettings(): void {
     const preferences = this.preferences.get();
     this.renderNavigationSettings(preferences);
     const root = this.required("panel-settings");
@@ -779,7 +788,7 @@ export class DashboardApp {
           label: name.value,
         });
         this.renderNavigation();
-        this.renderSettings();
+        this.renderLayoutSettings();
       });
       const placement = document.createElement("select");
       placement.setAttribute(
@@ -798,14 +807,9 @@ export class DashboardApp {
           placement: placement.value as "main" | "bottom",
         });
         this.renderNavigation();
-        this.renderSettings();
+        this.renderLayoutSettings();
       });
-      const count = document.createElement("span");
-      count.className = "navigation-page-count";
-      count.textContent = `${section.pages.length} page${
-        section.pages.length === 1 ? "" : "s"
-      }`;
-      fields.append(name, placement, count);
+      fields.append(name, placement);
       const actions = document.createElement("div");
       actions.className = "order-actions";
       const remove = orderButton("Delete", () => {
@@ -818,7 +822,7 @@ export class DashboardApp {
         }
         if (!this.preferences.removeNavigationSection(section.id)) return;
         this.renderNavigation();
-        this.renderSettings();
+        this.renderLayoutSettings();
       });
       remove.disabled = sections.length <= 1;
       actions.append(
@@ -854,7 +858,7 @@ export class DashboardApp {
       select.addEventListener("change", () => {
         this.preferences.setPageNavigationSection(item.id, select.value);
         this.renderNavigation();
-        this.renderSettings();
+        this.renderLayoutSettings();
       });
       row.append(label, select);
       assignments.append(row);
@@ -866,12 +870,12 @@ export class DashboardApp {
   private moveNavigationSection(id: string, direction: -1 | 1): void {
     this.preferences.moveNavigationSection(id, direction);
     this.renderNavigation();
-    this.renderSettings();
+    this.renderLayoutSettings();
   }
 
   private movePanel(id: string, direction: -1 | 1): void {
     this.preferences.move(id, direction);
-    this.renderSettings();
+    this.renderLayoutSettings();
     this.renderPanels();
   }
 
@@ -904,7 +908,7 @@ export class DashboardApp {
       const source = event.dataTransfer?.getData("text/x-hostmon-panel");
       if (!source || source === panelId) return;
       this.preferences.moveBefore(source, panelId);
-      this.renderSettings();
+      this.renderLayoutSettings();
       this.renderPanels();
     });
   }
@@ -1111,21 +1115,41 @@ export class DashboardApp {
     this.chartDialog.close();
     this.navigate(panel.page);
     await this.reloadData();
-    this.renderSettings();
+    this.renderLayoutSettings();
     this.renderPanels();
   }
 
   private removeChart(panelId: string): void {
     if (!window.confirm("Delete this custom chart?")) return;
     this.preferences.removeCustomPanel(panelId);
-    this.renderSettings();
+    this.renderLayoutSettings();
     this.renderPanels();
   }
 
-  private toggleDrawer(open: boolean): void {
-    this.settingsDrawer.classList.toggle("open", open);
-    this.settingsDrawer.setAttribute("aria-hidden", String(!open));
-    this.required("drawer-backdrop").classList.toggle("open", open);
+  private toggleLayoutDock(view: "navigation" | "panels"): void {
+    const isActive = !this.layoutPanel.hidden && this.layoutView === view;
+    this.setLayoutDock(isActive ? null : view);
+  }
+
+  private setLayoutDock(view: "navigation" | "panels" | null): void {
+    if (view) {
+      this.layoutView = view;
+      this.renderLayoutSettings();
+    }
+    const open = view !== null;
+    this.layoutPanel.hidden = !open;
+    this.layoutPanel.setAttribute("aria-hidden", String(!open));
+    for (const candidate of ["navigation", "panels"] as const) {
+      const active = open && this.layoutView === candidate;
+      this.required(`layout-${candidate}-view`).toggleAttribute(
+        "hidden",
+        this.layoutView !== candidate,
+      );
+      const button = this.required(`layout-${candidate}-button`);
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-expanded", String(active));
+      button.setAttribute("aria-pressed", String(active));
+    }
   }
 
   private setConnectionState(state: ConnectionState): void {

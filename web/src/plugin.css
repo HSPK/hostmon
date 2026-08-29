@@ -15,22 +15,24 @@
 }
 .workload-link:hover { color: var(--text); text-decoration: underline; }
 
-.workload-drawer {
-  position: fixed; top: 0; right: 0; z-index: 50; width: min(480px, 94vw); height: 100vh;
-  padding: 14px; border-left: 1px solid var(--border); background: var(--chrome);
-  transform: translateX(101%); transition: transform .15s linear; overflow-y: auto;
+.workload-dialog {
+  width: min(720px, calc(100vw - 24px));
+  max-height: min(720px, calc(100dvh - 48px));
+  padding: 14px; overflow: auto; color: var(--text);
+  border: 1px solid var(--border-strong); border-radius: 2px;
+  background: var(--chrome);
 }
-.workload-drawer.open { transform: translateX(0); }
-.workload-drawer > header {
+.workload-dialog::backdrop { background: rgba(0, 0, 0, .62); }
+.workload-dialog > header {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
   padding-bottom: 14px; border-bottom: 1px solid var(--border);
 }
-.workload-drawer > header > div { min-width: 0; }
-.workload-drawer > header .icon-button { flex: 0 0 auto; }
-.workload-drawer h2 {
+.workload-dialog > header > div { min-width: 0; }
+.workload-dialog > header .icon-button { flex: 0 0 auto; }
+.workload-dialog h2 {
   margin: 3px 0 0; font-size: 15px; overflow-wrap: anywhere;
 }
-.drawer-eyebrow {
+.dialog-eyebrow {
   color: var(--muted); font: 10px ui-monospace, monospace; text-transform: uppercase;
 }
 .workload-detail-grid {
@@ -44,15 +46,14 @@
   display: block; margin-top: 4px; font: 600 13px ui-monospace, monospace;
   overflow-wrap: anywhere;
 }
-.workload-backdrop {
-  position: fixed; inset: 0; z-index: 40; pointer-events: none;
-  background: rgba(0, 0, 0, .55); opacity: 0;
-}
-.workload-backdrop.open { pointer-events: auto; opacity: 1; }
-
 @media (max-width: 560px) {
   .gpu-submitters-panel .data-grid-toolbar input[type="search"] {
     grid-column: 1 / -1;
   }
   .fleet-summary { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+  .workload-dialog {
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - 16px);
+    padding: 10px;
+  }
 }

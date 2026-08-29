@@ -351,21 +351,51 @@ body.table-page .table-scroll {
 .task-grid strong, .system-card code { display: block; margin-top: 4px; overflow-wrap: anywhere; }
 .system-metrics { grid-column: 1 / -1; max-height: 480px; overflow: auto; background: var(--surface); }
 
-.settings-drawer {
-  position: fixed; top: 0; right: 0; z-index: 50; width: min(420px, 94vw); height: 100vh;
-  padding: 14px; border-left: 1px solid var(--border); background: var(--chrome);
-  transform: translateX(101%); transition: transform .15s linear; overflow-y: auto;
+.layout-dock {
+  position: fixed; right: 12px; bottom: 36px; z-index: 45;
+  display: grid; justify-items: end; gap: 6px; pointer-events: none;
 }
-.settings-drawer.open { transform: translateX(0); }
-.settings-drawer > header, .chart-dialog header, .chart-dialog footer {
+.layout-dock > * { pointer-events: auto; }
+.layout-dock-panel {
+  width: min(620px, calc(100vw - 24px));
+  max-height: min(720px, calc(100dvh - 110px));
+  display: flex; flex-direction: column; overflow: hidden;
+  border: 1px solid var(--border-strong); border-radius: 2px;
+  background: var(--chrome); box-shadow: 0 18px 48px rgba(0, 0, 0, .42);
+  contain: layout paint;
+}
+.layout-dock-panel[hidden],
+.layout-dock-view[hidden] { display: none; }
+.layout-dock-panel > header, .chart-dialog header, .chart-dialog footer {
   display: flex; justify-content: space-between; align-items: flex-start; gap: 12px;
 }
-.settings-drawer h2, .chart-dialog h2 { margin: 0; font-size: 15px; }
-.settings-drawer p, .chart-dialog p { margin: 3px 0; color: var(--muted); font-size: 11px; }
-.settings-drawer footer { margin-top: 14px; }
-.drawer-backdrop { position: fixed; inset: 0; z-index: 40; pointer-events: none; background: rgba(0, 0, 0, .55); opacity: 0; }
-.drawer-backdrop.open { pointer-events: auto; opacity: 1; }
-.layout-settings-section { margin-top: 18px; }
+.layout-dock-panel > header {
+  flex: 0 0 auto; padding: 12px; border-bottom: 1px solid var(--border);
+}
+.layout-dock-panel h2, .chart-dialog h2 { margin: 0; font-size: 15px; }
+.layout-dock-panel p, .chart-dialog p { margin: 3px 0; color: var(--muted); font-size: 11px; }
+.layout-dock-content {
+  min-height: 0; padding: 12px; overflow-y: auto; overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.layout-dock-panel > footer {
+  flex: 0 0 auto; padding: 10px 12px; border-top: 1px solid var(--border);
+}
+.layout-dock-nav {
+  display: flex; overflow: hidden; border: 1px solid var(--border-strong);
+  border-radius: 2px; background: var(--chrome);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, .32);
+}
+.layout-dock-button {
+  min-width: 92px; height: 34px; padding: 0 12px; color: var(--muted);
+  border: 0; border-right: 1px solid var(--border); background: transparent;
+  cursor: pointer; font-size: 10px; font-weight: 600; text-transform: uppercase;
+  letter-spacing: .05em;
+}
+.layout-dock-button:last-child { border-right: 0; }
+.layout-dock-button:hover { color: var(--text); background: var(--surface-2); }
+.layout-dock-button.active { color: var(--text); background: var(--surface-3); }
+.layout-dock-button:focus-visible { position: relative; z-index: 1; }
 .layout-settings-heading {
   display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
   margin-bottom: 8px;
@@ -387,9 +417,6 @@ body.table-page .table-scroll {
 }
 .navigation-setting-fields {
   display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 5px;
-}
-.navigation-page-count {
-  grid-column: 1 / -1; color: var(--muted); font-size: 9px;
 }
 .navigation-page-assignments {
   display: grid; gap: 5px; margin-top: 10px; padding-top: 10px;
@@ -501,6 +528,8 @@ body.table-page .table-scroll {
   .rule-editor > * { grid-column: 1; }
   .form-grid { grid-template-columns: 1fr; }
   .chart-title-label, .chart-page-label, .metric-filter-label { grid-column: auto; }
+  .layout-dock { right: 8px; bottom: 34px; }
+  .layout-dock-panel { width: calc(100vw - 16px); max-height: calc(100dvh - 104px); }
   .navigation-section-form { grid-template-columns: minmax(0, 1fr) 82px; }
   .navigation-section-form .button { grid-column: 1 / -1; }
   .navigation-setting { grid-template-columns: 1fr; }

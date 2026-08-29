@@ -34,9 +34,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   private readonly count: HTMLElement;
   private readonly previous: HTMLButtonElement;
   private readonly next: HTMLButtonElement;
-  private readonly drawer: HTMLElement;
-  private readonly backdrop: HTMLElement;
-  private readonly closeOnEscape: (event: KeyboardEvent) => void;
+  private readonly dialog: HTMLDialogElement;
   private report: ClusterGPUReport | null = null;
   private lastLoaded = 0;
   private loading = false;
@@ -124,18 +122,14 @@ export class GPUSubmittersPanel implements PanelRenderer {
     );
     shell.body.append(controls, this.table.element);
 
-    this.drawer = document.createElement("aside");
-    this.drawer.className = "workload-drawer";
-    this.drawer.setAttribute("aria-hidden", "true");
-    this.drawer.setAttribute("aria-label", "Workload details");
-    this.backdrop = document.createElement("div");
-    this.backdrop.className = "workload-backdrop";
-    this.backdrop.addEventListener("click", () => this.closeDetails());
-    this.closeOnEscape = event => {
-      if (event.key === "Escape") this.closeDetails();
-    };
-    window.addEventListener("keydown", this.closeOnEscape);
-    document.body.append(this.backdrop, this.drawer);
+    this.dialog = document.createElement("dialog");
+    this.dialog.className = "workload-dialog";
+    this.dialog.setAttribute("aria-label", "Workload details");
+    this.dialog.addEventListener("cancel", event => {
+      event.preventDefault();
+      this.closeDetails();
+    });
+    document.body.append(this.dialog);
     void this.load();
   }
 
@@ -144,9 +138,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   }
 
   destroy(): void {
-    window.removeEventListener("keydown", this.closeOnEscape);
-    this.drawer.remove();
-    this.backdrop.remove();
+    this.dialog.remove();
   }
 
   private async load(): Promise<void> {
@@ -252,7 +244,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     const header = document.createElement("header");
     const heading = document.createElement("div");
     const eyebrow = document.createElement("span");
-    eyebrow.className = "drawer-eyebrow";
+    eyebrow.className = "dialog-eyebrow";
     eyebrow.textContent = `${row.queue} / ${row.status}`;
     const title = document.createElement("h2");
     title.textContent = row.name;
@@ -281,20 +273,16 @@ export class GPUSubmittersPanel implements PanelRenderer {
         "detail-wide",
       ),
     );
-    this.drawer.replaceChildren(header, grid);
-    this.drawer.classList.add("open");
-    this.drawer.setAttribute("aria-hidden", "false");
-    this.backdrop.classList.add("open");
+    this.dialog.replaceChildren(header, grid);
     this.activeSelection = selection;
     if (updateRoute) this.selectWorkload(selection);
+    if (!this.dialog.open) this.dialog.showModal();
     if (changed) close.focus();
   }
 
   private closeDetails(updateRoute = true): void {
     if (!this.activeSelection && updateRoute) return;
-    this.drawer.classList.remove("open");
-    this.drawer.setAttribute("aria-hidden", "true");
-    this.backdrop.classList.remove("open");
+    if (this.dialog.open) this.dialog.close();
     this.activeSelection = null;
     if (updateRoute) this.selectWorkload(null);
   }

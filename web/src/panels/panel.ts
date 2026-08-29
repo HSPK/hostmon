@@ -31,7 +31,6 @@ export interface PanelContext {
       theme: DashboardPreferences["theme"],
       density: DashboardPreferences["density"],
     ): void;
-    openPanelSettings(): void;
     createChart(metrics?: string[]): void;
     editChart(panel: TimeSeriesPanelDefinition): void;
     removeChart(panelId: string): void;

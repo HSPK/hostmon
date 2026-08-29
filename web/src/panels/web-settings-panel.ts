@@ -32,14 +32,7 @@ export class WebSettingsPanel implements PanelRenderer {
     };
     theme.select.addEventListener("change", apply);
     density.select.addEventListener("change", apply);
-    const panels = document.createElement("button");
-    panels.type = "button";
-    panels.className = "button";
-    panels.textContent = "Configure panels";
-    panels.addEventListener("click", () =>
-      context.actions.openPanelSettings(),
-    );
-    form.append(theme.element, density.element, panels);
+    form.append(theme.element, density.element);
     shell.body.append(form);
   }
 
