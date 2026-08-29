@@ -203,6 +203,9 @@ Default locations:
 | Dashboard preferences | `~/.local/state/host-monitor/dashboard-preferences.json` |
 | User service | `~/.config/systemd/user/host-monitor.service` |
 
+Dashboard preferences persist custom charts, their target pages, panel layout,
+table columns, and the editable sidebar section order and page assignments.
+
 Complete samples are written as
 `metrics-YYYY-MM-DD-NNNN.jsonl`. A new file is created when the UTC date
 changes or the configured size limit is reached. Files are not automatically

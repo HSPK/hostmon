@@ -434,6 +434,14 @@ class PrometheusHTTPTests(unittest.TestCase):
                 "theme": "dark",
                 "density": "compact",
                 "customPanels": [],
+                "navigationSections": [
+                    {
+                        "id": "charts",
+                        "label": "Charts",
+                        "placement": "main",
+                        "pages": ["overview"],
+                    }
+                ],
             }
         )
         request = urllib.request.Request(

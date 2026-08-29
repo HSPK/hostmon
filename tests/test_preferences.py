@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -26,6 +27,20 @@ def sample_preferences() -> dict:
         "panelColumns": {"collectors": ["name", "state"]},
         "theme": "dark",
         "density": "compact",
+        "navigationSections": [
+            {
+                "id": "charts",
+                "label": "Charts",
+                "placement": "main",
+                "pages": ["overview"],
+            },
+            {
+                "id": "tables",
+                "label": "Tables",
+                "placement": "main",
+                "pages": ["metrics"],
+            },
+        ],
         "customPanels": [
             {
                 "id": "custom-latency",
@@ -70,6 +85,38 @@ class DashboardPreferenceTests(unittest.TestCase):
 
         self.assertEqual(normalized["customPanels"][0]["height"], 270)
         self.assertEqual(normalized["customPanels"][0]["lineWidth"], 1.5)
+
+    def test_migrates_preferences_without_navigation_sections(self):
+        preferences = sample_preferences()
+        del preferences["navigationSections"]
+
+        normalized = validate_dashboard_preferences(preferences)
+
+        self.assertEqual(normalized["navigationSections"], [])
+
+    def test_store_rewrites_legacy_preferences_with_navigation_sections(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "dashboard-preferences.json"
+            preferences = sample_preferences()
+            del preferences["navigationSections"]
+            path.write_text(json.dumps(preferences), encoding="utf-8")
+
+            loaded = DashboardPreferenceStore(path).load()
+
+            self.assertEqual(loaded["navigationSections"], [])
+            self.assertEqual(
+                json.loads(path.read_text(encoding="utf-8"))[
+                    "navigationSections"
+                ],
+                [],
+            )
+
+    def test_rejects_duplicate_navigation_page_assignments(self):
+        preferences = sample_preferences()
+        preferences["navigationSections"][1]["pages"] = ["overview"]
+
+        with self.assertRaisesRegex(ValueError, "assigned to another section"):
+            validate_dashboard_preferences(preferences)
 
     def test_load_returns_none_before_first_save(self):
         with tempfile.TemporaryDirectory() as directory:

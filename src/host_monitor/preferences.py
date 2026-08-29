@@ -20,7 +20,9 @@ PREFERENCE_KEYS = {
     "theme",
     "density",
     "customPanels",
+    "navigationSections",
 }
+OPTIONAL_PREFERENCE_KEYS = {"navigationSections"}
 
 
 def _string(value: Any, name: str, *, maximum: int = 256) -> str:
@@ -37,6 +39,48 @@ def _string_list(value: Any, name: str) -> list[str]:
     ):
         raise ValueError(f"{name} must be an array of strings")
     return list(dict.fromkeys(value))
+
+
+def _navigation_sections(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list) or len(value) > 64:
+        raise ValueError("navigationSections must be an array")
+    result: list[dict[str, Any]] = []
+    section_ids: set[str] = set()
+    assigned_pages: set[str] = set()
+    for index, raw_section in enumerate(value):
+        name = f"navigationSections[{index}]"
+        if not isinstance(raw_section, dict):
+            raise ValueError(f"{name} must be an object")
+        unknown = set(raw_section) - {"id", "label", "placement", "pages"}
+        if unknown:
+            raise ValueError(f"{name} has unknown fields: {sorted(unknown)}")
+        section_id = _string(raw_section.get("id"), f"{name}.id")
+        if section_id in section_ids:
+            raise ValueError(f"{name}.id must be unique")
+        label = raw_section.get("label")
+        if not isinstance(label, str) or len(label) > 64:
+            raise ValueError(f"{name}.label must be a string up to 64 characters")
+        placement = raw_section.get("placement")
+        if placement not in {"main", "bottom"}:
+            raise ValueError(f"{name}.placement must be main or bottom")
+        pages = _string_list(raw_section.get("pages"), f"{name}.pages")
+        duplicates = assigned_pages.intersection(pages)
+        if duplicates:
+            raise ValueError(
+                f"{name}.pages contains pages assigned to another section: "
+                f"{sorted(duplicates)}"
+            )
+        assigned_pages.update(pages)
+        section_ids.add(section_id)
+        result.append(
+            {
+                "id": section_id,
+                "label": label,
+                "placement": placement,
+                "pages": pages,
+            }
+        )
+    return result
 
 
 def _custom_panel(value: Any, index: int) -> dict[str, Any]:
@@ -134,7 +178,7 @@ def validate_dashboard_preferences(value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ValueError("preferences must be a JSON object")
     unknown = set(value) - PREFERENCE_KEYS
-    missing = PREFERENCE_KEYS - set(value)
+    missing = PREFERENCE_KEYS - OPTIONAL_PREFERENCE_KEYS - set(value)
     if unknown:
         raise ValueError(f"unknown preference fields: {sorted(unknown)}")
     if missing:
@@ -182,6 +226,9 @@ def validate_dashboard_preferences(value: Any) -> dict[str, Any]:
         "customPanels": [
             _custom_panel(panel, index) for index, panel in enumerate(custom)
         ],
+        "navigationSections": _navigation_sections(
+            value.get("navigationSections", [])
+        ),
     }
 
 

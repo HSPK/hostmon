@@ -152,7 +152,7 @@ describe("PreferenceStore", () => {
     preferences.saveCustomPanel({
       id: "custom-latency",
       type: "timeseries",
-      page: "metrics",
+      page: "overview",
       title: "Latency",
       metrics: ["custom/latency_ms"],
       custom: true,
@@ -160,12 +160,39 @@ describe("PreferenceStore", () => {
 
     const restored = new PreferenceStore(DASHBOARD);
     expect(restored.get().customPanels).toHaveLength(1);
-    expect(restored.visiblePanels("metrics").some(
+    expect(restored.visiblePanels("overview").some(
       panel => panel.id === "custom-latency",
     )).toBe(true);
 
     restored.removeCustomPanel("custom-latency");
     expect(restored.get().customPanels).toHaveLength(0);
+  });
+
+  it("persists configurable navigation sections without losing pages", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    const sectionId = preferences.addNavigationSection(
+      "Operations",
+      "main",
+    );
+    expect(sectionId).not.toBeNull();
+    preferences.setPageNavigationSection("metrics", sectionId!);
+    preferences.moveNavigationSection(sectionId!, -1);
+
+    const restored = new PreferenceStore(DASHBOARD);
+    const section = restored.get().navigationSections.find(
+      item => item.id === sectionId,
+    );
+    expect(section?.pages).toContain("metrics");
+    expect(
+      restored
+        .get()
+        .navigationSections.filter(item => item.placement === "main")
+        .map(item => item.label),
+    ).toEqual(["Charts", "Tables", "Operations", "Manage"]);
+    expect(restored.removeNavigationSection(sectionId!)).toBe(true);
+    expect(
+      restored.get().navigationSections.flatMap(item => item.pages),
+    ).toContain("metrics");
   });
 
   it("persists drag ordering before a target panel", () => {

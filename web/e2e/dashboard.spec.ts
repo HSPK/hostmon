@@ -385,6 +385,7 @@ test("searches metrics and persists a custom chart", async ({ page }) => {
   );
 
   await page.getByRole("button", { name: "Add chart" }).click();
+  await expect(page.locator("#chart-page")).toHaveValue("overview");
   await page.locator("#chart-metric-filter").fill("custom/latency");
   await page.locator(".metric-option").filter({ hasText: "custom/latency_ms" }).click();
   await expect(page.locator("#chart-metric-selected")).toContainText(
@@ -394,14 +395,71 @@ test("searches metrics and persists a custom chart", async ({ page }) => {
   await page.locator("#chart-style").selectOption("area");
   await page.getByRole("button", { name: "Save chart" }).click();
 
+  await expect(page.locator("#page-title")).toHaveText("Overview");
   await expect(page.locator('[data-panel-id^="custom-"]')).toContainText(
     "Request latency",
   );
+  await expect(
+    page.locator(
+      '.panel-section[data-section="Charts"] [data-panel-id^="custom-"]',
+    ),
+  ).toHaveCount(1);
   await page.reload();
-  await expect(page.locator("#page-title")).toHaveText("Metrics");
+  await expect(page.locator("#page-title")).toHaveText("Overview");
   await expect(page.locator('[data-panel-id^="custom-"]')).toContainText(
     "Request latency",
   );
+});
+
+test("defaults new charts to the current chart page", async ({ page }) => {
+  await page.goto("/?page=gpu-fleet");
+  await page.getByRole("button", { name: "Add chart" }).click();
+
+  await expect(page.locator("#chart-page")).toHaveValue("gpu-fleet");
+  await page
+    .locator("#chart-dialog")
+    .getByRole("button", { name: "Close" })
+    .click();
+  await expect(page.locator("#chart-dialog")).not.toBeVisible();
+});
+
+test("configures persistent sidebar sections", async ({ page }) => {
+  await page.goto("/?page=settings");
+  await page.getByRole("button", { name: "Configure panels" }).click();
+  await page.getByLabel("New section name").fill("Operations");
+  await page.getByRole("button", { name: "Add section" }).click();
+
+  const operations = page.locator(
+    '.navigation-setting[data-navigation-section-id="custom-operations"]',
+  );
+  await expect(operations).toHaveCount(1);
+  await operations.getByRole("button", { name: "Up" }).click();
+  await page.getByLabel("Section for Metrics").selectOption({
+    label: "Operations",
+  });
+  const sidebarSection = page.locator(".nav-section").filter({
+    has: page.getByRole("heading", { name: "Operations" }),
+  });
+  await expect(
+    sidebarSection.getByRole("button", { name: "Metrics" }),
+  ).toHaveCount(1);
+
+  await page.reload();
+  await page.getByRole("button", { name: "Configure panels" }).click();
+  await expect(page.getByLabel("Section for Metrics")).toHaveValue(
+    "custom-operations",
+  );
+  page.once("dialog", dialog => dialog.accept());
+  await page
+    .locator(
+      '.navigation-setting[data-navigation-section-id="custom-operations"]',
+    )
+    .getByRole("button", { name: "Delete" })
+    .click();
+  await expect(
+    page.getByRole("heading", { name: "Operations" }),
+  ).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Metrics" })).toHaveCount(1);
 });
 
 test("supports deep links and browser workspace history", async ({ page }) => {

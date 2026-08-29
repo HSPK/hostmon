@@ -1,6 +1,7 @@
 import type {
   DashboardDefinition,
   DashboardPreferences,
+  NavigationSection,
   PanelDefinition,
   PageId,
   TimeSeriesPanelDefinition,
@@ -19,6 +20,7 @@ export const PREFERENCE_FIELDS: PreferenceField[] = [
   "theme",
   "density",
   "customPanels",
+  "navigationSections",
 ];
 
 export class PreferenceStore {
@@ -57,6 +59,10 @@ export class PreferenceStore {
       theme: this.value.theme,
       density: this.value.density,
       customPanels: this.value.customPanels.map(panel => ({...panel})),
+      navigationSections: this.value.navigationSections.map(section => ({
+        ...section,
+        pages: [...section.pages],
+      })),
     };
   }
 
@@ -171,6 +177,106 @@ export class PreferenceStore {
     if (persist) this.save("activePage");
   }
 
+  addNavigationSection(
+    label: string,
+    placement: NavigationSection["placement"],
+  ): string | null {
+    const normalized = label.trim().slice(0, 64);
+    if (!normalized) return null;
+    const base = `custom-${slug(normalized) || "section"}`;
+    let id = base;
+    let suffix = 2;
+    while (this.value.navigationSections.some(section => section.id === id)) {
+      id = `${base}-${suffix++}`;
+    }
+    this.value.navigationSections.push({
+      id,
+      label: normalized,
+      placement,
+      pages: [],
+    });
+    this.save("navigationSections");
+    return id;
+  }
+
+  updateNavigationSection(
+    sectionId: string,
+    changes: Partial<Pick<NavigationSection, "label" | "placement">>,
+  ): void {
+    const section = this.value.navigationSections.find(
+      item => item.id === sectionId,
+    );
+    if (!section) return;
+    const label =
+      changes.label === undefined
+        ? section.label
+        : changes.label.trim().slice(0, 64);
+    const placement = changes.placement ?? section.placement;
+    if (section.label === label && section.placement === placement) return;
+    section.label = label;
+    section.placement = placement;
+    this.save("navigationSections");
+  }
+
+  moveNavigationSection(sectionId: string, direction: -1 | 1): void {
+    const section = this.value.navigationSections.find(
+      item => item.id === sectionId,
+    );
+    if (!section) return;
+    const peers = this.value.navigationSections.filter(
+      item => item.placement === section.placement,
+    );
+    const index = peers.findIndex(item => item.id === sectionId);
+    const target = peers[index + direction];
+    if (index < 0 || !target) return;
+    const sourceIndex = this.value.navigationSections.indexOf(section);
+    const targetIndex = this.value.navigationSections.indexOf(target);
+    [
+      this.value.navigationSections[sourceIndex],
+      this.value.navigationSections[targetIndex],
+    ] = [
+      this.value.navigationSections[targetIndex]!,
+      this.value.navigationSections[sourceIndex]!,
+    ];
+    this.save("navigationSections");
+  }
+
+  removeNavigationSection(sectionId: string): boolean {
+    const sections = this.value.navigationSections;
+    if (sections.length <= 1) return false;
+    const index = sections.findIndex(section => section.id === sectionId);
+    if (index < 0) return false;
+    const removed = sections[index]!;
+    const fallback =
+      sections.find(
+        section =>
+          section.id !== sectionId &&
+          section.placement === removed.placement,
+      ) ?? sections.find(section => section.id !== sectionId);
+    if (!fallback) return false;
+    fallback.pages = [...new Set([...fallback.pages, ...removed.pages])];
+    sections.splice(index, 1);
+    this.save("navigationSections");
+    return true;
+  }
+
+  setPageNavigationSection(page: PageId, sectionId: string): void {
+    const target = this.value.navigationSections.find(
+      section => section.id === sectionId,
+    );
+    if (
+      !this.definition.navigation.some(item => item.id === page) ||
+      !target
+    ) {
+      return;
+    }
+    for (const section of this.value.navigationSections) {
+      section.pages = section.pages.filter(item => item !== page);
+    }
+    target.pages.push(page);
+    this.save("navigationSections");
+  }
+
   panelState<T extends Record<string, string | number | boolean | null>>(
     panelId: string,
     fallback: T,
@@ -243,6 +349,7 @@ export class PreferenceStore {
       theme: "dark",
       density: "compact",
       customPanels: [],
+      navigationSections: defaultNavigationSections(this.definition),
     };
   }
 
@@ -297,6 +404,10 @@ export class PreferenceStore {
               isCustomPanel(panel, this.definition),
             ).map(normalizeCustomPanel)
           : [],
+        navigationSections: normalizeNavigationSections(
+          parsed.navigationSections,
+          this.definition,
+        ),
     };
   }
 
@@ -451,4 +562,96 @@ function normalizeCustomPanel(
         ? panel.lineWidth
         : 1.5,
   };
+}
+
+function defaultNavigationSections(
+  definition: DashboardDefinition,
+): NavigationSection[] {
+  const sections: NavigationSection[] = [];
+  const byGroup = new Map<string, NavigationSection>();
+  const identifiers = new Set<string>();
+  for (const item of definition.navigation) {
+    const placement = item.placement ?? "main";
+    const label = item.group ?? "";
+    const key = `${placement}\u0000${label}`;
+    let section = byGroup.get(key);
+    if (!section) {
+      const base = `default-${placement}-${slug(label) || "pages"}`;
+      let id = base;
+      let suffix = 2;
+      while (identifiers.has(id)) id = `${base}-${suffix++}`;
+      section = {id, label, placement, pages: []};
+      sections.push(section);
+      byGroup.set(key, section);
+      identifiers.add(id);
+    }
+    section.pages.push(item.id);
+  }
+  return sections;
+}
+
+function normalizeNavigationSections(
+  value: unknown,
+  definition: DashboardDefinition,
+): NavigationSection[] {
+  const defaults = defaultNavigationSections(definition);
+  if (!Array.isArray(value) || !value.length) return defaults;
+  const knownPages = new Set(definition.navigation.map(item => item.id));
+  const sectionIds = new Set<string>();
+  const assignedPages = new Set<PageId>();
+  const sections: NavigationSection[] = [];
+  for (const candidate of value.slice(0, 64)) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const section = candidate as Partial<NavigationSection>;
+    if (
+      typeof section.id !== "string" ||
+      !section.id ||
+      section.id.length > 256 ||
+      sectionIds.has(section.id) ||
+      typeof section.label !== "string" ||
+      section.label.length > 64 ||
+      (section.placement !== "main" && section.placement !== "bottom") ||
+      !Array.isArray(section.pages)
+    ) {
+      continue;
+    }
+    const pages = section.pages.filter(
+      (page): page is PageId =>
+        typeof page === "string" &&
+        knownPages.has(page) &&
+        !assignedPages.has(page),
+    );
+    for (const page of pages) assignedPages.add(page);
+    sections.push({
+      id: section.id,
+      label: section.label,
+      placement: section.placement,
+      pages,
+    });
+    sectionIds.add(section.id);
+  }
+  if (!sections.length) return defaults;
+  for (const item of definition.navigation) {
+    if (assignedPages.has(item.id)) continue;
+    const defaultSection = defaults.find(section =>
+      section.pages.includes(item.id),
+    );
+    const target =
+      sections.find(section => section.id === defaultSection?.id) ??
+      sections.find(
+        section => section.placement === defaultSection?.placement,
+      ) ??
+      sections[0]!;
+    target.pages.push(item.id);
+    assignedPages.add(item.id);
+  }
+  return sections;
+}
+
+function slug(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
 }

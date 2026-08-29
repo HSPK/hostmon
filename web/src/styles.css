@@ -106,8 +106,12 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .product strong { display: block; font-size: 14px; letter-spacing: .04em; }
 .product small { display: block; margin-top: 1px; color: var(--muted); font-size: 10px; text-transform: uppercase; }
 .sidebar nav { flex: 1; display: flex; flex-direction: column; min-height: 0; padding: 10px 8px; }
-.nav-main { overflow-y: auto; }
-.nav-bottom { margin-top: auto; padding-top: 8px; border-top: 1px solid var(--border); }
+.nav-main { flex: 1; min-height: 0; overflow-y: auto; }
+.nav-bottom {
+  flex: 0 0 auto; max-height: 45%; margin-top: auto; padding-top: 8px;
+  overflow-y: auto; border-top: 1px solid var(--border);
+}
+.nav-section { min-width: 0; }
 .sidebar nav h3 {
   margin: 12px 10px 4px; color: var(--muted);
   font-size: 9px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
@@ -361,7 +365,42 @@ body.table-page .table-scroll {
 .settings-drawer footer { margin-top: 14px; }
 .drawer-backdrop { position: fixed; inset: 0; z-index: 40; pointer-events: none; background: rgba(0, 0, 0, .55); opacity: 0; }
 .drawer-backdrop.open { pointer-events: auto; opacity: 1; }
-.panel-settings { margin-top: 14px; }
+.layout-settings-section { margin-top: 18px; }
+.layout-settings-heading {
+  display: flex; align-items: flex-end; justify-content: space-between; gap: 8px;
+  margin-bottom: 8px;
+}
+.layout-settings-heading h3,
+.navigation-page-assignments h4 {
+  margin: 0; color: var(--text); font-size: 11px; font-weight: 600;
+}
+.layout-settings-heading p { margin-top: 2px; }
+.navigation-section-form {
+  display: grid; grid-template-columns: minmax(0, 1fr) 88px auto; gap: 6px;
+  margin-bottom: 8px;
+}
+.navigation-settings,
+.navigation-section-list { display: grid; gap: 6px; }
+.navigation-setting {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px;
+  padding: 7px; border: 1px solid var(--border); background: var(--surface);
+}
+.navigation-setting-fields {
+  display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 5px;
+}
+.navigation-page-count {
+  grid-column: 1 / -1; color: var(--muted); font-size: 9px;
+}
+.navigation-page-assignments {
+  display: grid; gap: 5px; margin-top: 10px; padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.navigation-page-assignments h4 { margin-bottom: 2px; }
+.navigation-page-setting {
+  display: grid; grid-template-columns: minmax(0, 1fr) 150px;
+  align-items: center; gap: 8px; color: var(--muted); font-size: 10px;
+}
+.panel-settings { margin-top: 0; }
 .panel-setting { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 39px; border-bottom: 1px solid var(--border); }
 .panel-setting label { display: flex; align-items: center; gap: 7px; }
 .column-setting { position: relative; color: var(--muted); font-size: 10px; }
@@ -393,8 +432,9 @@ body.table-page .table-scroll {
   align-items: center; border-top: 1px solid var(--border); border-bottom: 0;
 }
 .chart-dialog form > footer > div { display: flex; gap: 6px; }
-.form-grid { display: grid; grid-template-columns: 2fr repeat(6, 1fr); gap: 8px; padding: 12px; }
+.form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 12px; }
 .form-grid label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 10px; }
+.chart-title-label, .chart-page-label { grid-column: span 2; }
 .metric-filter-label { grid-column: 1 / -1; }
 .metric-picker-layout {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 12px;
@@ -460,7 +500,11 @@ body.table-page .table-scroll {
   .rule-editor { grid-template-columns: 1fr; }
   .rule-editor > * { grid-column: 1; }
   .form-grid { grid-template-columns: 1fr; }
-  .metric-filter-label { grid-column: auto; }
+  .chart-title-label, .chart-page-label, .metric-filter-label { grid-column: auto; }
+  .navigation-section-form { grid-template-columns: minmax(0, 1fr) 82px; }
+  .navigation-section-form .button { grid-column: 1 / -1; }
+  .navigation-setting { grid-template-columns: 1fr; }
+  .navigation-page-setting { grid-template-columns: minmax(0, 1fr) 130px; }
   main { padding: var(--space-2); }
   *::-webkit-scrollbar { width: 8px; height: 8px; }
 }

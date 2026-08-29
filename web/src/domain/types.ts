@@ -281,6 +281,13 @@ export interface NavigationItem {
   placement?: "main" | "bottom";
 }
 
+export interface NavigationSection {
+  id: string;
+  label: string;
+  placement: "main" | "bottom";
+  pages: PageId[];
+}
+
 export interface DashboardDefinition {
   title: string;
   defaultWindowSeconds: number;
@@ -298,4 +305,5 @@ export interface DashboardPreferences {
   theme: "dark" | "light" | "system";
   density: "compact" | "comfortable";
   customPanels: TimeSeriesPanelDefinition[];
+  navigationSections: NavigationSection[];
 }
