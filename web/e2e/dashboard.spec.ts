@@ -608,6 +608,20 @@ test("remains responsive on narrow screens", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
+  const toolbarRows = await page
+    .locator(".toolbar-actions > .control, .toolbar-actions > .button")
+    .evaluateAll(elements =>
+      new Set(
+        elements.map(element =>
+          Math.round(element.getBoundingClientRect().top),
+        ),
+      ).size,
+    );
+  expect(toolbarRows).toBe(1);
+  const toolbarBox = await page.locator(".toolbar").boundingBox();
+  expect(toolbarBox).not.toBeNull();
+  expect(toolbarBox!.height).toBeLessThan(110);
+
   await page.locator("#layout-navigation-button").click();
   const layoutBox = await page.locator("#layout-panel").boundingBox();
   expect(layoutBox).not.toBeNull();
