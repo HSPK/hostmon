@@ -1,10 +1,7 @@
 import type {
   MetricCatalogEntry,
-  ClusterGPUReport,
   PanelDefinition,
   TimeSeriesPanelDefinition,
-  WorkloadSelection,
-  WorkloadView,
   AlertRuleConfig,
   DashboardPreferences,
   CollectorDiagnostic,
@@ -15,14 +12,15 @@ export interface PanelContext {
   store: TimeSeriesStore;
   actions: {
     loadCatalog(): Promise<MetricCatalogEntry[]>;
-    loadClusterGPU(): Promise<ClusterGPUReport>;
-    selectedWorkload(): WorkloadSelection | null;
-    selectWorkload(
-      selection: WorkloadSelection | null,
-      replace?: boolean,
+    loadPlugin<T>(name: string): Promise<T>;
+    panelState<T extends Record<string, string | number | boolean | null>>(
+      panelId: string,
+      fallback: T,
+    ): T;
+    setPanelState(
+      panelId: string,
+      state: Record<string, string | number | boolean | null>,
     ): void;
-    workloadView(): WorkloadView;
-    setWorkloadView(view: WorkloadView): void;
     loadRules(): Promise<AlertRuleConfig[]>;
     createRule(rule: AlertRuleConfig): Promise<void>;
     updateRule(name: string, rule: AlertRuleConfig): Promise<void>;

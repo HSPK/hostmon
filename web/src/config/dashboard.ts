@@ -126,8 +126,9 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
     return false;
   }
   if (
-    value.type === "gpu-fleet" &&
+    value.type === "plugin-summary" &&
     (!Array.isArray(value.summary) ||
+      typeof value.plugin !== "string" ||
       !value.summary.every(
         item =>
           isRecord(item) &&
@@ -142,11 +143,13 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
     "tasks",
     "metrics",
     "system",
-    "gpu-fleet",
-    "gpu-submitters",
+    "plugin-summary",
+    "plugin-records",
     "rules",
     "web-settings",
-  ].includes(value.type);
+  ].includes(value.type) &&
+    (!["plugin-summary", "plugin-records"].includes(value.type) ||
+      typeof value.plugin === "string");
 }
 
 function isDisplayItem(value: unknown): boolean {

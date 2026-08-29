@@ -28,11 +28,16 @@ The matching GitHub `pypi` environment is already declared by the workflow.
    rm -rf build dist
    python -m build
    python -m twine check dist/*
+   python scripts/check_release_artifacts.py dist/*
    ```
+
+   The repository-local plugin is tested separately and must never be copied
+   into `dist/` or uploaded to PyPI.
 
 4. Commit and push the changes.
 5. Create a GitHub release whose tag exactly matches `v<project.version>`, for
    example `v0.1.0`.
 
 Publishing the release runs tests, verifies that the tag and package versions
-match, builds the wheel and sdist, and publishes them to PyPI with OIDC.
+match, scans the wheel and sdist for deployment-specific content, and publishes
+only the core `hostmon` artifacts to PyPI with OIDC.

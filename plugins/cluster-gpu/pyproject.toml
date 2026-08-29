@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "hostmon-cluster-gpu"
+version = "0.1.0"
+description = "Repository-local cluster collectors for hostmon"
+requires-python = ">=3.11"
+dependencies = ["hostmon>=0.1.1.dev0"]
+
+[project.entry-points."host_monitor.collectors"]
+kubernetes = "hostmon_cluster_gpu.kubernetes:KubernetesCollector"
+kubernetes_permissions = "hostmon_cluster_gpu.permissions:KubernetesPermissionCollector"
+cluster_gpu_usage = "hostmon_cluster_gpu.cluster_gpu_usage:ClusterGPUUsageCollector"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

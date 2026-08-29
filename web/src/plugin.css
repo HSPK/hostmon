@@ -1,0 +1,58 @@
+.fleet-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 1px;
+  margin-bottom: 8px;
+  background: var(--border);
+}
+.fleet-summary > div { min-width: 0; padding: 9px; background: var(--surface); }
+.fleet-summary span { display: block; color: var(--muted); font-size: 10px; }
+.fleet-summary strong { display: block; margin-top: 4px; font: 600 16px ui-monospace, monospace; }
+.fleet-table-scroll { max-height: none; }
+.workload-link {
+  max-width: 360px; padding: 0; color: var(--link); border: 0; background: transparent;
+  text-align: left; cursor: pointer; overflow-wrap: anywhere;
+}
+.workload-link:hover { color: var(--text); text-decoration: underline; }
+
+.workload-drawer {
+  position: fixed; top: 0; right: 0; z-index: 50; width: min(480px, 94vw); height: 100vh;
+  padding: 14px; border-left: 1px solid var(--border); background: var(--chrome);
+  transform: translateX(101%); transition: transform .15s linear; overflow-y: auto;
+}
+.workload-drawer.open { transform: translateX(0); }
+.workload-drawer > header {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding-bottom: 14px; border-bottom: 1px solid var(--border);
+}
+.workload-drawer > header > div { min-width: 0; }
+.workload-drawer > header .icon-button { flex: 0 0 auto; }
+.workload-drawer h2 {
+  margin: 3px 0 0; font-size: 15px; overflow-wrap: anywhere;
+}
+.drawer-eyebrow {
+  color: var(--muted); font: 10px ui-monospace, monospace; text-transform: uppercase;
+}
+.workload-detail-grid {
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px; margin-top: 14px; background: var(--border);
+}
+.workload-detail-grid > div { min-width: 0; padding: 10px; background: var(--surface); }
+.workload-detail-grid .detail-wide { grid-column: 1 / -1; }
+.workload-detail-grid span { display: block; color: var(--muted); font-size: 10px; }
+.workload-detail-grid strong {
+  display: block; margin-top: 4px; font: 600 13px ui-monospace, monospace;
+  overflow-wrap: anywhere;
+}
+.workload-backdrop {
+  position: fixed; inset: 0; z-index: 40; pointer-events: none;
+  background: rgba(0, 0, 0, .55); opacity: 0;
+}
+.workload-backdrop.open { pointer-events: auto; opacity: 1; }
+
+@media (max-width: 560px) {
+  .gpu-submitters-panel .data-grid-toolbar input[type="search"] {
+    grid-column: 1 / -1;
+  }
+  .fleet-summary { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
+}

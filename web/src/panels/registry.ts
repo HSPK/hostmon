@@ -23,7 +23,7 @@ import { RulesPanel } from "./rules-panel";
 import { WebSettingsPanel } from "./web-settings-panel";
 
 export function createPanelRegistry(): PanelRegistry {
-  return new PanelRegistry()
+  const registry = new PanelRegistry()
     .register(
       "stats",
       (definition, context) =>
@@ -55,19 +55,6 @@ export function createPanelRegistry(): PanelRegistry {
         new SystemPanel(definition as SystemPanelDefinition, context),
     )
     .register(
-      "gpu-fleet",
-      (definition, context) =>
-        new GPUFleetPanel(definition as GPUFleetPanelDefinition, context),
-    )
-    .register(
-      "gpu-submitters",
-      (definition, context) =>
-        new GPUSubmittersPanel(
-          definition as GPUSubmittersPanelDefinition,
-          context,
-        ),
-    )
-    .register(
       "rules",
       (definition, context) =>
         new RulesPanel(definition as RulesPanelDefinition, context),
@@ -80,4 +67,21 @@ export function createPanelRegistry(): PanelRegistry {
           context,
         ),
     );
+  if (__HOSTMON_PLUGIN_UI__) {
+    registry
+      .register(
+        "plugin-summary",
+        (definition, context) =>
+          new GPUFleetPanel(definition as GPUFleetPanelDefinition, context),
+      )
+      .register(
+        "plugin-records",
+        (definition, context) =>
+          new GPUSubmittersPanel(
+            definition as GPUSubmittersPanelDefinition,
+            context,
+          ),
+      );
+  }
+  return registry;
 }

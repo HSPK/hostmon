@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Callable
 
-from .base import CollectorResult, reject_unknown_options
+from host_monitor.collectors.base import CollectorResult, reject_unknown_options
 from .kubectl_client import KubectlClient, parse_quantity
 
 

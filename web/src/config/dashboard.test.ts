@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { DASHBOARD } from "./dashboard";
+import pluginDashboard from "../../../plugins/cluster-gpu/dashboard.json";
+import { assertDashboard, DASHBOARD } from "./dashboard";
 
 describe("dashboard definition", () => {
   it("has unique panel IDs and registered panel types", () => {
@@ -12,8 +13,8 @@ describe("dashboard definition", () => {
       "tasks",
       "metrics",
       "system",
-      "gpu-fleet",
-      "gpu-submitters",
+      "plugin-summary",
+      "plugin-records",
       "rules",
       "web-settings",
     ]);
@@ -32,5 +33,12 @@ describe("dashboard definition", () => {
 
     expect(panels.length).toBeGreaterThan(0);
     expect(panels.every(panel => panel.metrics.length > 0)).toBe(true);
+  });
+
+  it("validates the repository-local plugin dashboard", () => {
+    expect(() => assertDashboard(pluginDashboard)).not.toThrow();
+    expect(pluginDashboard.panels.some(
+      panel => panel.type === "plugin-summary",
+    )).toBe(true);
   });
 });

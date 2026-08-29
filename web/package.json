@@ -5,8 +5,10 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build && node scripts/prune-dashboard-assets.mjs",
-    "preview": "vite preview --host 127.0.0.1 --port 4173",
+    "build": "tsc --noEmit && npm run build:core && npm run build:plugin",
+    "build:core": "vite build --mode core && node scripts/prune-dashboard-assets.mjs ../../src/host_monitor/static/dashboard ../src/config/dashboard.json false",
+    "build:plugin": "vite build --mode plugin && node scripts/prune-dashboard-assets.mjs ../../plugins/cluster-gpu/static/dashboard ../../plugins/cluster-gpu/dashboard.json",
+    "preview": "vite preview --mode plugin --host 127.0.0.1 --port 4173",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:e2e": "playwright test",

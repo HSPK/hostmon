@@ -2,6 +2,7 @@ import type {
   HistoryResponse,
   AlertRuleConfig,
   CollectorDiagnostic,
+  DashboardPreferences,
   PluginDocument,
   MetricCatalogResponse,
   StatusResponse,
@@ -81,6 +82,31 @@ export class ApiClient {
     return response.collectors;
   }
 
+  async preferences(): Promise<DashboardPreferences | null> {
+    const response = await this.getJson<{
+      preferences: DashboardPreferences | null;
+    }>("/api/preferences");
+    return response.preferences;
+  }
+
+  async savePreferences(
+    preferences: DashboardPreferences,
+  ): Promise<DashboardPreferences> {
+    const response = await this.sendJson<{
+      preferences: DashboardPreferences;
+    }>("/api/preferences", "PUT", preferences);
+    return response.preferences;
+  }
+
+  async patchPreferences(
+    changes: Partial<DashboardPreferences>,
+  ): Promise<DashboardPreferences> {
+    const response = await this.sendJson<{
+      preferences: DashboardPreferences;
+    }>("/api/preferences", "PATCH", changes);
+    return response.preferences;
+  }
+
   private async getJson<T>(url: string, signal?: AbortSignal): Promise<T> {
     const started = performance.now();
     const options: RequestInit = {
@@ -99,11 +125,11 @@ export class ApiClient {
     }
   }
 
-  private async sendJson(
+  private async sendJson<T = void>(
     url: string,
-    method: "POST" | "PUT" | "DELETE",
+    method: "POST" | "PUT" | "PATCH" | "DELETE",
     body?: unknown,
-  ): Promise<void> {
+  ): Promise<T> {
     const started = performance.now();
     try {
       const response = await fetch(url, {
@@ -119,6 +145,8 @@ export class ApiClient {
         const message = await response.text();
         throw new Error(message || `${url} returned HTTP ${response.status}`);
       }
+      if (response.status === 204) return undefined as T;
+      return (await response.json()) as T;
     } finally {
       this.onTiming?.(url, performance.now() - started);
     }

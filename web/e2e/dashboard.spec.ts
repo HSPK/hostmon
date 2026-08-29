@@ -119,6 +119,7 @@ const clusterGPUReport = {
 };
 
 test.beforeEach(async ({ page }) => {
+  let dashboardPreferences: Record<string, unknown> | null = null;
   let alertRules = [
     {
       alert: "high-cpu",
@@ -245,6 +246,20 @@ test.beforeEach(async ({ page }) => {
       },
     }),
   );
+  await page.route("**/api/preferences", route => {
+    if (route.request().method() === "PUT") {
+      dashboardPreferences = route.request().postDataJSON();
+      return route.fulfill({json: {preferences: dashboardPreferences}});
+    }
+    if (route.request().method() === "PATCH") {
+      dashboardPreferences = {
+        ...(dashboardPreferences ?? {}),
+        ...route.request().postDataJSON(),
+      };
+      return route.fulfill({json: {preferences: dashboardPreferences}});
+    }
+    return route.fulfill({json: {preferences: dashboardPreferences}});
+  });
   await page.routeWebSocket("**/api/ws", socket => {
     socket.send(
       JSON.stringify({
@@ -399,6 +414,67 @@ test("supports deep links and browser workspace history", async ({ page }) => {
   await expect(page.locator(".workload-drawer")).toContainText(
     "training-job-001",
   );
+});
+
+test("does not persist defaults before a user change", async ({ page }) => {
+  const writes: string[] = [];
+  page.on("request", request => {
+    if (
+      request.method() === "PUT" &&
+      new URL(request.url()).pathname === "/api/preferences"
+    ) {
+      writes.push(request.postData() ?? "");
+    }
+  });
+
+  await page.goto("/?page=gpu-fleet");
+  await expect(page.locator("#page-title")).toHaveText("GPU Fleet");
+  await page.waitForTimeout(100);
+  expect(writes).toEqual([]);
+});
+
+test("tracks metrics from server-restored custom charts", async ({ page }) => {
+  await page.unroute("**/api/preferences");
+  await page.route("**/api/preferences", route =>
+    route.fulfill({
+      json: {
+        preferences: {
+          hiddenPanels: [],
+          panelOrder: [],
+          windowSeconds: 3600,
+          activePage: "overview",
+          panelState: {},
+          panelColumns: {},
+          theme: "dark",
+          density: "compact",
+          customPanels: [
+            {
+              id: "custom-server-latency",
+              type: "timeseries",
+              page: "overview",
+              title: "Server latency",
+              metrics: ["custom/latency_ms"],
+              custom: true,
+            },
+          ],
+        },
+      },
+    }),
+  );
+  const historyRequest = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/history" &&
+      url.searchParams.get("metrics")?.includes("custom/latency_ms") === true
+    );
+  });
+
+  await page.goto("/?page=overview");
+  await historyRequest;
+
+  await expect(
+    page.locator('[data-panel-id="custom-server-latency"]'),
+  ).toContainText("Server latency");
 });
 
 test("filters and sorts workload triage views", async ({ page }) => {
@@ -571,13 +647,33 @@ test("drags panels and edits built-in chart configuration", async ({ page }) => 
   await page.locator("#chart-title").fill("Custom host utilization");
   await page.locator("#chart-line-width").fill("2.5");
   await page.locator("#chart-height").selectOption("360");
+  const persisted = page.waitForRequest(request => {
+    if (
+      !["PUT", "PATCH"].includes(request.method()) ||
+      new URL(request.url()).pathname !== "/api/preferences"
+    ) {
+      return false;
+    }
+    const preferences = request.postDataJSON() as {
+      customPanels?: Array<{title?: string}>;
+    };
+    return preferences.customPanels?.some(
+      panel => panel.title === "Custom host utilization",
+    ) ?? false;
+  });
   await page.getByRole("button", { name: "Save chart" }).click();
+  await persisted;
   await expect(
     page.locator('[data-panel-id="host-utilization"]'),
   ).toContainText("Custom host utilization");
   await expect(
     page.locator('[data-panel-id="host-utilization"] .panel-body'),
   ).toHaveAttribute("style", /360px/);
+  await page.evaluate(() => localStorage.clear());
+  await page.reload();
+  await expect(
+    page.locator('[data-panel-id="host-utilization"]'),
+  ).toContainText("Custom host utilization");
   await page.getByRole("button", { name: "System" }).click();
   await page.getByLabel("Find chart").fill("host utilization");
   await page.getByLabel("Find chart").press("Enter");
@@ -645,6 +741,144 @@ test("configures web theme and density", async ({ page }) => {
     .toBe("#d6dde5");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+});
+
+test("merges unrelated preference changes from stale clients", async ({
+  page,
+}) => {
+  await page.unroute("**/api/preferences");
+  let serverPreferences = {
+    hiddenPanels: [] as string[],
+    panelOrder: [] as string[],
+    windowSeconds: 3600,
+    activePage: "settings",
+    panelState: {},
+    panelColumns: {},
+    theme: "dark",
+    density: "compact",
+    customPanels: [] as unknown[],
+  };
+  await page.context().route("**/api/preferences", route => {
+    if (route.request().method() === "PATCH") {
+      serverPreferences = {
+        ...serverPreferences,
+        ...route.request().postDataJSON(),
+      };
+    }
+    return route.fulfill({json: {preferences: serverPreferences}});
+  });
+  await page.goto("/?page=settings");
+  serverPreferences = {...serverPreferences, theme: "light"};
+  const densitySaved = page.waitForRequest(
+    request =>
+      request.method() === "PATCH" &&
+      new URL(request.url()).pathname === "/api/preferences",
+  );
+  await page.locator(".web-settings-grid label").filter({
+    hasText: "Density",
+  }).locator("select").selectOption("comfortable");
+  const request = await densitySaved;
+
+  expect(request.postDataJSON()).toEqual({density: "comfortable"});
+  expect(serverPreferences.theme).toBe("light");
+  expect(serverPreferences.density).toBe("comfortable");
+});
+
+test("retries failed preference writes without losing changes", async ({
+  page,
+}) => {
+  await page.unroute("**/api/preferences");
+  let attempts = 0;
+  let serverPreferences = {
+    hiddenPanels: [] as string[],
+    panelOrder: [] as string[],
+    windowSeconds: 3600,
+    activePage: "settings",
+    panelState: {},
+    panelColumns: {},
+    theme: "dark",
+    density: "compact",
+    customPanels: [] as unknown[],
+  };
+  await page.route("**/api/preferences", route => {
+    if (route.request().method() === "PATCH") {
+      attempts++;
+      if (attempts === 1) {
+        return route.fulfill({status: 500, body: "temporary failure"});
+      }
+      serverPreferences = {
+        ...serverPreferences,
+        ...route.request().postDataJSON(),
+      };
+    }
+    return route.fulfill({json: {preferences: serverPreferences}});
+  });
+  await page.goto("/?page=settings");
+  await page.locator(".web-settings-grid label").filter({
+    hasText: "Density",
+  }).locator("select").selectOption("comfortable");
+
+  await expect.poll(() => attempts, {timeout: 5000}).toBe(2);
+  expect(serverPreferences.density).toBe("comfortable");
+});
+
+test("does not overwrite server preferences after a load failure", async ({
+  page,
+}) => {
+  await page.unroute("**/api/preferences");
+  let writes = 0;
+  await page.route("**/api/preferences", route => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({status: 500, body: "temporary failure"});
+    }
+    writes++;
+    return route.fulfill({status: 500, body: "must not write"});
+  });
+  await page.goto("/?page=settings");
+  await page.locator(".web-settings-grid label").filter({
+    hasText: "Density",
+  }).locator("select").selectOption("comfortable");
+  await page.waitForTimeout(1200);
+
+  expect(writes).toBe(0);
+});
+
+test("retries initial local preference migration", async ({page}) => {
+  await page.addInitScript(() => {
+    localStorage.setItem(
+      "hostmon.dashboard.preferences.v2",
+      JSON.stringify({
+        hiddenPanels: [],
+        panelOrder: [],
+        windowSeconds: 3600,
+        activePage: "overview",
+        panelState: {},
+        panelColumns: {},
+        theme: "light",
+        density: "compact",
+        customPanels: [],
+      }),
+    );
+  });
+  await page.unroute("**/api/preferences");
+  let attempts = 0;
+  let saved: Record<string, unknown> | null = null;
+  await page.route("**/api/preferences", route => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({json: {preferences: saved}});
+    }
+    attempts++;
+    if (attempts === 1) {
+      return route.fulfill({status: 500, body: "temporary failure"});
+    }
+    saved = route.request().postDataJSON();
+    return route.fulfill({json: {preferences: saved}});
+  });
+
+  await page.goto("/?page=overview");
+
+  await expect.poll(() => attempts, {timeout: 5000}).toBe(2);
+  expect(saved?.theme).toBe("light");
 });
 
 test("configures visible workload table columns", async ({ page }) => {

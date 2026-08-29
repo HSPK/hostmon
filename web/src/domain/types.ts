@@ -240,12 +240,14 @@ export interface SystemPanelDefinition extends BasePanelDefinition {
 }
 
 export interface GPUFleetPanelDefinition extends BasePanelDefinition {
-  type: "gpu-fleet";
+  type: "plugin-summary";
+  plugin: string;
   summary: SummaryFieldDefinition[];
 }
 
 export interface GPUSubmittersPanelDefinition extends BasePanelDefinition {
-  type: "gpu-submitters";
+  type: "plugin-records";
+  plugin: string;
   defaultSort?: string;
   defaultSortDirection?: "asc" | "desc";
 }
@@ -291,7 +293,7 @@ export interface DashboardPreferences {
   panelOrder: string[];
   windowSeconds: number;
   activePage: PageId;
-  workloadView: WorkloadView;
+  panelState: Record<string, Record<string, string | number | boolean | null>>;
   panelColumns: Record<string, string[]>;
   theme: "dark" | "light" | "system";
   density: "compact" | "comfortable";

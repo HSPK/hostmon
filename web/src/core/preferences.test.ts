@@ -40,14 +40,65 @@ beforeEach(() => {
 });
 
 describe("PreferenceStore", () => {
+  it("distinguishes existing local preferences from defaults", () => {
+    expect(new PreferenceStore(DASHBOARD).hasLocalPreferences()).toBe(false);
+    localStorage.setItem(
+      "hostmon.dashboard.preferences.v2",
+      JSON.stringify({theme: "light"}),
+    );
+    expect(new PreferenceStore(DASHBOARD).hasLocalPreferences()).toBe(true);
+  });
+
+  it("preserves unconfirmed local fields while hydrating server state", () => {
+    const local = new PreferenceStore(DASHBOARD);
+    local.setWindow(900);
+    const restored = new PreferenceStore(DASHBOARD);
+    const server = {
+      ...restored.get(),
+      windowSeconds: 3600,
+      theme: "light" as const,
+    };
+
+    restored.hydrate(server);
+
+    expect(restored.get().windowSeconds).toBe(900);
+    expect(restored.get().theme).toBe("light");
+    expect(restored.pendingFields()).toContain("windowSeconds");
+    restored.markPersisted(["windowSeconds"]);
+    expect(restored.pendingFields()).not.toContain("windowSeconds");
+  });
+
+  it("marks only appearance fields that actually changed", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+
+    preferences.setAppearance("dark", "comfortable");
+
+    expect(preferences.pendingFields()).toEqual(["density"]);
+  });
+
+  it("does not mutate hydrated server preference objects", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    const server = {
+      ...preferences.get(),
+      panelState: {records: {filter: "all"}},
+      panelColumns: {collectors: ["name"]},
+    };
+    preferences.hydrate(server);
+
+    preferences.setPanelState("records", {filter: "active"});
+    preferences.setPanelColumns("collectors", ["name", "state"]);
+
+    expect(server.panelState.records.filter).toBe("all");
+    expect(server.panelColumns.collectors).toEqual(["name"]);
+  });
+
   it("persists visibility, order, and time window", () => {
     const first = new PreferenceStore(DASHBOARD);
     first.setVisible("network", false);
     first.move("tasks", -1);
     first.setWindow(900);
-    first.setWorkloadView({
-      queue: "queue-a",
-      state: "attention",
+    first.setPanelState("records", {
+      filter: "attention",
       sort: "pending_gpus",
       sortDirection: "desc",
     });
@@ -56,9 +107,8 @@ describe("PreferenceStore", () => {
 
     expect(restored.get().hiddenPanels).toContain("network");
     expect(restored.get().windowSeconds).toBe(900);
-    expect(restored.get().workloadView).toEqual({
-      queue: "queue-a",
-      state: "attention",
+    expect(restored.get().panelState.records).toEqual({
+      filter: "attention",
       sort: "pending_gpus",
       sortDirection: "desc",
     });
@@ -121,7 +171,8 @@ describe("PreferenceStore", () => {
       custom: true,
     });
 
-    const panels = preferences
+    const restored = new PreferenceStore(DASHBOARD);
+    const panels = restored
       .visiblePanels("overview")
       .filter(panel => panel.id === "host-utilization");
 
@@ -131,16 +182,16 @@ describe("PreferenceStore", () => {
 
   it("persists configured table columns", () => {
     const preferences = new PreferenceStore(DASHBOARD);
-    preferences.setPanelColumns("gpu-submitters", ["queue", "name"]);
+    preferences.setPanelColumns("collectors", ["name", "state"]);
 
     const restored = new PreferenceStore(DASHBOARD);
     const panel = restored
-      .visiblePanels("workloads")
-      .find(item => item.id === "gpu-submitters");
+      .visiblePanels("collectors")
+      .find(item => item.id === "collectors");
 
     expect(panel?.columns?.map(column => column.id)).toEqual([
-      "queue",
       "name",
+      "state",
     ]);
   });
 });

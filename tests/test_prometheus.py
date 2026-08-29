@@ -24,6 +24,7 @@ from host_monitor.prometheus import (
     prometheus_names,
     render_prometheus,
 )
+from host_monitor.preferences import validate_dashboard_preferences
 from host_monitor.rules import DEFAULT_RULES, RuleStore
 from host_monitor.state import StateStore
 
@@ -393,7 +394,7 @@ class PrometheusHTTPTests(unittest.TestCase):
                 "samples": [],
                 "rules": {},
                 "collectors": {
-                    "cluster_gpu_usage": {
+                    "document_plugin": {
                         "_hostmon_envelope": 1,
                         "plugin_state": {
                             "schema_version": 3,
@@ -411,13 +412,101 @@ class PrometheusHTTPTests(unittest.TestCase):
         self.exporter.start()
 
         with urllib.request.urlopen(
-            self.url("/api/plugins/cluster_gpu_usage"),
+            self.url("/api/plugins/document_plugin"),
             timeout=5,
         ) as response:
             document = json.load(response)
 
         self.assertEqual(document["schema_version"], 3)
         self.assertEqual(document["document"]["usage"][0]["submitter"], "run-a")
+
+    def test_persists_dashboard_preferences_over_http(self):
+        self.save_state(time.time())
+        self.exporter.start()
+        preferences = validate_dashboard_preferences(
+            {
+                "hiddenPanels": ["network"],
+                "panelOrder": ["overview", "network"],
+                "windowSeconds": 3600,
+                "activePage": "overview",
+                "panelState": {},
+                "panelColumns": {},
+                "theme": "dark",
+                "density": "compact",
+                "customPanels": [],
+            }
+        )
+        request = urllib.request.Request(
+            self.url("/api/preferences"),
+            data=json.dumps(preferences).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Origin": self.url(""),
+            },
+            method="PUT",
+        )
+
+        with urllib.request.urlopen(request, timeout=5) as response:
+            saved = json.load(response)
+        with urllib.request.urlopen(
+            self.url("/api/preferences"),
+            timeout=5,
+        ) as response:
+            loaded = json.load(response)
+
+        self.assertEqual(saved["preferences"], preferences)
+        self.assertEqual(loaded["preferences"], preferences)
+
+        patch = urllib.request.Request(
+            self.url("/api/preferences"),
+            data=json.dumps({"theme": "light"}).encode(),
+            headers={
+                "Content-Type": "application/json",
+                "Origin": self.url(""),
+            },
+            method="PATCH",
+        )
+        with urllib.request.urlopen(patch, timeout=5) as response:
+            updated = json.load(response)
+        self.assertEqual(updated["preferences"]["theme"], "light")
+        self.assertEqual(updated["preferences"]["density"], "compact")
+
+    def test_serves_assets_from_external_dashboard_directory(self):
+        self.save_state(time.time())
+        root = Path(self.directory.name) / "external-dashboard"
+        root.mkdir()
+        (root / "index.html").write_text("external dashboard", encoding="utf-8")
+        self.exporter.settings = PrometheusSettings(
+            enabled=True,
+            host="127.0.0.1",
+            port=0,
+            max_sample_age_seconds=30,
+            dashboard_directory=root,
+        )
+        self.exporter.start()
+
+        with urllib.request.urlopen(self.url("/"), timeout=5) as response:
+            content = response.read().decode()
+
+        self.assertEqual(content, "external dashboard")
+
+    def test_rejects_invalid_dashboard_preferences(self):
+        self.save_state(time.time())
+        self.exporter.start()
+        request = urllib.request.Request(
+            self.url("/api/preferences"),
+            data=b"{}",
+            headers={
+                "Content-Type": "application/json",
+                "Origin": self.url(""),
+            },
+            method="PUT",
+        )
+
+        with self.assertRaises(urllib.error.HTTPError) as context:
+            urllib.request.urlopen(request, timeout=5)
+
+        self.assertEqual(context.exception.code, 400)
 
     def test_manages_alert_rules_over_http(self):
         self.save_state(time.time())

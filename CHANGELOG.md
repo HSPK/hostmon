@@ -6,6 +6,12 @@ All notable changes to this project are documented here.
 
 ### Changed
 
+- Persisted dashboard layout, chart edits, table columns, filters, time windows,
+  theme, and density atomically through the hostmon service, with safe migration
+  from existing browser-local preferences.
+- Split deployment-specific collectors and their full dashboard into an
+  unpublished repository-local plugin; core wheel and sdist builds now fail CI
+  if deployment-specific modules, names, or configuration enter the artifacts.
 - Isolated collectors with concurrent execution, deadlines, bounded stale-data
   fallback, and collector health metrics.
 - Added a durable SQLite alert outbox with idempotent events and per-channel

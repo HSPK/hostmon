@@ -4,8 +4,8 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
-from ..errors import CollectorError
-from .base import CollectorResult, reject_unknown_options
+from host_monitor.collectors.base import CollectorResult, reject_unknown_options
+from host_monitor.errors import CollectorError
 from .kubectl_client import KubectlClient
 
 

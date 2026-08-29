@@ -6,7 +6,7 @@ import subprocess
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from ..errors import CollectorError
+from host_monitor.errors import CollectorError
 
 
 QUANTITY_SUFFIXES = {

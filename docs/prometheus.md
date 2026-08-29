@@ -32,6 +32,7 @@ history, rules, and alerts remain active.
 | `/api/status` | Latest metrics and non-numeric template fields as JSON |
 | `/api/history` | Compact columnar history, bounded and downsampled in memory |
 | `/api/catalog` | Current/min/average/p95/max statistics for every metric |
+| `/api/preferences` | GET/PUT atomically persisted dashboard preferences |
 | `/api/plugins/{name}` | Latest structured document exported by a collector plugin |
 | `/api/ws` | WebSocket stream for live updates |
 
@@ -79,14 +80,11 @@ Useful Grafana queries:
 hostmon_cpu_percent
 hostmon_memory_percent
 hostmon_gpu_percent
-hostmon_k8s_occupied_gpu_nodes / hostmon_k8s_quota_nodes
-hostmon_monitor_collector_kubernetes_up
 hostmon_sample_age_seconds
 ```
 
-Non-numeric fields such as failed or stopped task names are intentionally not
-converted to Prometheus labels, which avoids unbounded cardinality. Read them
-from `/api/status`.
+Non-numeric fields are intentionally not converted to Prometheus labels,
+which avoids unbounded cardinality. Read them from `/api/status`.
 
 ## Remote Prometheus
 

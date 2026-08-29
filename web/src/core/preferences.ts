@@ -4,15 +4,35 @@ import type {
   PanelDefinition,
   PageId,
   TimeSeriesPanelDefinition,
-  WorkloadView,
 } from "../domain/types";
 
 const STORAGE_KEY = "hostmon.dashboard.preferences.v2";
+const PENDING_KEY = "hostmon.dashboard.preferences.pending.v1";
+export type PreferenceField = keyof DashboardPreferences;
+export const PREFERENCE_FIELDS: PreferenceField[] = [
+  "hiddenPanels",
+  "panelOrder",
+  "windowSeconds",
+  "activePage",
+  "panelState",
+  "panelColumns",
+  "theme",
+  "density",
+  "customPanels",
+];
 
 export class PreferenceStore {
   private value: DashboardPreferences;
+  private readonly hadLocalPreferences: boolean;
+  private readonly pending = loadPendingFields();
+  private onChange?: (
+    value: DashboardPreferences,
+    fields: PreferenceField[],
+    replace: boolean,
+  ) => void;
 
   constructor(private readonly definition: DashboardDefinition) {
+    this.hadLocalPreferences = hasStoredPreferences();
     this.value = this.load();
   }
 
@@ -22,7 +42,12 @@ export class PreferenceStore {
       panelOrder: [...this.value.panelOrder],
       windowSeconds: this.value.windowSeconds,
       activePage: this.value.activePage,
-      workloadView: {...this.value.workloadView},
+      panelState: Object.fromEntries(
+        Object.entries(this.value.panelState).map(([id, state]) => [
+          id,
+          {...state},
+        ]),
+      ),
       panelColumns: Object.fromEntries(
         Object.entries(this.value.panelColumns).map(([id, columns]) => [
           id,
@@ -33,6 +58,44 @@ export class PreferenceStore {
       density: this.value.density,
       customPanels: this.value.customPanels.map(panel => ({...panel})),
     };
+  }
+
+  hydrate(value: DashboardPreferences): void {
+    const local = this.get();
+    const merged = {...value} as DashboardPreferences;
+    for (const field of this.pending) {
+      Object.assign(merged, {[field]: local[field]});
+    }
+    this.value = this.normalize(merged);
+    this.saveLocal();
+  }
+
+  setPersistence(
+    onChange: (
+      value: DashboardPreferences,
+      fields: PreferenceField[],
+      replace: boolean,
+    ) => void,
+  ): void {
+    this.onChange = onChange;
+  }
+
+  hasLocalPreferences(): boolean {
+    return this.hadLocalPreferences;
+  }
+
+  pendingFields(): PreferenceField[] {
+    return [...this.pending];
+  }
+
+  markPending(fields: PreferenceField[]): void {
+    for (const field of fields) this.pending.add(field);
+    this.savePending();
+  }
+
+  markPersisted(fields: PreferenceField[]): void {
+    for (const field of fields) this.pending.delete(field);
+    this.savePending();
   }
 
   visiblePanels(page: PageId = this.value.activePage): PanelDefinition[] {
@@ -65,7 +128,7 @@ export class PreferenceStore {
     if (visible) hidden.delete(panelId);
     else hidden.add(panelId);
     this.value.hiddenPanels = [...hidden];
-    this.save();
+    this.save("hiddenPanels");
   }
 
   move(panelId: string, direction: -1 | 1): void {
@@ -75,7 +138,7 @@ export class PreferenceStore {
     if (index < 0 || target < 0 || target >= order.length) return;
     [order[index], order[target]] = [order[target]!, order[index]!];
     this.value.panelOrder = order;
-    this.save();
+    this.save("panelOrder");
   }
 
   moveBefore(sourceId: string, targetId: string): void {
@@ -95,36 +158,52 @@ export class PreferenceStore {
     order.splice(source, 1);
     order.splice(order.indexOf(targetId), 0, sourceId);
     this.value.panelOrder = order;
-    this.save();
+    this.save("panelOrder");
   }
 
   setWindow(seconds: number): void {
     this.value.windowSeconds = seconds;
-    this.save();
+    this.save("windowSeconds");
   }
 
-  setActivePage(page: PageId): void {
+  setActivePage(page: PageId, persist = true): void {
     this.value.activePage = page;
-    this.save();
+    if (persist) this.save("activePage");
   }
 
-  setWorkloadView(view: WorkloadView): void {
-    this.value.workloadView = {...view};
-    this.save();
+  panelState<T extends Record<string, string | number | boolean | null>>(
+    panelId: string,
+    fallback: T,
+  ): T {
+    return {
+      ...fallback,
+      ...(this.value.panelState[panelId] ?? {}),
+    } as T;
+  }
+
+  setPanelState(
+    panelId: string,
+    state: Record<string, string | number | boolean | null>,
+  ): void {
+    this.value.panelState[panelId] = {...state};
+    this.save("panelState");
   }
 
   setPanelColumns(panelId: string, columns: string[]): void {
     this.value.panelColumns[panelId] = [...columns];
-    this.save();
+    this.save("panelColumns");
   }
 
   setAppearance(
     theme: DashboardPreferences["theme"],
     density: DashboardPreferences["density"],
   ): void {
+    const fields: PreferenceField[] = [];
+    if (this.value.theme !== theme) fields.push("theme");
+    if (this.value.density !== density) fields.push("density");
     this.value.theme = theme;
     this.value.density = density;
-    this.save();
+    if (fields.length) this.save(...fields);
   }
 
   saveCustomPanel(panel: TimeSeriesPanelDefinition): void {
@@ -136,7 +215,7 @@ export class PreferenceStore {
         this.value.panelOrder.push(panel.id);
       }
     }
-    this.save();
+    this.save("customPanels", "panelOrder");
   }
 
   removeCustomPanel(panelId: string): void {
@@ -145,12 +224,12 @@ export class PreferenceStore {
     );
     this.value.panelOrder = this.value.panelOrder.filter(id => id !== panelId);
     this.value.hiddenPanels = this.value.hiddenPanels.filter(id => id !== panelId);
-    this.save();
+    this.save("customPanels", "panelOrder", "hiddenPanels");
   }
 
   reset(): void {
     this.value = this.defaults();
-    this.save();
+    this.persist(PREFERENCE_FIELDS, true);
   }
 
   private defaults(): DashboardPreferences {
@@ -159,7 +238,7 @@ export class PreferenceStore {
       panelOrder: this.definition.panels.map(panel => panel.id),
       windowSeconds: this.definition.defaultWindowSeconds,
       activePage: "overview",
-      workloadView: defaultWorkloadView(this.definition),
+      panelState: {},
       panelColumns: {},
       theme: "dark",
       density: "compact",
@@ -171,8 +250,18 @@ export class PreferenceStore {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return this.defaults();
-      const parsed = JSON.parse(raw) as Partial<DashboardPreferences>;
-      return {
+      return this.normalize(JSON.parse(raw));
+    } catch {
+      return this.defaults();
+    }
+  }
+
+  private normalize(value: unknown): DashboardPreferences {
+    const parsed =
+      value && typeof value === "object"
+        ? value as Partial<DashboardPreferences>
+        : {};
+    return {
         hiddenPanels: Array.isArray(parsed.hiddenPanels)
           ? parsed.hiddenPanels.filter(item => typeof item === "string")
           : [],
@@ -186,9 +275,14 @@ export class PreferenceStore {
         activePage: isPageId(parsed.activePage, this.definition)
           ? parsed.activePage
           : "overview",
-        workloadView: parseWorkloadView(parsed.workloadView, this.definition),
+        panelState: parsePanelState(parsed),
         panelColumns: isPanelColumns(parsed.panelColumns)
-          ? parsed.panelColumns
+          ? Object.fromEntries(
+              Object.entries(parsed.panelColumns).map(([id, columns]) => [
+                id,
+                [...columns],
+              ]),
+            )
           : {},
         theme:
           parsed.theme === "dark" ||
@@ -199,15 +293,25 @@ export class PreferenceStore {
         density:
           parsed.density === "comfortable" ? "comfortable" : "compact",
         customPanels: Array.isArray(parsed.customPanels)
-          ? parsed.customPanels.filter(isCustomPanel)
+          ? parsed.customPanels.filter(panel =>
+              isCustomPanel(panel, this.definition),
+            )
           : [],
-      };
-    } catch {
-      return this.defaults();
-    }
+    };
   }
 
-  private save(): void {
+  private save(...fields: PreferenceField[]): void {
+    this.persist(fields, false);
+  }
+
+  private persist(fields: PreferenceField[], replace: boolean): void {
+    for (const field of fields) this.pending.add(field);
+    this.saveLocal();
+    this.savePending();
+    this.onChange?.(this.get(), fields, replace);
+  }
+
+  private saveLocal(): void {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(this.value));
     } catch {
@@ -215,20 +319,35 @@ export class PreferenceStore {
     }
   }
 
+  private savePending(): void {
+    try {
+      localStorage.setItem(PENDING_KEY, JSON.stringify([...this.pending]));
+    } catch {
+      // Storage can be unavailable in hardened/private browser contexts.
+    }
+  }
 }
 
-function defaultWorkloadView(
-  definition: DashboardDefinition,
-): WorkloadView {
-  const panel = definition.panels.find(
-    item => item.type === "gpu-submitters",
-  );
-  return {
-    queue: "all",
-    state: "all",
-    sort: panel?.defaultSort ?? "name",
-    sortDirection: panel?.defaultSortDirection ?? "asc",
-  };
+function hasStoredPreferences(): boolean {
+  try {
+    return localStorage.getItem(STORAGE_KEY) !== null;
+  } catch {
+    return false;
+  }
+}
+
+function loadPendingFields(): Set<PreferenceField> {
+  try {
+    const value = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "[]");
+    if (!Array.isArray(value)) return new Set();
+    return new Set(
+      value.filter((item): item is PreferenceField =>
+        PREFERENCE_FIELDS.includes(item as PreferenceField),
+      ),
+    );
+  } catch {
+    return new Set();
+  }
 }
 
 function isPanelColumns(
@@ -246,31 +365,50 @@ function isPanelColumns(
   );
 }
 
-function parseWorkloadView(
-  value: unknown,
-  definition: DashboardDefinition,
-): WorkloadView {
-  if (!value || typeof value !== "object") {
-    return defaultWorkloadView(definition);
+function parsePanelState(
+  value: Partial<DashboardPreferences> & {workloadView?: unknown},
+): DashboardPreferences["panelState"] {
+  const state = isPanelState(value.panelState) ? value.panelState : {};
+  const normalized = Object.fromEntries(
+    Object.entries(state).map(([id, item]) => [id, {...item}]),
+  );
+  if (
+    __HOSTMON_PLUGIN_UI__ &&
+    !normalized["gpu-submitters"] &&
+    isLegacyWorkloadView(value.workloadView)
+  ) {
+    normalized["gpu-submitters"] = {...value.workloadView};
   }
-  const view = value as Partial<WorkloadView>;
-  const valid =
-    typeof view.queue === "string" &&
-    ["all", "attention", "Running", "Pending", "Mixed"].includes(
-      String(view.state),
-    ) &&
-    typeof view.sort === "string" &&
-    view.sort.length > 0;
-  if (!valid) return defaultWorkloadView(definition);
-  return {
-    queue: view.queue!,
-    state: view.state!,
-    sort: view.sort!.replaceAll("-", "_"),
-    sortDirection:
-      view.sortDirection === "asc" || view.sortDirection === "desc"
-        ? view.sortDirection
-        : "desc",
-  };
+  return normalized;
+}
+
+function isPanelState(
+  value: unknown,
+): value is DashboardPreferences["panelState"] {
+  return (
+    value !== null &&
+    typeof value === "object" &&
+    Object.values(value).every(
+      state =>
+        state !== null &&
+        typeof state === "object" &&
+        Object.values(state).every(
+          item =>
+            item === null ||
+            ["string", "number", "boolean"].includes(typeof item),
+        ),
+    )
+  );
+}
+
+function isLegacyWorkloadView(
+  value: unknown,
+): value is Record<string, string> {
+  if (!value || typeof value !== "object") return false;
+  const view = value as Record<string, unknown>;
+  return ["queue", "state", "sort", "sortDirection"].every(
+    key => typeof view[key] === "string",
+  );
 }
 
 function isPageId(
@@ -280,14 +418,18 @@ function isPageId(
   return definition.navigation.some(item => item.id === value);
 }
 
-function isCustomPanel(value: unknown): value is TimeSeriesPanelDefinition {
+function isCustomPanel(
+  value: unknown,
+  definition: DashboardDefinition,
+): value is TimeSeriesPanelDefinition {
   if (!value || typeof value !== "object") return false;
   const panel = value as Partial<TimeSeriesPanelDefinition>;
   return (
     typeof panel.id === "string" &&
     typeof panel.title === "string" &&
     panel.type === "timeseries" &&
-    panel.page === "metrics" &&
+    typeof panel.page === "string" &&
+    isPageId(panel.page, definition) &&
     Array.isArray(panel.metrics) &&
     panel.metrics.every(metric => typeof metric === "string")
   );

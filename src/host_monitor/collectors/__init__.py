@@ -11,14 +11,11 @@ from typing import Any
 from ..config import CollectorSettings
 from ..errors import CollectorError, ConfigError
 from .base import Collection, Collector, CollectorResult
-from .cluster_gpu_usage import ClusterGPUUsageCollector
 from .cpu import CPUCollector
 from .disk import DiskCollector
 from .gpu import GPUCollector
-from .kubernetes import KubernetesCollector
 from .memory import MemoryCollector
 from .network import NetworkCollector
-from .permissions import KubernetesPermissionCollector
 from .pressure import PressureCollector
 
 
@@ -30,9 +27,6 @@ BUILTIN_COLLECTORS: dict[str, type[Collector]] = {
     "network": NetworkCollector,
     "gpu": GPUCollector,
     "pressure": PressureCollector,
-    "kubernetes": KubernetesCollector,
-    "kubernetes_permissions": KubernetesPermissionCollector,
-    "cluster_gpu_usage": ClusterGPUUsageCollector,
 }
 
 

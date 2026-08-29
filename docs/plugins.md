@@ -166,7 +166,6 @@ def collect(self, previous, now):
     )
 ```
 
-The built-in Kubernetes collectors use this pattern.
 Cache hits remain healthy but do not advance collector last-refresh timestamps
 or replace the measured duration of the most recent real refresh.
 

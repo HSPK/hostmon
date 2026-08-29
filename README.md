@@ -9,10 +9,6 @@ Its primary CLI is `hmon`. It collects localhost CPU, memory, disk, network,
 NVIDIA GPU, and PSI metrics, evaluates [Expr Tracker](https://github.com/HSPK/expr_tracker)
 rules, and routes alerts to multiple channels.
 
-Optional Kubernetes collectors monitor workload health, Volcano GPU quota, and
-RBAC changes. They do not replace localhost resource metrics with Kubernetes
-node metrics.
-
 ## Highlights
 
 - No metrics server or database required.
@@ -22,7 +18,7 @@ node metrics.
 - Full JSONL history rotated by UTC date and maximum file size.
 - Built-in Prometheus HTTP exporter for Grafana and other monitoring systems.
 - Extensible collectors discovered through Python entry points.
-- User-level systemd lifecycle and an optional K9s shortcut.
+- User-level systemd lifecycle.
 
 ## Quick start
 
@@ -64,17 +60,20 @@ hmon exporter start --host 127.0.0.1 --port 9108 --max-sample-age 30
 See [`docs/prometheus.md`](docs/prometheus.md) for scrape configuration,
 Grafana metric names, health checks, and remote-access guidance.
 
-The dashboard is a separate TypeScript/Vite application with Overview, GPU
-Fleet, Workloads, Metrics, Collectors, Kubernetes, and System pages. It includes a searchable
-metric catalog, current/min/average/p95/max statistics, arbitrary custom
-charts, CSV export, and browser-persisted layout customization. Its panel
+The dashboard is a separate TypeScript/Vite application with Overview,
+Metrics, Collectors, Alerts, Settings, and System pages. It includes a
+searchable metric catalog, current/min/average/p95/max statistics, arbitrary
+custom charts, CSV export, and server-persisted layout customization. Its panel
 renderer registry keeps new display types independent from transport and
 storage. See
 [`web/README.md`](web/README.md).
 
-The optional cluster GPU plugin provides queue capacity, allocated/free CPU
-and GPU resources, pending demand, no-job node equivalents, and submitter
-usage. See [`docs/cluster-gpu.md`](docs/cluster-gpu.md).
+Dashboard preferences are stored atomically by the hostmon service. Existing
+browser-local preferences are migrated on first connection; local storage
+remains an offline fallback.
+
+Deployment-specific collectors and dashboards are installed separately
+through entry points and are not included in the `hostmon` release artifacts.
 
 For Lark, the initializer has a convenience option:
 
@@ -99,9 +98,6 @@ channels can be configured directly in TOML. See
 | `network` | `/proc/net/dev` | aggregate and per-interface Mbps |
 | `gpu` | `nvidia-smi` | utilization, memory, temperature, power |
 | `pressure` | `/proc/pressure` | CPU, memory, and I/O PSI |
-| `kubernetes` | `kubectl` | failed tasks, problem Pods, GPU nodes/quota |
-| `kubernetes_permissions` | `kubectl auth can-i` | named RBAC checks by verb |
-| `cluster_gpu_usage` | Pods and Volcano queues | queue capacity and submitter GPU usage |
 
 Metric names use `/`, while Expr Tracker expressions may use dots:
 
@@ -204,6 +200,7 @@ Default locations:
 | Runtime state | `~/.local/state/host-monitor/state.json` |
 | Alert outbox | `~/.local/state/host-monitor/reliability.db` |
 | Long-term history | `~/.local/state/host-monitor/history/` |
+| Dashboard preferences | `~/.local/state/host-monitor/dashboard-preferences.json` |
 | User service | `~/.config/systemd/user/host-monitor.service` |
 
 Complete samples are written as
@@ -216,7 +213,7 @@ deleted.
 Collectors run concurrently. Every collector supports hostmon-level controls:
 
 ```toml
-[collectors.kubernetes]
+[collectors.remote_example]
 enabled = true
 required = false
 deadline_seconds = 20
@@ -262,18 +259,6 @@ collectors / external entry points
 Full samples -> segmented JSONL history
 Rule window  -> bounded atomic runtime state
 ```
-
-## K9s integration
-
-K9s is only a UI shortcut to the localhost CLI. It does not participate in
-collection:
-
-```bash
-mkdir -p ~/.config/k9s/plugins
-cp k9s-plugin.yaml ~/.config/k9s/plugins/localhost-resource-monitor.yaml
-```
-
-Press `Shift-M` in any K9s view to run `hmon snapshot`.
 
 ## Development
 

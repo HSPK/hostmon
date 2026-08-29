@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import subprocess
 import tempfile
 import threading
@@ -8,7 +9,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from host_monitor.collectors.cpu import CPUCollector, parse_cpu_line
-from host_monitor.collectors.cluster_gpu_usage import (
+from hostmon_cluster_gpu.cluster_gpu_usage import (
     ClusterGPUUsageCollector,
     aggregate_usage,
     aggregate_workloads,
@@ -17,15 +18,15 @@ from host_monitor.collectors.cluster_gpu_usage import (
 )
 from host_monitor.collectors.disk import DiskCollector
 from host_monitor.collectors.gpu import parse_gpu_rows
-from host_monitor.collectors.kubernetes import (
+from hostmon_cluster_gpu.kubernetes import (
     KubernetesCollector,
     analyze_workloads,
     stopped_gpu_tasks,
 )
-from host_monitor.collectors.kubectl_client import KubectlClient
 from host_monitor.collectors.memory import MemoryCollector, parse_meminfo
 from host_monitor.collectors.network import NetworkCollector, parse_net_dev
-from host_monitor.collectors.permissions import (
+from hostmon_cluster_gpu.kubectl_client import KubectlClient
+from hostmon_cluster_gpu.permissions import (
     KubernetesPermissionCollector,
     parse_checks,
 )
@@ -59,22 +60,8 @@ class ConfigTests(unittest.TestCase):
             self.assertFalse(settings.prometheus.enabled)
             self.assertEqual(settings.prometheus.host, "127.0.0.1")
             self.assertEqual(settings.prometheus.port, 9108)
-            disabled = {item.name: item for item in settings.collectors}
-            self.assertEqual(disabled["kubernetes"].deadline_seconds, 20)
-            self.assertEqual(
-                disabled["kubernetes_permissions"].deadline_seconds,
-                20,
-            )
-            self.assertEqual(
-                disabled["cluster_gpu_usage"].deadline_seconds,
-                20,
-            )
-            self.assertEqual(
-                disabled["cluster_gpu_usage"].options[
-                    "max_parallel_queries"
-                ],
-                4,
-            )
+            self.assertIsNone(settings.prometheus.dashboard_directory)
+            self.assertEqual(len(settings.collectors), 6)
 
     def test_atomically_updates_prometheus_section(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -114,6 +101,10 @@ class ConfigTests(unittest.TestCase):
                 "max_sample_age_seconds = 30",
                 'max_sample_age_seconds = 30\ndashboard_file = "dashboard.json"',
             )
+            Path(directory, "dashboard.json").write_text(
+                "{}",
+                encoding="utf-8",
+            )
             path.write_text(content, encoding="utf-8")
 
             settings = load_settings(path)
@@ -122,6 +113,54 @@ class ConfigTests(unittest.TestCase):
             settings.prometheus.dashboard_file,
             Path(directory) / "dashboard.json",
         )
+
+    def test_rejects_missing_external_dashboard_paths(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            initialize_config(path)
+            content = path.read_text(encoding="utf-8").replace(
+                "max_sample_age_seconds = 30",
+                'max_sample_age_seconds = 30\n'
+                'dashboard_directory = "missing-dashboard"',
+            )
+            path.write_text(content, encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                ConfigError,
+                "dashboard_directory does not exist",
+            ):
+                load_settings(path)
+
+    def test_plugin_dashboard_requires_external_asset_directory(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            dashboard = Path(directory) / "dashboard.json"
+            initialize_config(path)
+            dashboard.write_text(
+                json.dumps(
+                    {
+                        "panels": [
+                            {
+                                "id": "records",
+                                "type": "plugin-records",
+                            }
+                        ]
+                    }
+                ),
+                encoding="utf-8",
+            )
+            content = path.read_text(encoding="utf-8").replace(
+                "max_sample_age_seconds = 30",
+                'max_sample_age_seconds = 30\n'
+                'dashboard_file = "dashboard.json"',
+            )
+            path.write_text(content, encoding="utf-8")
+
+            with self.assertRaisesRegex(
+                ConfigError,
+                "dashboard_directory is not configured",
+            ):
+                load_settings(path)
 
 
 class CPUCollectorTests(unittest.TestCase):
@@ -430,7 +469,7 @@ class KubectlClientTests(unittest.TestCase):
         client = KubectlClient("kubectl")
 
         with patch(
-            "host_monitor.collectors.kubectl_client.subprocess.run",
+            "hostmon_cluster_gpu.kubectl_client.subprocess.run",
             return_value=subprocess.CompletedProcess(
                 ["kubectl"],
                 7,

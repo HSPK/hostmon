@@ -56,7 +56,9 @@ export class GPUFleetPanel implements PanelRenderer {
     if (this.loading) return;
     this.loading = true;
     try {
-      this.report = await this.context.actions.loadClusterGPU();
+      this.report = await this.context.actions.loadPlugin<ClusterGPUReport>(
+        this.definition.plugin,
+      );
       this.lastLoaded = Date.now();
       this.render();
     } finally {

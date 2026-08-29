@@ -1,5 +1,7 @@
 import "./styles.css";
 
+if (__HOSTMON_PLUGIN_UI__) await import("./plugin.css");
+
 import { DashboardApp } from "./app";
 import { loadDashboard } from "./config/dashboard";
 

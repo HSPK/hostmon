@@ -1,17 +1,20 @@
 import { notifyAppearanceChanged } from "./core/appearance";
 import { ApiClient } from "./core/api-client";
-import { PreferenceStore } from "./core/preferences";
+import {
+  PREFERENCE_FIELDS,
+  PreferenceStore,
+  type PreferenceField,
+} from "./core/preferences";
 import { TimeSeriesStore } from "./core/time-series-store";
 import { RealtimeClient } from "./core/websocket-client";
 import type {
   ConnectionState,
-  ClusterGPUReport,
   DashboardDefinition,
+  DashboardPreferences,
   MetricCatalogEntry,
   PageId,
   PanelDefinition,
   TimeSeriesPanelDefinition,
-  WorkloadSelection,
 } from "./domain/types";
 import type { PanelRenderer } from "./panels/panel";
 import { createPanelRegistry } from "./panels/registry";
@@ -37,12 +40,20 @@ export class DashboardApp {
   private refreshController: AbortController | null = null;
   private catalogCache: { loadedAt: number; entries: MetricCatalogEntry[] } | null =
     null;
-  private clusterGPUCache: { loadedAt: number; report: ClusterGPUReport } | null =
-    null;
+  private readonly pluginCache = new Map<
+    string,
+    {loadedAt: number; document: unknown}
+  >();
   private updateQueued = false;
   private renderGeneration = 0;
   private paused = false;
   private editingPanel: TimeSeriesPanelDefinition | null = null;
+  private preferenceSaveRunning = false;
+  private readonly preferenceSaveFields = new Set<PreferenceField>();
+  private preferenceSaveRetry: number | null = null;
+  private preferenceReplacePending = false;
+  private serverPreferencesLoaded = false;
+  private serverPreferences: DashboardPreferences | null = null;
   private readonly handlePopState = (): void => {
     this.navigate(this.pageFromLocation() ?? "overview", false);
   };
@@ -56,18 +67,16 @@ export class DashboardApp {
         this.operationLatency.textContent = `API ${milliseconds.toFixed(1)} ms`;
       }
     });
-    const tracked = this.allPanels()
-      .filter(
-        (panel): panel is TimeSeriesPanelDefinition =>
-          panel.type === "timeseries",
-      )
-      .flatMap(panel => panel.metrics);
-    this.store = new TimeSeriesStore(30 * 24 * 60 * 60, tracked, 2400);
+    this.store = new TimeSeriesStore(
+      30 * 24 * 60 * 60,
+      this.trackedPanelMetrics(),
+      2400,
+    );
     this.realtime = new RealtimeClient({
       onSnapshot: snapshot => {
         this.store.append(snapshot);
         this.catalogCache = null;
-        this.clusterGPUCache = null;
+        this.pluginCache.clear();
       },
       onState: state => this.setConnectionState(state),
     });
@@ -75,13 +84,26 @@ export class DashboardApp {
 
   async start(): Promise<void> {
     this.applyAppearance();
+    await this.hydratePreferences();
+    this.applyAppearance();
     this.buildShell();
     const routedPage = this.pageFromLocation();
     if (routedPage) {
-      this.preferences.setActivePage(routedPage);
+      this.preferences.setActivePage(routedPage, false);
     } else {
       this.updatePageRoute(this.preferences.get().activePage, true);
     }
+    this.preferences.setPersistence((_value, fields, replace) =>
+      this.queuePreferenceSave(fields, replace),
+    );
+    const pending = this.preferences.pendingFields();
+    if (pending.length) {
+      this.queuePreferenceSave(
+        pending,
+        this.serverPreferencesLoaded && this.serverPreferences === null,
+      );
+    }
+    this.store.track(this.trackedPanelMetrics());
     const preferences = this.preferences.get();
     this.store.setWindow(preferences.windowSeconds);
     this.bindControls();
@@ -92,6 +114,122 @@ export class DashboardApp {
     this.realtime.start();
     window.addEventListener("popstate", this.handlePopState);
     window.addEventListener("beforeunload", () => this.destroy(), { once: true });
+  }
+
+  private async hydratePreferences(): Promise<void> {
+    try {
+      const preferences = await this.api.preferences();
+      this.serverPreferencesLoaded = true;
+      this.serverPreferences = preferences;
+      if (preferences) this.preferences.hydrate(preferences);
+      else if (this.preferences.hasLocalPreferences()) {
+        this.preferences.markPending(PREFERENCE_FIELDS);
+      }
+    } catch (error) {
+      console.error("Dashboard preferences could not be loaded", error);
+    }
+  }
+
+  private queuePreferenceSave(
+    fields: PreferenceField[] = [],
+    replace = false,
+  ): void {
+    for (const field of fields) this.preferenceSaveFields.add(field);
+    this.preferenceReplacePending =
+      this.preferenceReplacePending || replace;
+    if (
+      this.preferenceSaveRunning ||
+      this.preferenceSaveRetry !== null ||
+      !this.preferenceSaveFields.size
+    ) {
+      return;
+    }
+    this.preferenceSaveRunning = true;
+    void this.flushPreferenceSaves();
+  }
+
+  private async flushPreferenceSaves(): Promise<void> {
+    let failed = false;
+    let replaceInFlight = false;
+    try {
+      while (this.preferenceSaveFields.size) {
+        if (!this.serverPreferencesLoaded) {
+          const preferences = await this.api.preferences();
+          this.serverPreferencesLoaded = true;
+          this.serverPreferences = preferences;
+          if (preferences) this.preferences.hydrate(preferences);
+        }
+        const fields = [...this.preferenceSaveFields];
+        this.preferenceSaveFields.clear();
+        const current = this.preferences.get();
+        const snapshot = Object.fromEntries(
+          fields.map(field => [field, current[field]]),
+        ) as Partial<DashboardPreferences>;
+        const changes = this.preferencePatch(current, fields);
+        const replace =
+          this.preferenceReplacePending || this.serverPreferences === null;
+        this.preferenceReplacePending = false;
+        replaceInFlight = replace;
+        this.serverPreferences =
+          replace
+            ? await this.api.savePreferences(current)
+            : await this.api.patchPreferences(changes);
+        const latest = this.preferences.get();
+        const confirmed = fields.filter(
+          field =>
+            JSON.stringify(latest[field]) === JSON.stringify(snapshot[field]),
+        );
+        this.preferences.markPersisted(confirmed);
+        this.preferences.hydrate(this.serverPreferences);
+        replaceInFlight = false;
+      }
+    } catch (error) {
+      failed = true;
+      console.error("Dashboard preferences could not be saved", error);
+      if (this.operationLatency) {
+        this.operationLatency.textContent = "Preferences save failed";
+      }
+      for (const field of this.preferences.pendingFields()) {
+        this.preferenceSaveFields.add(field);
+      }
+      this.preferenceReplacePending =
+        this.preferenceReplacePending || replaceInFlight;
+    } finally {
+      this.preferenceSaveRunning = false;
+      if (failed) {
+        this.preferenceSaveRetry = window.setTimeout(() => {
+          this.preferenceSaveRetry = null;
+          this.queuePreferenceSave();
+        }, 1000);
+      } else if (this.preferenceSaveFields.size) {
+        this.queuePreferenceSave();
+      }
+    }
+  }
+
+  private preferencePatch(
+    current: DashboardPreferences,
+    fields: PreferenceField[],
+  ): Partial<DashboardPreferences> {
+    const changes: Partial<DashboardPreferences> = {};
+    for (const field of fields) {
+      if (field === "panelState" || field === "panelColumns") {
+        const currentValues = current[field];
+        const serverValues = this.serverPreferences?.[field] ?? {};
+        Object.assign(changes, {
+          [field]: Object.fromEntries(
+            Object.entries(currentValues).filter(
+              ([key, value]) =>
+                JSON.stringify(value) !==
+                JSON.stringify(serverValues[key]),
+            ),
+          ),
+        });
+      } else {
+        Object.assign(changes, {[field]: current[field]});
+      }
+    }
+    return changes;
   }
 
   private buildShell(): void {
@@ -123,7 +261,7 @@ export class DashboardApp {
         </section>
       </div>
       <aside id="settings-drawer" class="settings-drawer" aria-hidden="true">
-        <header><div><h2>Panel layout</h2><p>Visibility and order are stored in this browser.</p></div><button id="settings-close" class="icon-button" type="button">Close</button></header>
+        <header><div><h2>Panel layout</h2><p>Visibility, order, and chart changes are saved by this hostmon service.</p></div><button id="settings-close" class="icon-button" type="button">Close</button></header>
         <div id="panel-settings" class="panel-settings"></div>
         <footer><button id="settings-reset" class="button" type="button">Reset layout</button></footer>
       </aside>
@@ -282,21 +420,16 @@ export class DashboardApp {
     return response.metrics;
   }
 
-  private async loadClusterGPU(): Promise<ClusterGPUReport> {
-    if (
-      this.clusterGPUCache &&
-      Date.now() - this.clusterGPUCache.loadedAt < 5000
-    ) {
-      return this.clusterGPUCache.report;
+  private async loadPlugin<T>(name: string): Promise<T> {
+    const cached = this.pluginCache.get(name);
+    if (cached && Date.now() - cached.loadedAt < 5000) {
+      return cached.document as T;
     }
-
-    const response = await this.api.plugin<ClusterGPUReport>(
-      "cluster_gpu_usage",
-    );
-    this.clusterGPUCache = {
+    const response = await this.api.plugin<T>(name);
+    this.pluginCache.set(name, {
       loadedAt: Date.now(),
-      report: response.document,
-    };
+      document: response.document,
+    });
     return response.document;
   }
 
@@ -361,36 +494,9 @@ export class DashboardApp {
 
   private updatePageRoute(page: PageId, replace = false): void {
     const url = new URL(window.location.href);
+    url.search = "";
     url.searchParams.set("page", page);
-    if (page !== "workloads") {
-      url.searchParams.delete("queue");
-      url.searchParams.delete("run");
-    }
     this.commitRoute(url, {page}, replace);
-  }
-
-  private workloadFromLocation(): WorkloadSelection | null {
-    if (this.pageFromLocation() !== "workloads") return null;
-    const parameters = new URL(window.location.href).searchParams;
-    const queue = parameters.get("queue");
-    const name = parameters.get("run");
-    return queue && name ? {queue, name} : null;
-  }
-
-  private updateWorkloadRoute(
-    selection: WorkloadSelection | null,
-    replace = false,
-  ): void {
-    const url = new URL(window.location.href);
-    url.searchParams.set("page", "workloads");
-    if (selection) {
-      url.searchParams.set("queue", selection.queue);
-      url.searchParams.set("run", selection.name);
-    } else {
-      url.searchParams.delete("queue");
-      url.searchParams.delete("run");
-    }
-    this.commitRoute(url, {page: "workloads", workload: selection}, replace);
   }
 
   private commitRoute(
@@ -440,12 +546,11 @@ export class DashboardApp {
         store: this.store,
         actions: {
           loadCatalog: () => this.loadCatalog(),
-          loadClusterGPU: () => this.loadClusterGPU(),
-          selectedWorkload: () => this.workloadFromLocation(),
-          selectWorkload: (selection, replace) =>
-            this.updateWorkloadRoute(selection, replace),
-          workloadView: () => this.preferences.get().workloadView,
-          setWorkloadView: view => this.preferences.setWorkloadView(view),
+          loadPlugin: name => this.loadPlugin(name),
+          panelState: (panelId, fallback) =>
+            this.preferences.panelState(panelId, fallback),
+          setPanelState: (panelId, state) =>
+            this.preferences.setPanelState(panelId, state),
           loadRules: () => this.api.rules(),
           createRule: rule => this.api.createRule(rule),
           updateRule: (name, rule) => this.api.updateRule(name, rule),
@@ -855,6 +960,15 @@ export class DashboardApp {
       ...this.dashboard.panels,
       ...this.preferences.get().customPanels,
     ];
+  }
+
+  private trackedPanelMetrics(): string[] {
+    return this.allPanels()
+      .filter(
+        (panel): panel is TimeSeriesPanelDefinition =>
+          panel.type === "timeseries",
+      )
+      .flatMap(panel => panel.metrics);
   }
 
   private required(id: string): HTMLElement {

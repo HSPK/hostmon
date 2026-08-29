@@ -30,6 +30,8 @@ KNOWN_PROMETHEUS_KEYS = {
     "port",
     "max_sample_age_seconds",
     "dashboard_file",
+    "dashboard_directory",
+    "preferences_file",
 }
 REQUIRED_COLLECTORS = {"cpu", "memory", "disk", "network"}
 
@@ -67,6 +69,8 @@ class PrometheusSettings:
     port: int
     max_sample_age_seconds: float
     dashboard_file: Path | None = None
+    dashboard_directory: Path | None = None
+    preferences_file: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -158,6 +162,24 @@ def _mapping(name: str, value: Any) -> dict[str, Any]:
     if not isinstance(value, dict):
         raise ConfigError(f"{name} must be a TOML table")
     return value
+
+
+def _dashboard_uses_plugin_panels(path: Path) -> bool:
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise ConfigError(
+            f"cannot read prometheus.dashboard_file {path}: {error}"
+        ) from error
+    if not isinstance(payload, dict):
+        raise ConfigError("prometheus.dashboard_file must contain an object")
+    panels = payload.get("panels", [])
+    return isinstance(panels, list) and any(
+        isinstance(panel, dict)
+        and isinstance(panel.get("type"), str)
+        and panel["type"].startswith("plugin-")
+        for panel in panels
+    )
 
 
 def load_settings(path: str | Path | None = None) -> Settings:
@@ -314,6 +336,47 @@ def load_settings(path: str | Path | None = None) -> Settings:
         if raw_dashboard_file not in (None, "")
         else None
     )
+    if dashboard_file is not None and not dashboard_file.is_file():
+        raise ConfigError(
+            f"prometheus.dashboard_file does not exist: {dashboard_file}"
+        )
+    raw_dashboard_directory = raw_prometheus.get("dashboard_directory")
+    dashboard_directory = (
+        _resolve_path(
+            raw_dashboard_directory,
+            base,
+            base / "dashboard",
+        )
+        if raw_dashboard_directory not in (None, "")
+        else None
+    )
+    if dashboard_directory is not None and not dashboard_directory.is_dir():
+        raise ConfigError(
+            "prometheus.dashboard_directory does not exist: "
+            f"{dashboard_directory}"
+        )
+    if (
+        dashboard_directory is not None
+        and not (dashboard_directory / "index.html").is_file()
+    ):
+        raise ConfigError(
+            "prometheus.dashboard_directory has no index.html: "
+            f"{dashboard_directory}"
+        )
+    if (
+        dashboard_file is not None
+        and _dashboard_uses_plugin_panels(dashboard_file)
+        and dashboard_directory is None
+    ):
+        raise ConfigError(
+            "prometheus.dashboard_file uses plugin panels but "
+            "prometheus.dashboard_directory is not configured"
+        )
+    preferences_file = _resolve_path(
+        raw_prometheus.get("preferences_file"),
+        base,
+        state_file.with_name("dashboard-preferences.json"),
+    )
 
     return Settings(
         config_file=config_file,
@@ -342,6 +405,8 @@ def load_settings(path: str | Path | None = None) -> Settings:
             port=prometheus_port,
             max_sample_age_seconds=max_sample_age,
             dashboard_file=dashboard_file,
+            dashboard_directory=dashboard_directory,
+            preferences_file=preferences_file,
         ),
     )
 
@@ -394,44 +459,6 @@ def render_default_config(
         "enabled = true",
         "required = false",
         "",
-        "[collectors.kubernetes]",
-        "enabled = false",
-        "required = false",
-        "deadline_seconds = 20",
-        "max_stale_seconds = 300",
-        'context = ""',
-        'namespace = ""',
-        'queue = ""',
-        'gpu_resource = "nvidia.com/gpu"',
-        "gpus_per_node = 8",
-        "poll_interval_seconds = 60",
-        'kubectl = "kubectl"',
-        "timeout_seconds = 30",
-        "",
-        "[collectors.kubernetes_permissions]",
-        "enabled = false",
-        "required = false",
-        "deadline_seconds = 20",
-        "max_stale_seconds = 300",
-        "poll_interval_seconds = 60",
-        'kubectl = "kubectl"',
-        "timeout_seconds = 15",
-        "checks = []",
-        "",
-        "[collectors.cluster_gpu_usage]",
-        "enabled = false",
-        "required = false",
-        "deadline_seconds = 20",
-        "max_stale_seconds = 300",
-        'context = ""',
-        'queues = ["queue-a", "queue-b"]',
-        'gpu_resource = "nvidia.com/gpu"',
-        "gpus_per_node = 8",
-        "poll_interval_seconds = 60",
-        'kubectl = "kubectl"',
-        "timeout_seconds = 30",
-        "max_parallel_queries = 4",
-        "",
         "[history]",
         "enabled = true",
         'directory = "~/.local/state/host-monitor/history"',
@@ -442,6 +469,7 @@ def render_default_config(
         'host = "127.0.0.1"',
         "port = 9108",
         "max_sample_age_seconds = 30",
+        'preferences_file = "~/.local/state/host-monitor/dashboard-preferences.json"',
         "",
         "[alerts]",
         f"enabled = {'true' if alert_enabled else 'false'}",
@@ -510,6 +538,14 @@ def _render_prometheus_section(settings: PrometheusSettings) -> str:
     ]
     if settings.dashboard_file is not None:
         lines.append(f"dashboard_file = {json.dumps(str(settings.dashboard_file))}")
+    if settings.dashboard_directory is not None:
+        lines.append(
+            f"dashboard_directory = {json.dumps(str(settings.dashboard_directory))}"
+        )
+    if settings.preferences_file is not None:
+        lines.append(
+            f"preferences_file = {json.dumps(str(settings.preferences_file))}"
+        )
     lines.append("")
     return "\n".join(lines)
 
@@ -576,6 +612,8 @@ def update_prometheus_config(
         port=resolved_port,
         max_sample_age_seconds=float(resolved_max_age),
         dashboard_file=current.dashboard_file,
+        dashboard_directory=current.dashboard_directory,
+        preferences_file=current.preferences_file,
     )
     try:
         text = settings.config_file.read_text(encoding="utf-8")

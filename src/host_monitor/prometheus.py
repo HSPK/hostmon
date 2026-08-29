@@ -31,6 +31,7 @@ from .dashboard import (
     load_recent_history,
 )
 from .errors import MonitorError, RuleError
+from .preferences import DashboardPreferenceStore
 from .rules import RuleStore
 from .state import StateStore
 
@@ -170,6 +171,10 @@ class PrometheusExporter:
         self.collector_settings = collector_settings
         self.interval_seconds = interval_seconds
         self.reader = StateSnapshotReader(state_file)
+        self.preferences = DashboardPreferenceStore(
+            settings.preferences_file
+            or state_file.with_name("dashboard-preferences.json")
+        )
         self.dashboard = DashboardStore()
         self.thread: threading.Thread | None = None
         self.loop: asyncio.AbstractEventLoop | None = None
@@ -539,6 +544,43 @@ class PrometheusExporter:
             )
         return self._json_response({"collectors": diagnostics})
 
+    async def _preferences_get(self, request: web.Request) -> web.Response:
+        try:
+            preferences = await asyncio.to_thread(self.preferences.load)
+        except MonitorError as error:
+            return self._error(error)
+        return self._json_response({"preferences": preferences})
+
+    async def _preferences_put(self, request: web.Request) -> web.Response:
+        self._require_same_origin(request)
+        try:
+            payload = await request.json()
+            preferences = await asyncio.to_thread(
+                self.preferences.save,
+                payload,
+            )
+        except json.JSONDecodeError as error:
+            return self._json_response({"error": str(error)}, status=400)
+        except ValueError as error:
+            return self._json_response({"error": str(error)}, status=400)
+        except MonitorError as error:
+            return self._error(error)
+        return self._json_response({"preferences": preferences})
+
+    async def _preferences_patch(self, request: web.Request) -> web.Response:
+        self._require_same_origin(request)
+        try:
+            payload = await request.json()
+            preferences = await asyncio.to_thread(
+                self.preferences.patch,
+                payload,
+            )
+        except (json.JSONDecodeError, ValueError) as error:
+            return self._json_response({"error": str(error)}, status=400)
+        except MonitorError as error:
+            return self._error(error)
+        return self._json_response({"preferences": preferences})
+
     async def _websocket(self, request: web.Request) -> web.StreamResponse:
         origin = request.headers.get("Origin")
         if origin and urlsplit(origin).netloc != request.host:
@@ -584,8 +626,9 @@ class PrometheusExporter:
         except (ConnectionError, RuntimeError):
             return
 
-    @staticmethod
-    def _static_root() -> Any:
+    def _static_root(self) -> Any:
+        if self.settings.dashboard_directory is not None:
+            return self.settings.dashboard_directory
         return importlib.resources.files("host_monitor").joinpath("static/dashboard")
 
     async def _asset(self, request: web.Request) -> web.Response:
@@ -661,6 +704,9 @@ class PrometheusExporter:
                 web.put("/api/rules/{name}", self._rules_replace),
                 web.delete("/api/rules/{name}", self._rules_delete),
                 web.get("/api/collectors", self._collector_diagnostics),
+                web.get("/api/preferences", self._preferences_get),
+                web.put("/api/preferences", self._preferences_put),
+                web.patch("/api/preferences", self._preferences_patch),
                 web.get("/api/plugins/{name}", self._plugin_document),
                 web.get("/api/ws", self._websocket),
                 web.get("/{path:.*}", self._asset),

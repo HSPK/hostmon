@@ -5,6 +5,7 @@ import type {
   WorkloadSelection,
   WorkloadSort,
   WorkloadStateFilter,
+  WorkloadView,
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
@@ -43,7 +44,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   private activeSelection: WorkloadSelection | null = null;
 
   constructor(
-    definition: GPUSubmittersPanelDefinition,
+    private readonly definition: GPUSubmittersPanelDefinition,
     private readonly context: PanelContext,
   ) {
     const shell = panelShell(definition, "gpu-submitters-panel");
@@ -76,7 +77,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.persistView();
       this.renderRows();
     });
-    const view = this.context.actions.workloadView();
+    const view = this.workloadView();
     this.state.value = view.state;
     this.sort = view.sort;
     this.sortDirection = view.sortDirection;
@@ -152,10 +153,12 @@ export class GPUSubmittersPanel implements PanelRenderer {
     if (this.loading) return;
     this.loading = true;
     try {
-      this.report = await this.context.actions.loadClusterGPU();
+      this.report = await this.context.actions.loadPlugin<ClusterGPUReport>(
+        this.definition.plugin,
+      );
       this.lastLoaded = Date.now();
       const queues = ["all", ...this.report.capacity.map(row => row.queue)];
-      const selected = this.queue.value || this.context.actions.workloadView().queue;
+      const selected = this.queue.value || this.workloadView().queue;
       this.queue.replaceChildren(
         ...queues.map(value => {
           const option = document.createElement("option");
@@ -212,7 +215,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   }
 
   private persistView(): void {
-    this.context.actions.setWorkloadView({
+    this.context.actions.setPanelState(this.definition.id, {
       queue: this.queue.value || "all",
       state: this.state.value as WorkloadStateFilter,
       sort: this.sort,
@@ -222,7 +225,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
 
   private syncSelectedDetails(): void {
     if (!this.report) return;
-    const selected = this.context.actions.selectedWorkload();
+    const selected = this.selectedWorkload();
     if (!selected) {
       this.closeDetails(false);
       return;
@@ -235,7 +238,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
       return;
     }
     this.closeDetails(false);
-    this.context.actions.selectWorkload(null, true);
+    this.selectWorkload(null, true);
   }
 
   private openDetails(
@@ -283,7 +286,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.drawer.setAttribute("aria-hidden", "false");
     this.backdrop.classList.add("open");
     this.activeSelection = selection;
-    if (updateRoute) this.context.actions.selectWorkload(selection);
+    if (updateRoute) this.selectWorkload(selection);
     if (changed) close.focus();
   }
 
@@ -293,7 +296,39 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.drawer.setAttribute("aria-hidden", "true");
     this.backdrop.classList.remove("open");
     this.activeSelection = null;
-    if (updateRoute) this.context.actions.selectWorkload(null);
+    if (updateRoute) this.selectWorkload(null);
+  }
+
+  private workloadView(): WorkloadView {
+    return this.context.actions.panelState(this.definition.id, {
+      queue: "all",
+      state: "all",
+      sort: this.definition.defaultSort ?? "name",
+      sortDirection: this.definition.defaultSortDirection ?? "asc",
+    }) as WorkloadView;
+  }
+
+  private selectedWorkload(): WorkloadSelection | null {
+    const parameters = new URL(window.location.href).searchParams;
+    const queue = parameters.get("queue");
+    const name = parameters.get("run");
+    return queue && name ? {queue, name} : null;
+  }
+
+  private selectWorkload(
+    selection: WorkloadSelection | null,
+    replace = false,
+  ): void {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.searchParams.set("page", this.definition.page);
+    if (selection) {
+      url.searchParams.set("queue", selection.queue);
+      url.searchParams.set("run", selection.name);
+    }
+    const state = {page: this.definition.page, selection};
+    if (replace) window.history.replaceState(state, "", url);
+    else window.history.pushState(state, "", url);
   }
 }
 

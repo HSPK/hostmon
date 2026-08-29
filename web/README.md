@@ -26,7 +26,7 @@ Important modules:
 | `core/api-client.ts` | Initial status and compact history requests |
 | `core/websocket-client.ts` | WebSocket lifecycle and jittered reconnect |
 | `core/time-series-store.ts` | Bounded aligned columnar data |
-| `core/preferences.ts` | Browser-local layout preferences |
+| `core/preferences.ts` | Server-backed preferences with local migration fallback |
 | `panels/panel.ts` | Renderer interface and registry |
 | `panels/data-table.ts` | Typed configurable table rendering |
 | `panels/timeseries-panel.ts` | uPlot adapter |
@@ -52,22 +52,22 @@ The production bundle budget is below 100 KiB compressed.
 ## Customize the dashboard
 
 Users can drag panel headers or open **Layout** to show, hide, and reorder
-panels. Preferences are
-stored in browser local storage and do not affect other users.
+panels. Preferences are atomically stored by the hostmon service. Existing
+browser-local settings migrate on first connection and remain an offline
+fallback.
 Configured tables also expose per-column visibility controls in **Layout**.
 
 The navigation model separates operational workflows:
 
 - **Overview**: host resource summary and high-signal charts.
-- **GPU Fleet**: Volcano queue capacity, allocation, pending demand, and
-  no-job node equivalents.
-- **Workloads**: searchable GPU usage grouped by submitter and creator ID.
 - **Metrics**: complete metric catalog and custom chart builder.
 - **Collectors**: plugin health and stale/failure state.
-- **Kubernetes**: node and task state.
 - **Alerts**: validated Expr Tracker alert rule CRUD.
 - **Settings**: web theme and density.
 - **System**: internal hostmon and API diagnostics.
+
+Repository-local plugins may provide additional navigation, panels, and
+renderers without entering the core Python release.
 
 The **Metrics** page searches every metric exposed by hostmon and shows
 current, minimum, average, p95, maximum, and sample count. Select any metrics
@@ -95,8 +95,8 @@ Available built-in panel types:
 - `collectors`
 - `tasks`
 - `metrics`
-- `gpu-fleet`
-- `gpu-submitters`
+- `plugin-summary` (repository plugin build)
+- `plugin-records` (repository plugin build)
 - `rules`
 - `system`
 
@@ -123,6 +123,7 @@ For runtime customization, copy the packaged `dashboard.json` and configure:
 ```toml
 [prometheus]
 dashboard_file = "~/.config/host-monitor/dashboard.json"
+dashboard_directory = "~/.config/host-monitor/dashboard/"
 ```
 
 The browser fetches and validates this file on each reload; no TypeScript
@@ -139,10 +140,16 @@ npm run dev
 npm run build
 ```
 
-`npm run build` writes production assets to:
+`npm run build` writes the release-safe core dashboard to:
 
 ```text
 ../src/host_monitor/static/dashboard/
+```
+
+It also writes the repository-local plugin dashboard to:
+
+```text
+../plugins/cluster-gpu/static/dashboard/
 ```
 
 The backend remains available on `127.0.0.1:9108`, so the Vite development

@@ -3,11 +3,8 @@
   "defaultWindowSeconds": 3600,
   "navigation": [
     {"id": "overview", "label": "Overview", "group": "Charts"},
-    {"id": "gpu-fleet", "label": "GPU Fleet", "group": "Charts"},
-    {"id": "workloads", "label": "Workloads", "group": "Tables"},
     {"id": "metrics", "label": "Metrics", "group": "Tables"},
     {"id": "collectors", "label": "Collectors", "group": "Tables"},
-    {"id": "kubernetes", "label": "Kubernetes", "group": "Tables"},
     {"id": "alerts", "label": "Alerts", "group": "Manage"},
     {"id": "settings", "label": "Settings", "placement": "bottom"},
     {"id": "system", "label": "System", "placement": "bottom"}
@@ -81,17 +78,6 @@
       "range": [0, 100]
     },
     {
-      "id": "kubernetes",
-      "type": "timeseries",
-      "page": "kubernetes",
-      "title": "Kubernetes GPU nodes",
-      "metrics": ["k8s/occupied_gpu_nodes", "k8s/quota_nodes"],
-      "series": {
-        "k8s/occupied_gpu_nodes": {"label": "Occupied nodes"},
-        "k8s/quota_nodes": {"label": "Node quota"}
-      }
-    },
-    {
       "id": "collectors",
       "type": "collectors",
       "page": "collectors",
@@ -107,110 +93,6 @@
         {"id": "failed", "label": "Last failure (UTC+8)", "path": "last_failure_at", "width": "180px", "format": "timestamp", "sort": "last_failure_at"},
         {"id": "log", "label": "Last error", "path": "last_error", "width": "300px", "align": "left", "fallback": "None"},
         {"id": "details", "label": "", "width": "70px", "align": "center", "action": "details"}
-      ]
-    },
-    {
-      "id": "tasks",
-      "type": "tasks",
-      "page": "kubernetes",
-      "title": "Kubernetes task state",
-      "columnSpan": 2,
-      "items": [
-        {
-          "label": "GPU nodes",
-          "template": "{occupied} / {quota}",
-          "values": {
-            "occupied": {"source": "metric", "key": "k8s/occupied_gpu_nodes"},
-            "quota": {"source": "metric", "key": "k8s/quota_nodes"}
-          }
-        },
-        {"label": "Stopped or reduced", "template": "{value}", "values": {"value": {"source": "field", "key": "k8s_stopped_tasks", "fallback": "(none)"}}},
-        {"label": "Lost nodes", "template": "{value}", "values": {"value": {"source": "field", "key": "k8s_stopped_task_details", "fallback": "(none)"}}},
-        {"label": "Failed tasks", "template": "{value}", "values": {"value": {"source": "field", "key": "k8s_failed_tasks", "fallback": "(none)"}}},
-        {
-          "label": "Permission checks",
-          "template": "{counts} granted",
-          "values": {
-            "counts": {"source": "metricMatch", "prefix": "permission/", "suffix": "/allowed", "equals": 1}
-          }
-        }
-      ]
-    },
-    {
-      "id": "gpu-fleet",
-      "type": "gpu-fleet",
-      "page": "gpu-fleet",
-      "title": "Queue capacity and allocation",
-      "columnSpan": 2,
-      "summary": [
-        {"label": "GPU allocation", "path": "gpu_allocation"},
-        {"label": "Utilization", "path": "utilization_percent", "format": "number", "unit": "%"},
-        {"label": "Pending GPUs", "path": "pending_gpus", "format": "number"},
-        {"label": "No-job GPUs", "path": "no_job_gpus", "format": "number"},
-        {"label": "No-job nodes", "path": "no_job_node_equivalents", "format": "number"},
-        {"label": "Free CPUs", "path": "free_cpus", "format": "number"}
-      ],
-      "columns": [
-        {"id": "queue", "label": "Queue", "path": "queue", "width": "120px", "align": "left", "sort": "queue"},
-        {"id": "gpu_allocation", "label": "GPU allocation", "path": "gpu_allocation", "width": "180px", "align": "left"},
-        {"id": "utilization", "label": "Usage", "path": "utilization_percent", "width": "120px", "format": "number", "unit": "%", "sort": "utilization_percent"},
-        {"id": "pending", "label": "Pending", "path": "pending_gpus", "width": "100px", "format": "number", "sort": "pending_gpus"},
-        {"id": "free", "label": "Free now", "path": "unallocated_gpus", "width": "110px", "format": "number", "sort": "unallocated_gpus"},
-        {"id": "no_job", "label": "No-job GPUs", "path": "no_job_gpus", "width": "120px", "format": "number", "sort": "no_job_gpus"},
-        {"id": "no_job_nodes", "label": "No-job nodes", "path": "no_job_node_equivalents", "width": "120px", "format": "number"},
-        {"id": "cpu_allocation", "label": "CPU allocation", "path": "cpu_allocation", "width": "190px", "align": "left"},
-        {"id": "free_cpus", "label": "Free CPUs", "path": "free_cpus", "width": "110px", "format": "number", "sort": "free_cpus"}
-      ]
-    },
-    {
-      "id": "gpu-capacity-history",
-      "type": "timeseries",
-      "page": "gpu-fleet",
-      "title": "GPU capacity history",
-      "columnSpan": 1,
-      "height": 300,
-      "metrics": ["cluster_gpu/queue/total/capacity_gpus", "cluster_gpu/queue/total/allocated_gpus"],
-      "series": {
-        "cluster_gpu/queue/total/capacity_gpus": {"label": "GPU capacity"},
-        "cluster_gpu/queue/total/allocated_gpus": {"label": "Allocated GPUs"}
-      }
-    },
-    {
-      "id": "gpu-availability-history",
-      "type": "timeseries",
-      "page": "gpu-fleet",
-      "title": "GPU availability and demand",
-      "columnSpan": 1,
-      "height": 300,
-      "metrics": [
-        "cluster_gpu/queue/total/pending_gpus",
-        "cluster_gpu/queue/total/unallocated_gpus",
-        "cluster_gpu/queue/total/no_job_gpus",
-        "cluster_gpu/queue/total/no_job_node_equivalents"
-      ],
-      "series": {
-        "cluster_gpu/queue/total/pending_gpus": {"label": "Pending GPUs"},
-        "cluster_gpu/queue/total/unallocated_gpus": {"label": "Free GPUs"},
-        "cluster_gpu/queue/total/no_job_gpus": {"label": "No-job GPUs"},
-        "cluster_gpu/queue/total/no_job_node_equivalents": {"label": "No-job nodes"}
-      }
-    },
-    {
-      "id": "gpu-submitters",
-      "type": "gpu-submitters",
-      "page": "workloads",
-      "title": "GPU workloads",
-      "columnSpan": 2,
-      "defaultSort": "running_gpus",
-      "defaultSortDirection": "desc",
-      "columns": [
-        {"id": "queue", "label": "Queue", "path": "queue", "width": "96px", "align": "left", "sort": "queue"},
-        {"id": "name", "label": "Workload", "path": "name", "width": "410px", "align": "left", "pinned": true, "sort": "name", "action": "details"},
-        {"id": "status", "label": "State", "path": "status", "width": "100px", "align": "center", "format": "state"},
-        {"id": "submitter", "label": "Submitter", "path": "submitter", "width": "280px", "align": "left", "sort": "submitter"},
-        {"id": "running_gpus", "label": "Running GPUs", "path": "running_gpus", "width": "130px", "format": "number", "sort": "running_gpus"},
-        {"id": "running_gpu_nodes", "label": "GPU nodes", "path": "running_gpu_nodes", "width": "130px", "format": "number"},
-        {"id": "pending_gpus", "label": "Pending GPUs", "path": "pending_gpus", "width": "130px", "format": "number", "sort": "pending_gpus"}
       ]
     },
     {
