@@ -516,14 +516,22 @@ body.table-page .table-scroll {
   .layout-dock-button {
     min-width: 68px; padding-inline: 8px; font-size: 9px;
   }
-  .toolbar { align-items: flex-start; }
-  .toolbar-actions { max-width: 70%; }
+  .toolbar { align-items: center; }
+  .toolbar-title { min-width: 100px; }
+  .toolbar-actions {
+    max-width: calc(100% - 112px); flex-wrap: nowrap; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .toolbar-actions::-webkit-scrollbar { display: none; }
   .panel-grid { grid-template-columns: 1fr; }
   .panel-wide { grid-column: auto; }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
-  .toolbar { position: static; flex-direction: column; gap: 6px; padding: 8px; }
+  .toolbar {
+    position: static; flex-direction: column; align-items: flex-start;
+    gap: 6px; padding: 8px;
+  }
   .toolbar-title { width: 100%; }
   .toolbar-actions {
     width: 100%; max-width: none; display: grid;

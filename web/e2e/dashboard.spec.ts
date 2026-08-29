@@ -784,6 +784,26 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   await expect(page.getByLabel("Time window")).toHaveValue("3600");
 });
 
+test("keeps tablet toolbar actions on one row", async ({ page }) => {
+  await page.setViewportSize({width: 600, height: 800});
+  await page.goto("/?page=overview");
+
+  const actionRows = await page
+    .locator(".toolbar-actions > .control, .toolbar-actions > .button")
+    .evaluateAll(elements =>
+      new Set(
+        elements.map(element =>
+          Math.round(element.getBoundingClientRect().top),
+        ),
+      ).size,
+    );
+  const toolbarBox = await page.locator(".toolbar").boundingBox();
+
+  expect(actionRows).toBe(1);
+  expect(toolbarBox).not.toBeNull();
+  expect(toolbarBox!.height).toBeLessThan(70);
+});
+
 test("maintains smooth animation frame cadence", async ({ page }) => {
   await page.goto("/");
   const frameDurations = await page.evaluate(
