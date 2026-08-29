@@ -66,9 +66,9 @@ const __vite__mapDeps=(i,m=__vite__mapDeps,d=(m.f||(m.f=["assets/plugin-Lg8V6gA4
           <footer id="layout-footer"><button id="layout-reset" class="button" type="button">Reset layout</button></footer>
         </section>
         <nav class="layout-dock-nav" aria-label="Workspace tools">
-          <button id="layout-pages-button" class="layout-dock-button layout-pages-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Pages</button>
-          <button id="layout-navigation-button" class="layout-dock-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Navigation</button>
-          <button id="layout-panels-button" class="layout-dock-button" type="button" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Panels</button>
+          <button id="layout-pages-button" class="layout-dock-button layout-pages-button" type="button" data-compact-label="Pages" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Pages</button>
+          <button id="layout-navigation-button" class="layout-dock-button" type="button" data-compact-label="Nav" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Navigation</button>
+          <button id="layout-panels-button" class="layout-dock-button" type="button" data-compact-label="Panels" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Panels</button>
         </nav>
       </aside>
       <dialog id="chart-dialog" class="chart-dialog">

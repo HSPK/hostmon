@@ -776,11 +776,18 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   const actionsFit = await page.locator(".toolbar-actions").evaluate(
     element => element.scrollWidth <= element.clientWidth,
   );
+  const latencyBox = await page.locator("#operation-latency").boundingBox();
+  const dockBox = await page.locator(".layout-dock-nav").boundingBox();
 
   expect(toolbarRows).toBe(1);
   expect(windowBox).not.toBeNull();
+  expect(latencyBox).not.toBeNull();
+  expect(dockBox).not.toBeNull();
   expect(windowBox!.width).toBeGreaterThanOrEqual(58);
   expect(actionsFit).toBe(true);
+  expect(latencyBox!.x + latencyBox!.width).toBeLessThanOrEqual(
+    dockBox!.x,
+  );
   await expect(page.getByLabel("Time window")).toHaveValue("3600");
 });
 
