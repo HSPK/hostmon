@@ -322,6 +322,7 @@ class KubernetesCollectorTests(unittest.TestCase):
         query.assert_not_called()
         self.assertEqual(result.metrics["k8s/failed_task_count"], 1)
         self.assertEqual(result.fields["k8s_failed_tasks"], "job-a")
+        self.assertFalse(result.refreshed)
 
     def test_identifies_tasks_that_lost_gpu_nodes(self):
         stopped, details = stopped_gpu_tasks(
@@ -406,6 +407,7 @@ class KubernetesPermissionCollectorTests(unittest.TestCase):
 
         query.assert_not_called()
         self.assertEqual(result.metrics["permission/access/allowed"], 0)
+        self.assertFalse(result.refreshed)
 
     def test_rejects_unsafe_check_names(self):
         with self.assertRaises(ValueError):
@@ -533,6 +535,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
         query.assert_not_called()
         self.assertEqual(result.metrics["cluster_gpu/running_gpus"], 8)
         self.assertIs(result.state, previous)
+        self.assertFalse(result.refreshed)
 
     def test_cluster_queries_run_concurrently(self):
         collector = ClusterGPUUsageCollector(

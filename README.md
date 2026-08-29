@@ -231,6 +231,8 @@ max_stale_seconds = 300
 - While an optional refresh is in flight, valid last-good data remains
   available. A deadline miss is counted once per collection attempt, and a
   late result is picked up by a later cycle.
+- Cached collector results do not replace the timestamp or duration of the
+  most recent real source refresh.
 - `monitor.collector.<name>.up`, `.stale`, `.duration_ms`, and related health
   metrics are available to rules and history.
 

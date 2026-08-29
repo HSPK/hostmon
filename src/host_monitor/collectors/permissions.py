@@ -123,6 +123,7 @@ class KubernetesPermissionCollector:
                     metrics={str(key): float(value) for key, value in metrics.items()},
                     fields=dict(fields),
                     state=previous,
+                    refreshed=False,
                 )
 
         metrics: dict[str, float] = {}

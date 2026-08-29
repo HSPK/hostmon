@@ -375,6 +375,7 @@ class ClusterGPUUsageCollector:
                         for name, value in metrics.items()
                     },
                     state=previous,
+                    refreshed=False,
                 )
         request_timeout = f"--request-timeout={max(1, int(self.timeout))}s"
         with ThreadPoolExecutor(

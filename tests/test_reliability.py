@@ -85,6 +85,44 @@ class DelayedCollector:
         return CollectorResult(metrics={"delayed/value": 1}, state={"at": now})
 
 
+class CachedCollector:
+    name = "cached"
+
+    def collect(self, previous, now):
+        if isinstance(previous, dict):
+            return CollectorResult(
+                metrics={"cached/value": 1},
+                state=previous,
+                refreshed=False,
+            )
+        return CollectorResult(
+            metrics={"cached/value": 1},
+            state={"at": now},
+        )
+
+
+class PipelinedCollector:
+    name = "pipelined"
+
+    def __init__(self):
+        self.calls = 0
+        self.started = [threading.Event(), threading.Event()]
+        self.release = [threading.Event(), threading.Event()]
+        self.finished = threading.Event()
+
+    def collect(self, previous, now):
+        index = self.calls
+        self.calls += 1
+        self.started[index].set()
+        self.release[index].wait()
+        if index == 0:
+            self.finished.set()
+        return CollectorResult(
+            metrics={"pipelined/value": float(index + 1)},
+            state={"at": now},
+        )
+
+
 class CollectorReliabilityTests(unittest.TestCase):
     def test_optional_failure_uses_bounded_stale_data(self):
         collector = MutableCollector("remote", "remote/value", 10)
@@ -256,6 +294,42 @@ class CollectorReliabilityTests(unittest.TestCase):
         self.assertEqual(completed.metrics["blocking/value"], 1)
         self.assertEqual(completed.states["blocking"]["failures_total"], 1)
 
+    def test_background_collector_is_pipelined_after_harvest(self):
+        collector = PipelinedCollector()
+        manager = CollectorManager(
+            [
+                CollectorBinding(
+                    name="pipelined",
+                    collector=collector,
+                    required=False,
+                    deadline_seconds=1,
+                    max_stale_seconds=60,
+                )
+            ]
+        )
+        try:
+            first = manager.collect(
+                {},
+                now=100,
+                wait_for_optional=False,
+            )
+            self.assertTrue(collector.started[0].wait(0.2))
+            collector.release[0].set()
+            self.assertTrue(collector.finished.wait(0.2))
+            second = manager.collect(
+                first.states,
+                now=110,
+                wait_for_optional=False,
+            )
+            self.assertTrue(collector.started[1].wait(0.2))
+        finally:
+            collector.release[0].set()
+            collector.release[1].set()
+            manager.close()
+
+        self.assertEqual(second.metrics["pipelined/value"], 1)
+        self.assertEqual(collector.calls, 2)
+
     def test_background_refresh_keeps_last_good_data_available(self):
         release = threading.Event()
         collector = RefreshingCollector(release)
@@ -322,6 +396,35 @@ class CollectorReliabilityTests(unittest.TestCase):
         self.assertEqual(second.metrics["monitor/collector/delayed/up"], 1)
         self.assertEqual(second.states["delayed"]["failures_total"], 1)
         self.assertIn("completed after its 0.01s deadline", second.warnings[0])
+
+    def test_cache_hit_preserves_real_refresh_time_and_duration(self):
+        manager = CollectorManager(
+            [
+                CollectorBinding(
+                    name="cached",
+                    collector=CachedCollector(),
+                    required=False,
+                    deadline_seconds=1,
+                    max_stale_seconds=60,
+                )
+            ]
+        )
+        try:
+            first = manager.collect({}, now=100)
+            second = manager.collect(first.states, now=110)
+        finally:
+            manager.close()
+
+        self.assertEqual(first.states["cached"]["last_success_at"], 100)
+        self.assertEqual(second.states["cached"]["last_success_at"], 100)
+        self.assertEqual(
+            second.states["cached"]["duration_ms"],
+            first.states["cached"]["duration_ms"],
+        )
+        self.assertEqual(
+            second.metrics["monitor/collector/cached/last_success_age_seconds"],
+            10,
+        )
 
 
 class FakeSender:

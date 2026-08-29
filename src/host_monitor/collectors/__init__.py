@@ -49,6 +49,7 @@ class CollectorBinding:
 class InflightCollection:
     future: Future
     submitted_at: float
+    collection_time: float
     deadline_reported: bool = False
 
 
@@ -145,6 +146,10 @@ def _previous_state(value: Any) -> tuple[dict[str, Any] | None, dict[str, Any] |
 def _validate_result(name: str, result: Any) -> CollectorResult:
     if not isinstance(result, CollectorResult):
         raise CollectorError(f"collector {name!r} returned an invalid result")
+    if not isinstance(result.refreshed, bool):
+        raise CollectorError(
+            f"collector {name!r} returned an invalid refreshed flag"
+        )
     return result
 
 
@@ -179,6 +184,23 @@ class CollectorManager:
             thread_name_prefix="hostmon-collector",
         )
         self._inflight: dict[str, InflightCollection] = {}
+
+    def _start_collection(
+        self,
+        binding: CollectorBinding,
+        previous: dict[str, Any] | None,
+        now: float,
+    ) -> InflightCollection:
+        return InflightCollection(
+            future=self._executor.submit(
+                _collect_timed,
+                binding.collector,
+                previous,
+                now,
+            ),
+            submitted_at=time.monotonic(),
+            collection_time=now,
+        )
 
     def close(self) -> None:
         for binding in self.collectors:
@@ -256,20 +278,18 @@ class CollectorManager:
         states: dict[str, Any] = {}
         warnings: list[str] = []
         required_errors: list[str] = []
+        submitted_now: set[str] = set()
 
         for binding in self.collectors:
             if binding.name in self._inflight:
                 continue
             plugin_previous, _ = _previous_state(previous.get(binding.name))
-            self._inflight[binding.name] = InflightCollection(
-                future=self._executor.submit(
-                    _collect_timed,
-                    binding.collector,
-                    plugin_previous,
-                    now,
-                ),
-                submitted_at=time.monotonic(),
+            self._inflight[binding.name] = self._start_collection(
+                binding,
+                plugin_previous,
+                now,
             )
+            submitted_now.add(binding.name)
 
         for binding in self.collectors:
             _, prior_envelope = _previous_state(previous.get(binding.name))
@@ -362,8 +382,24 @@ class CollectorManager:
                 del self._inflight[binding.name]
 
             if result is not None:
+                actual_refresh = result.refreshed or prior_envelope is None
+                effective_success_at = (
+                    inflight.collection_time
+                    if actual_refresh
+                    else last_success_at
+                )
+                effective_duration_ms = (
+                    duration_ms
+                    if actual_refresh
+                    else prior_duration_ms
+                )
+                if effective_success_at is None:
+                    effective_success_at = inflight.collection_time
+                if effective_duration_ms is None:
+                    effective_duration_ms = duration_ms
                 deadline_missed = bool(
-                    duration_ms is not None
+                    actual_refresh
+                    and duration_ms is not None
                     and duration_ms > binding.deadline_seconds * 1000
                 )
                 deadline_miss_is_new = (
@@ -389,10 +425,10 @@ class CollectorManager:
                     **previous_failure,
                     "_hostmon_envelope": ENVELOPE_VERSION,
                     "plugin_state": result.state,
-                    "last_success_at": now,
+                    "last_success_at": effective_success_at,
                     "metrics": result.metrics,
                     "fields": result.fields,
-                    "duration_ms": duration_ms,
+                    "duration_ms": effective_duration_ms,
                     "failures_total": (
                         prior_failures + int(deadline_miss_is_new)
                     ),
@@ -410,11 +446,21 @@ class CollectorManager:
                     metrics,
                     up=True,
                     stale=False,
-                    duration_ms=duration_ms,
-                    last_success_at=now,
+                    duration_ms=effective_duration_ms,
+                    last_success_at=effective_success_at,
                     failures_total=envelope["failures_total"],
                     now=now,
                 )
+                if (
+                    not wait_for_optional
+                    and not binding.required
+                    and binding.name not in submitted_now
+                ):
+                    self._inflight[binding.name] = self._start_collection(
+                        binding,
+                        result.state,
+                        now,
+                    )
                 continue
 
             failures_total = prior_failures + int(failure_is_new)

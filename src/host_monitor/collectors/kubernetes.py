@@ -244,6 +244,7 @@ class KubernetesCollector:
                     metrics={str(key): float(value) for key, value in metrics.items()},
                     fields=dict(fields),
                     state=previous,
+                    refreshed=False,
                 )
 
         request_timeout = f"--request-timeout={max(1, int(self.timeout))}s"

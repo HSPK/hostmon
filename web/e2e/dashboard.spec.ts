@@ -276,9 +276,18 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator("#page-title")).toHaveText("Collectors");
   await expect(page.locator(".health-table tbody tr")).toHaveCount(1);
   await expect(page.locator(".health-table")).toContainText("10.0 s");
+  await expect(page.locator(".health-table thead")).toContainText(
+    "Last data refresh (UTC+8)",
+  );
+  await expect(page.locator(".health-table thead")).toContainText(
+    "Last failure (UTC+8)",
+  );
   await page.getByRole("button", { name: "View", exact: true }).click();
   await expect(page.locator(".collector-dialog")).toContainText(
     "deadline_seconds",
+  );
+  await expect(page.locator(".collector-dialog")).toContainText(
+    "last_refresh_duration_ms",
   );
   await page.locator(".collector-dialog").getByRole("button", {
     name: "Close",

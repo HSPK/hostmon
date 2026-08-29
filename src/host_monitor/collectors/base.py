@@ -10,6 +10,7 @@ class CollectorResult:
     fields: dict[str, Any] = field(default_factory=dict)
     state: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    refreshed: bool = True
 
 
 @dataclass

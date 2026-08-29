@@ -107,7 +107,10 @@ export class CollectorPanel implements PanelRenderer {
     this.dialog.querySelector("h2")!.textContent = row.name;
     this.dialog.querySelector("pre")!.textContent = JSON.stringify(
       {
+        state: row.state,
         required: row.required,
+        last_refresh_duration_ms: row.duration,
+        failures: row.failures,
         deadline_seconds: row.deadline_seconds,
         max_stale_seconds: row.max_stale_seconds,
         refresh_seconds: row.refresh_seconds,

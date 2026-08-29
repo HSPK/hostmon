@@ -26,6 +26,10 @@ All notable changes to this project are documented here.
 - Exposed plugin state schema versions through the generic plugin document API.
 - Parallelized independent Cluster GPU Kubernetes queries with a bounded,
   configurable worker count.
+- Distinguished cache hits from real collector refreshes so diagnostics retain
+  accurate refresh timestamps and durations.
+- Pipelined completed background collectors so fast optional sources retain
+  the configured sampling cadence without blocking the main cycle.
 - Removed the duplicate state fsync and made the scheduler catch up after a
   slight overrun instead of adding another full interval.
 - Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,

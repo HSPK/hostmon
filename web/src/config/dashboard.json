@@ -100,12 +100,13 @@
       "columns": [
         {"id": "name", "label": "Collector", "path": "name", "width": "220px", "align": "left", "pinned": true, "sort": "name"},
         {"id": "state", "label": "State", "path": "state", "width": "90px", "align": "center", "format": "state", "sort": "state"},
-        {"id": "duration", "label": "Duration", "path": "duration", "width": "120px", "format": "number", "unit": "ms", "sort": "duration"},
-        {"id": "refresh", "label": "Refresh", "path": "refresh_seconds", "width": "110px", "format": "duration", "sort": "refresh_seconds"},
-        {"id": "updated", "label": "Last refresh (UTC+8)", "path": "last_success_at", "width": "180px", "format": "timestamp", "sort": "last_success_at"},
-        {"id": "failures", "label": "Failures", "path": "failures", "width": "100px", "format": "number", "sort": "failures"},
-        {"id": "log", "label": "Latest log", "path": "last_error", "width": "400px", "align": "left", "fallback": "OK"},
-        {"id": "details", "label": "", "width": "80px", "align": "center", "action": "details"}
+        {"id": "duration", "label": "Last duration", "path": "duration", "width": "130px", "format": "number", "unit": "ms", "sort": "duration"},
+        {"id": "refresh", "label": "Interval", "path": "refresh_seconds", "width": "100px", "format": "duration", "sort": "refresh_seconds"},
+        {"id": "updated", "label": "Last data refresh (UTC+8)", "path": "last_success_at", "width": "190px", "format": "timestamp", "sort": "last_success_at"},
+        {"id": "failures", "label": "Failures", "path": "failures", "width": "90px", "format": "number", "sort": "failures"},
+        {"id": "failed", "label": "Last failure (UTC+8)", "path": "last_failure_at", "width": "180px", "format": "timestamp", "sort": "last_failure_at"},
+        {"id": "log", "label": "Last error", "path": "last_error", "width": "300px", "align": "left", "fallback": "None"},
+        {"id": "details", "label": "", "width": "70px", "align": "center", "action": "details"}
       ]
     },
     {

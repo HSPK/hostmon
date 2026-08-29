@@ -46,6 +46,7 @@ CollectorResult(
     fields={"thermal_sensor": "x86_pkg_temp"},
     state={"at": now, "raw": 72500},
     warnings=[],
+    refreshed=True,
 )
 ```
 
@@ -55,6 +56,7 @@ CollectorResult(
 | `fields` | Globally unique names; string, number, bool, or `None` | Alert title/message templates |
 | `state` | JSON-serializable object | Caching, rates, and transition state |
 | `warnings` | List of human-readable strings | Non-fatal degradation |
+| `refreshed` | Boolean; defaults to `True` | Whether this call fetched new source data |
 
 Use slash-separated metric names. Expr Tracker automatically accepts dotted
 aliases, so `thermal/cpu_celsius` becomes `thermal.cpu_celsius` in rules.
@@ -152,6 +154,7 @@ def collect(self, previous, now):
             metrics=dict(previous["metrics"]),
             fields=dict(previous.get("fields", {})),
             state=previous,
+            refreshed=False,
         )
 
     metrics, fields = self.query_remote_api()
@@ -164,6 +167,8 @@ def collect(self, previous, now):
 ```
 
 The built-in Kubernetes collectors use this pattern.
+Cache hits remain healthy but do not advance collector last-refresh timestamps
+or replace the measured duration of the most recent real refresh.
 
 ## Optional data sources
 
