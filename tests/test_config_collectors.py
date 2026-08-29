@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import tempfile
+import threading
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -56,10 +57,20 @@ class ConfigTests(unittest.TestCase):
             self.assertEqual(settings.prometheus.host, "127.0.0.1")
             self.assertEqual(settings.prometheus.port, 9108)
             disabled = {item.name: item for item in settings.collectors}
-            self.assertEqual(disabled["kubernetes"].deadline_seconds, 5)
+            self.assertEqual(disabled["kubernetes"].deadline_seconds, 20)
             self.assertEqual(
                 disabled["kubernetes_permissions"].deadline_seconds,
-                5,
+                20,
+            )
+            self.assertEqual(
+                disabled["cluster_gpu_usage"].deadline_seconds,
+                20,
+            )
+            self.assertEqual(
+                disabled["cluster_gpu_usage"].options[
+                    "max_parallel_queries"
+                ],
+                4,
             )
 
     def test_atomically_updates_prometheus_section(self):
@@ -522,6 +533,63 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
         query.assert_not_called()
         self.assertEqual(result.metrics["cluster_gpu/running_gpus"], 8)
         self.assertIs(result.state, previous)
+
+    def test_cluster_queries_run_concurrently(self):
+        collector = ClusterGPUUsageCollector(
+            {
+                "queues": ["queue-a", "queue-b"],
+                "max_parallel_queries": 3,
+            }
+        )
+        release = threading.Event()
+        lock = threading.Lock()
+        active = 0
+        peak = 0
+
+        def query(*arguments):
+            nonlocal active, peak
+            with lock:
+                active += 1
+                peak = max(peak, active)
+                if active == 3:
+                    release.set()
+            if not release.wait(0.5):
+                raise AssertionError("cluster queries did not overlap")
+            try:
+                if arguments[1] == "pods":
+                    return {"items": []}
+                return {
+                    "items": [
+                        {
+                            "metadata": {"name": queue},
+                            "spec": {
+                                "capability": {
+                                    "nvidia.com/gpu": "8",
+                                    "cpu": "100",
+                                }
+                            },
+                            "status": {
+                                "allocated": {
+                                    "nvidia.com/gpu": "0",
+                                    "cpu": "0",
+                                }
+                            },
+                        }
+                        for queue in ("queue-a", "queue-b")
+                    ]
+                }
+            finally:
+                with lock:
+                    active -= 1
+
+        with patch.object(collector, "_json", side_effect=query):
+            result = collector.collect(None, 100)
+
+        self.assertEqual(peak, 3)
+        self.assertEqual(
+            result.metrics["cluster_gpu/queue/total/capacity_gpus"],
+            16,
+        )
 
 
 if __name__ == "__main__":

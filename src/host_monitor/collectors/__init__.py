@@ -49,6 +49,7 @@ class CollectorBinding:
 class InflightCollection:
     future: Future
     submitted_at: float
+    deadline_reported: bool = False
 
 
 def _external_entry_points() -> dict[str, Any]:
@@ -247,6 +248,7 @@ class CollectorManager:
         previous: dict[str, Any] | None = None,
         *,
         now: float,
+        wait_for_optional: bool = True,
     ) -> Collection:
         previous = previous or {}
         metrics: dict[str, float] = {}
@@ -278,64 +280,21 @@ class CollectorManager:
                 + binding.deadline_seconds
                 - time.monotonic(),
             )
-            result: CollectorResult | None = None
-            duration_ms: float | None = None
-            error_text: str | None = None
-            try:
-                raw_result, duration_ms = inflight.future.result(timeout=remaining)
-                result = _validate_result(binding.name, raw_result)
-            except TimeoutError:
-                error_text = (
-                    f"deadline exceeded after {binding.deadline_seconds:g}s"
-                )
-            # Third-party collectors are an isolation boundary: surface failures
-            # as health state without letting plugin exceptions abort other work.
-            except Exception as error:
-                error_text = _safe_error(error)
-                del self._inflight[binding.name]
-            else:
-                del self._inflight[binding.name]
-
             prior_failures = (
                 int(prior_envelope.get("failures_total", 0))
                 if prior_envelope is not None
                 else 0
             )
-            if result is not None:
-                self._merge_result(binding.name, result, metrics, fields)
-                previous_failure = {
-                    key: prior_envelope[key]
-                    for key in ("last_failure_at", "last_error")
-                    if prior_envelope is not None and key in prior_envelope
-                }
-                envelope = {
-                    **previous_failure,
-                    "_hostmon_envelope": ENVELOPE_VERSION,
-                    "plugin_state": result.state,
-                    "last_success_at": now,
-                    "metrics": result.metrics,
-                    "fields": result.fields,
-                    "failures_total": prior_failures,
-                }
-                states[binding.name] = envelope
-                warnings.extend(result.warnings)
-                self._health_metrics(
-                    binding,
-                    metrics,
-                    up=True,
-                    stale=False,
-                    duration_ms=duration_ms,
-                    last_success_at=now,
-                    failures_total=prior_failures,
-                    now=now,
-                )
-                continue
-
-            failures_total = prior_failures + 1
             last_success_at = (
                 float(prior_envelope["last_success_at"])
                 if prior_envelope is not None
                 and isinstance(prior_envelope.get("last_success_at"), (int, float))
+                else None
+            )
+            prior_duration_ms = (
+                float(prior_envelope["duration_ms"])
+                if prior_envelope is not None
+                and isinstance(prior_envelope.get("duration_ms"), (int, float))
                 else None
             )
             stale_age = (
@@ -348,13 +307,130 @@ class CollectorManager:
                 and isinstance(prior_envelope.get("metrics"), dict)
                 and isinstance(prior_envelope.get("fields"), dict)
             )
+            if (
+                not wait_for_optional
+                and not binding.required
+                and not inflight.future.done()
+                and remaining > 0
+            ):
+                states[binding.name] = prior_envelope or {
+                    "_hostmon_envelope": ENVELOPE_VERSION,
+                    "failures_total": 0,
+                }
+                if use_stale:
+                    self._merge_result(
+                        binding.name,
+                        CollectorResult(
+                            metrics=dict(prior_envelope["metrics"]),
+                            fields=dict(prior_envelope["fields"]),
+                        ),
+                        metrics,
+                        fields,
+                    )
+                self._health_metrics(
+                    binding,
+                    metrics,
+                    up=use_stale,
+                    stale=False,
+                    duration_ms=prior_duration_ms,
+                    last_success_at=last_success_at,
+                    failures_total=prior_failures,
+                    now=now,
+                )
+                continue
+
+            result: CollectorResult | None = None
+            duration_ms: float | None = None
+            error_text: str | None = None
+            failure_is_new = True
+            try:
+                raw_result, duration_ms = inflight.future.result(timeout=remaining)
+                result = _validate_result(binding.name, raw_result)
+            except TimeoutError:
+                error_text = (
+                    f"deadline exceeded after {binding.deadline_seconds:g}s"
+                )
+                failure_is_new = not inflight.deadline_reported
+                inflight.deadline_reported = True
+            # Third-party collectors are an isolation boundary: surface failures
+            # as health state without letting plugin exceptions abort other work.
+            except Exception as error:
+                error_text = _safe_error(error)
+                failure_is_new = not inflight.deadline_reported
+                del self._inflight[binding.name]
+            else:
+                del self._inflight[binding.name]
+
+            if result is not None:
+                deadline_missed = bool(
+                    duration_ms is not None
+                    and duration_ms > binding.deadline_seconds * 1000
+                )
+                deadline_miss_is_new = (
+                    deadline_missed and not inflight.deadline_reported
+                )
+                self._merge_result(binding.name, result, metrics, fields)
+                if deadline_miss_is_new:
+                    previous_failure = {
+                        "last_failure_at": now,
+                        "last_error": (
+                            f"deadline exceeded after "
+                            f"{binding.deadline_seconds:g}s; "
+                            f"completed in {duration_ms / 1000:.2f}s"
+                        ),
+                    }
+                else:
+                    previous_failure = {
+                        key: prior_envelope[key]
+                        for key in ("last_failure_at", "last_error")
+                        if prior_envelope is not None and key in prior_envelope
+                    }
+                envelope = {
+                    **previous_failure,
+                    "_hostmon_envelope": ENVELOPE_VERSION,
+                    "plugin_state": result.state,
+                    "last_success_at": now,
+                    "metrics": result.metrics,
+                    "fields": result.fields,
+                    "duration_ms": duration_ms,
+                    "failures_total": (
+                        prior_failures + int(deadline_miss_is_new)
+                    ),
+                }
+                states[binding.name] = envelope
+                warnings.extend(result.warnings)
+                if deadline_miss_is_new:
+                    warnings.append(
+                        f"collector {binding.name!r} completed after its "
+                        f"{binding.deadline_seconds:g}s deadline in "
+                        f"{duration_ms / 1000:.2f}s"
+                    )
+                self._health_metrics(
+                    binding,
+                    metrics,
+                    up=True,
+                    stale=False,
+                    duration_ms=duration_ms,
+                    last_success_at=now,
+                    failures_total=envelope["failures_total"],
+                    now=now,
+                )
+                continue
+
+            failures_total = prior_failures + int(failure_is_new)
             envelope = {
                 **(prior_envelope or {}),
                 "_hostmon_envelope": ENVELOPE_VERSION,
                 "failures_total": failures_total,
-                "last_failure_at": now,
-                "last_error": error_text,
             }
+            failure_detail_changed = bool(
+                not failure_is_new
+                and error_text
+                and error_text != envelope.get("last_error")
+            )
+            if failure_is_new or failure_detail_changed:
+                envelope["last_failure_at"] = now
+                envelope["last_error"] = error_text
             states[binding.name] = envelope
             if use_stale:
                 stale_result = CollectorResult(
@@ -370,13 +446,14 @@ class CollectorManager:
                     else "no usable stale data"
                 )
             )
-            warnings.append(warning)
+            if failure_is_new or failure_detail_changed or binding.required:
+                warnings.append(warning)
             self._health_metrics(
                 binding,
                 metrics,
                 up=False,
                 stale=use_stale,
-                duration_ms=None,
+                duration_ms=prior_duration_ms,
                 last_success_at=last_success_at,
                 failures_total=failures_total,
                 now=now,

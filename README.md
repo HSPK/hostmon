@@ -219,15 +219,18 @@ Collectors run concurrently. Every collector supports hostmon-level controls:
 [collectors.kubernetes]
 enabled = true
 required = false
-deadline_seconds = 5
+deadline_seconds = 20
 max_stale_seconds = 300
 ```
 
 - A required collector fails the cycle when no valid stale value exists.
 - An optional collector failure does not discard healthy localhost metrics.
 - Last-good data may be reused only within `max_stale_seconds`.
-- Remote deadlines should remain below `monitor.interval_seconds`; timed-out
-  calls remain in flight and their result is picked up by a later cycle.
+- Daemon cycles harvest optional collectors asynchronously, so a slow remote
+  refresh cannot delay localhost sampling or WebSocket publication.
+- While an optional refresh is in flight, valid last-good data remains
+  available. A deadline miss is counted once per collection attempt, and a
+  late result is picked up by a later cycle.
 - `monitor.collector.<name>.up`, `.stale`, `.duration_ms`, and related health
   metrics are available to rules and history.
 

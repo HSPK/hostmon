@@ -49,6 +49,42 @@ class BlockingCollector:
         return CollectorResult(metrics={"blocking/value": 1}, state={"at": now})
 
 
+class BlockingFailureCollector:
+    name = "blocking_failure"
+
+    def __init__(self, release: threading.Event):
+        self.release = release
+
+    def collect(self, previous, now):
+        self.release.wait()
+        raise CollectorError("remote request failed")
+
+
+class RefreshingCollector:
+    name = "refreshing"
+
+    def __init__(self, release: threading.Event):
+        self.release = release
+        self.calls = 0
+
+    def collect(self, previous, now):
+        self.calls += 1
+        if self.calls > 1:
+            self.release.wait()
+        return CollectorResult(
+            metrics={"refreshing/value": float(self.calls)},
+            state={"at": now},
+        )
+
+
+class DelayedCollector:
+    name = "delayed"
+
+    def collect(self, previous, now):
+        time.sleep(0.02)
+        return CollectorResult(metrics={"delayed/value": 1}, state={"at": now})
+
+
 class CollectorReliabilityTests(unittest.TestCase):
     def test_optional_failure_uses_bounded_stale_data(self):
         collector = MutableCollector("remote", "remote/value", 10)
@@ -126,6 +162,166 @@ class CollectorReliabilityTests(unittest.TestCase):
         self.assertLess(time.monotonic() - started, 0.2)
         self.assertEqual(first.metrics["monitor/collector/blocking/up"], 0)
         self.assertEqual(second.metrics["monitor/collector/blocking/up"], 0)
+        self.assertEqual(first.states["blocking"]["failures_total"], 1)
+        self.assertEqual(second.states["blocking"]["failures_total"], 1)
+
+    def test_late_exception_replaces_timeout_without_double_counting(self):
+        release = threading.Event()
+        manager = CollectorManager(
+            [
+                CollectorBinding(
+                    name="blocking_failure",
+                    collector=BlockingFailureCollector(release),
+                    required=False,
+                    deadline_seconds=0.01,
+                    max_stale_seconds=0,
+                )
+            ]
+        )
+        try:
+            first = manager.collect({}, now=100)
+            release.set()
+            for _ in range(20):
+                second = manager.collect(first.states, now=101)
+                if "remote request failed" in str(
+                    second.states["blocking_failure"].get("last_error")
+                ):
+                    break
+                time.sleep(0.005)
+        finally:
+            release.set()
+            manager.close()
+
+        self.assertEqual(first.states["blocking_failure"]["failures_total"], 1)
+        self.assertEqual(second.states["blocking_failure"]["failures_total"], 1)
+        self.assertEqual(
+            second.states["blocking_failure"]["last_error"],
+            "CollectorError: remote request failed",
+        )
+        self.assertIn("remote request failed", second.warnings[0])
+
+    def test_background_optional_collector_does_not_block_sampling(self):
+        release = threading.Event()
+        manager = CollectorManager(
+            [
+                CollectorBinding(
+                    name="blocking",
+                    collector=BlockingCollector(release),
+                    required=False,
+                    deadline_seconds=0.03,
+                    max_stale_seconds=0,
+                )
+            ]
+        )
+        started = time.monotonic()
+        try:
+            first = manager.collect(
+                {},
+                now=100,
+                wait_for_optional=False,
+            )
+            elapsed = time.monotonic() - started
+            time.sleep(0.04)
+            second = manager.collect(
+                first.states,
+                now=101,
+                wait_for_optional=False,
+            )
+            third = manager.collect(
+                second.states,
+                now=102,
+                wait_for_optional=False,
+            )
+            release.set()
+            for _ in range(20):
+                completed = manager.collect(
+                    third.states,
+                    now=103,
+                    wait_for_optional=False,
+                )
+                if "blocking/value" in completed.metrics:
+                    break
+                time.sleep(0.005)
+        finally:
+            release.set()
+            manager.close()
+
+        self.assertLess(elapsed, 0.02)
+        self.assertEqual(first.states["blocking"]["failures_total"], 0)
+        self.assertEqual(first.warnings, [])
+        self.assertEqual(second.states["blocking"]["failures_total"], 1)
+        self.assertEqual(len(second.warnings), 1)
+        self.assertEqual(third.states["blocking"]["failures_total"], 1)
+        self.assertEqual(third.warnings, [])
+        self.assertEqual(completed.metrics["blocking/value"], 1)
+        self.assertEqual(completed.states["blocking"]["failures_total"], 1)
+
+    def test_background_refresh_keeps_last_good_data_available(self):
+        release = threading.Event()
+        collector = RefreshingCollector(release)
+        manager = CollectorManager(
+            [
+                CollectorBinding(
+                    name="refreshing",
+                    collector=collector,
+                    required=False,
+                    deadline_seconds=1,
+                    max_stale_seconds=60,
+                )
+            ]
+        )
+        try:
+            first = manager.collect({}, now=100)
+            second = manager.collect(
+                first.states,
+                now=110,
+                wait_for_optional=False,
+            )
+        finally:
+            release.set()
+            manager.close()
+
+        self.assertEqual(second.metrics["refreshing/value"], 1)
+        self.assertEqual(second.metrics["monitor/collector/refreshing/up"], 1)
+        self.assertEqual(second.metrics["monitor/collector/refreshing/stale"], 0)
+        self.assertIn(
+            "monitor/collector/refreshing/duration_ms",
+            second.metrics,
+        )
+        self.assertEqual(second.states["refreshing"]["failures_total"], 0)
+        self.assertEqual(second.warnings, [])
+
+    def test_background_late_completion_counts_one_deadline_miss(self):
+        manager = CollectorManager(
+            [
+                CollectorBinding(
+                    name="delayed",
+                    collector=DelayedCollector(),
+                    required=False,
+                    deadline_seconds=0.01,
+                    max_stale_seconds=0,
+                )
+            ]
+        )
+        try:
+            first = manager.collect(
+                {},
+                now=100,
+                wait_for_optional=False,
+            )
+            time.sleep(0.03)
+            second = manager.collect(
+                first.states,
+                now=101,
+                wait_for_optional=False,
+            )
+        finally:
+            manager.close()
+
+        self.assertEqual(second.metrics["delayed/value"], 1)
+        self.assertEqual(second.metrics["monitor/collector/delayed/up"], 1)
+        self.assertEqual(second.states["delayed"]["failures_total"], 1)
+        self.assertIn("completed after its 0.01s deadline", second.warnings[0])
 
 
 class FakeSender:

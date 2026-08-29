@@ -114,6 +114,7 @@ export interface ClusterGPUReport {
 export interface PluginDocument<T> {
   name: string;
   updated_at: number;
+  schema_version: number | null;
   document: T;
 }
 

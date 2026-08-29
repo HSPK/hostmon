@@ -9,7 +9,7 @@ status across one or more queue namespaces.
 [collectors.cluster_gpu_usage]
 enabled = true
 required = false
-deadline_seconds = 5
+deadline_seconds = 20
 max_stale_seconds = 300
 context = "my-cluster"
 queues = ["queue-a", "queue-b"]
@@ -18,7 +18,14 @@ gpus_per_node = 8
 poll_interval_seconds = 60
 kubectl = "kubectl"
 timeout_seconds = 30
+max_parallel_queries = 4
 ```
+
+The daemon refreshes this optional collector in the background. Slow
+Kubernetes responses therefore keep the previous valid report available
+without delaying localhost samples or dashboard WebSocket updates.
+Independent Pod and Volcano queue requests run concurrently with a bounded,
+configurable worker count.
 
 The collector groups running and pending GPU Pods by:
 

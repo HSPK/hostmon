@@ -435,6 +435,7 @@ class PrometheusExporter:
             {
                 "name": name,
                 "updated_at": plugin_state.get("at"),
+                "schema_version": plugin_state.get("schema_version"),
                 "document": document,
             }
         )

@@ -396,6 +396,7 @@ class PrometheusHTTPTests(unittest.TestCase):
                     "cluster_gpu_usage": {
                         "_hostmon_envelope": 1,
                         "plugin_state": {
+                            "schema_version": 3,
                             "at": 100,
                             "report": {"usage": [{"submitter": "run-a"}]},
                         },
@@ -415,6 +416,7 @@ class PrometheusHTTPTests(unittest.TestCase):
         ) as response:
             document = json.load(response)
 
+        self.assertEqual(document["schema_version"], 3)
         self.assertEqual(document["document"]["usage"][0]["submitter"], "run-a")
 
     def test_manages_alert_rules_over_http(self):

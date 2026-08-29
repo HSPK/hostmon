@@ -88,6 +88,7 @@ class MonitorRuntime:
         collection = self.collectors.collect(
             self.state.get("collectors"),
             now=now,
+            wait_for_optional=False,
         )
         collection.metrics["monitor/collection_duration_ms"] = (
             self.monotonic() - started

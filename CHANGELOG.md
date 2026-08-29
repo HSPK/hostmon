@@ -20,8 +20,12 @@ All notable changes to this project are documented here.
 - Changed Kubernetes notifications to fire only when occupied GPU nodes
   decrease below quota, including the task names and nodes affected by that
   transition.
-- Bounded default remote collector deadlines to half the collection interval,
-  so slow Kubernetes API calls cannot create long gaps in localhost history.
+- Moved optional collector refreshes off the critical sampling path, retaining
+  last-good data while remote work is in flight and counting each deadline miss
+  once instead of once per monitor cycle.
+- Exposed plugin state schema versions through the generic plugin document API.
+- Parallelized independent Cluster GPU Kubernetes queries with a bounded,
+  configurable worker count.
 - Removed the duplicate state fsync and made the scheduler catch up after a
   slight overrun instead of adding another full interval.
 - Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,
