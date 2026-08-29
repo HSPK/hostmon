@@ -20,6 +20,8 @@
   --scroll-track: #0b1015;
   --scroll-thumb: #4a5968;
   --scroll-thumb-hover: #687b8d;
+  --chart-axis: #8290a3;
+  --chart-grid: #273241;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -49,6 +51,8 @@
   --scroll-track: #edf1f4;
   --scroll-thumb: #aeb8c2;
   --scroll-thumb-hover: #818e9b;
+  --chart-axis: #667584;
+  --chart-grid: #d6dde5;
 }
 .metric-table th button {
   padding: 0; color: inherit; border: 0; background: transparent;

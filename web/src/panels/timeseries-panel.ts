@@ -1,6 +1,7 @@
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 
+import { APPEARANCE_CHANGED_EVENT } from "../core/appearance";
 import type { TimeSeriesPanelDefinition } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
 import { panelShell } from "./panel";
@@ -16,6 +17,13 @@ export class TimeSeriesPanel implements PanelRenderer {
   private lastHeight = 0;
   private lastRevision = -1;
   private lastScaleKey = "";
+  private axisColor = themeColor("--chart-axis", "#8290a3");
+  private gridColor = themeColor("--chart-grid", "#273241");
+  private readonly redrawForAppearance = (): void => {
+    this.axisColor = themeColor("--chart-axis", "#8290a3");
+    this.gridColor = themeColor("--chart-grid", "#273241");
+    this.plot.redraw(false, true);
+  };
 
   constructor(
     private readonly definition: TimeSeriesPanelDefinition,
@@ -68,6 +76,10 @@ export class TimeSeriesPanel implements PanelRenderer {
       this.plot.setSize({ width, height });
     });
     this.resizeObserver.observe(this.chartHost);
+    window.addEventListener(
+      APPEARANCE_CHANGED_EVENT,
+      this.redrawForAppearance,
+    );
     this.update();
   }
 
@@ -90,6 +102,10 @@ export class TimeSeriesPanel implements PanelRenderer {
 
   destroy(): void {
     this.resizeObserver.disconnect();
+    window.removeEventListener(
+      APPEARANCE_CHANGED_EVENT,
+      this.redrawForAppearance,
+    );
     this.plot.destroy();
   }
 
@@ -116,15 +132,25 @@ export class TimeSeriesPanel implements PanelRenderer {
       },
       axes: [
         {
-          stroke: "#8290a3",
-          grid: { stroke: "#273241", width: 1 },
-          ticks: { stroke: "#273241" },
+          stroke: () => this.axisColor,
+          grid: {
+            stroke: () => this.gridColor,
+            width: 1,
+          },
+          ticks: {
+            stroke: () => this.gridColor,
+          },
           font: "11px ui-monospace, monospace",
         },
         {
-          stroke: "#8290a3",
-          grid: { stroke: "#273241", width: 1 },
-          ticks: { stroke: "#273241" },
+          stroke: () => this.axisColor,
+          grid: {
+            stroke: () => this.gridColor,
+            width: 1,
+          },
+          ticks: {
+            stroke: () => this.gridColor,
+          },
           font: "11px ui-monospace, monospace",
           size: 64,
         },
@@ -150,6 +176,14 @@ export class TimeSeriesPanel implements PanelRenderer {
       ],
     };
   }
+}
+
+function themeColor(variable: string, fallback: string): string {
+  return (
+    getComputedStyle(document.documentElement)
+      .getPropertyValue(variable)
+      .trim() || fallback
+  );
 }
 
 function actionButton(label: string, action: () => void): HTMLButtonElement {

@@ -1,3 +1,4 @@
+import { notifyAppearanceChanged } from "./core/appearance";
 import { ApiClient } from "./core/api-client";
 import { PreferenceStore } from "./core/preferences";
 import { TimeSeriesStore } from "./core/time-series-store";
@@ -490,6 +491,7 @@ export class DashboardApp {
         : theme;
     document.documentElement.dataset.theme = resolved;
     document.documentElement.dataset.density = density;
+    notifyAppearanceChanged();
   }
 
   private focusPanel(panelId: string, attempts = 20): void {

@@ -604,6 +604,15 @@ test("configures web theme and density", async ({ page }) => {
     "data-density",
     "comfortable",
   );
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        getComputedStyle(document.documentElement)
+          .getPropertyValue("--chart-grid")
+          .trim(),
+      ),
+    )
+    .toBe("#d6dde5");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 });

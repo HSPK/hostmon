@@ -34,6 +34,8 @@ All notable changes to this project are documented here.
 - Included kubectl exit codes when failed commands produce no output.
 - Filled the System status grid with the health endpoint and applied bounded
   shared number formatting to raw internal metrics.
+- Made chart axes and gridlines theme-aware, including redraws after runtime
+  appearance changes.
 - Removed the duplicate state fsync and made the scheduler catch up after a
   slight overrun instead of adding another full interval.
 - Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,
