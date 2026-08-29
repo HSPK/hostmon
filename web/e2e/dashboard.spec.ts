@@ -498,6 +498,16 @@ test("remains responsive on narrow screens", async ({ page }) => {
   const closeBox = await closeButton.boundingBox();
   expect(closeBox).not.toBeNull();
   expect((closeBox?.x ?? 400) + (closeBox?.width ?? 0)).toBeLessThanOrEqual(390);
+  await closeButton.click();
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Overview" }).click();
+  await page.getByRole("button", { name: "Edit" }).first().click();
+  await expect(page.getByRole("button", { name: "Save chart" }))
+    .toBeInViewport({ratio: 1});
+  const editorBodyScrolls = await page
+    .locator(".chart-dialog-body")
+    .evaluate(element => element.scrollHeight > element.clientHeight);
+  expect(editorBodyScrolls).toBe(true);
 });
 
 test("maintains smooth animation frame cadence", async ({ page }) => {
