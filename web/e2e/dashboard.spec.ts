@@ -654,6 +654,33 @@ test("remains responsive on narrow screens", async ({ page }) => {
   await expect(page.locator(".sidebar")).toHaveClass(/open/);
   await page.getByRole("button", { name: "Metrics" }).click();
   await expect(page.locator("#page-title")).toHaveText("Metrics");
+  const metricViewport = page.locator(
+    ".metric-explorer-panel .data-grid-viewport",
+  );
+  await expect(page.locator(".metric-table tbody tr").first()).toBeVisible();
+  await metricViewport.evaluate(element => {
+    element.scrollLeft = 0;
+  });
+  const metricSelect = await page
+    .locator('.metric-table td[data-column="select"]')
+    .first()
+    .boundingBox();
+  const metricName = await page
+    .locator('.metric-table td[data-column="name"]')
+    .first()
+    .boundingBox();
+  expect(metricSelect).not.toBeNull();
+  expect(metricName).not.toBeNull();
+  expect(metricName!.width).toBeLessThanOrEqual(212);
+  expect(metricName!.x).toBeGreaterThanOrEqual(
+    metricSelect!.x + metricSelect!.width - 1,
+  );
+  await expect(
+    page.locator('.metric-table td[data-column="select"] input').first(),
+  ).toBeInViewport({ratio: 1});
+  await expect(
+    page.locator('.metric-table td[data-column="current"]').first(),
+  ).toBeInViewport({ratio: 1});
 
   await page.getByRole("button", { name: "Menu" }).click();
   await page.getByRole("button", { name: "Workloads" }).click();

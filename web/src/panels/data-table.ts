@@ -6,9 +6,11 @@ export interface DataColumn<T> {
   sortValue?: string;
   className?: string;
   width?: string;
+  mobileWidth?: string;
   align?: "left" | "center" | "right";
   pinned?: "left" | "right";
   pinnedOffset?: number;
+  mobilePinnedOffset?: number;
   render(row: T): string | Node;
 }
 
@@ -24,6 +26,9 @@ export function configuredColumns<T extends object>(
       id: definition.id,
       label: definition.label,
       ...(definition.width ? {width: definition.width} : {}),
+      ...(definition.mobileWidth
+        ? {mobileWidth: definition.mobileWidth}
+        : {}),
       ...(definition.align ? {align: definition.align} : {}),
       ...(definition.pinned
         ? {
@@ -181,17 +186,25 @@ export class DataTable<T> {
       (total, column) => total + pixelWidth(column.width),
       0,
     );
-    if (configuredWidth) table.style.minWidth = `${configuredWidth}px`;
+    const configuredMobileWidth = columns.reduce(
+      (total, column) =>
+        total + pixelWidth(column.mobileWidth ?? column.width),
+      0,
+    );
+    if (configuredWidth) {
+      table.style.setProperty("--table-width", `${configuredWidth}px`);
+      table.style.setProperty(
+        "--table-mobile-width",
+        `${configuredMobileWidth}px`,
+      );
+    }
     const head = document.createElement("thead");
     const row = document.createElement("tr");
     for (const column of columns) {
       const cell = document.createElement("th");
       cell.dataset.column = column.id;
       cell.title = column.label;
-      if (column.width) {
-        cell.style.width = column.width;
-        cell.style.minWidth = column.width;
-      }
+      applyColumnSizing(cell, column);
       if (column.align) cell.style.textAlign = column.align;
       applyPinnedColumn(cell, column);
       if (column.sortValue && onSort) {
@@ -257,6 +270,7 @@ export class DataTable<T> {
           const cell = document.createElement("td");
           cell.dataset.column = column.id;
           if (column.className) cell.className = column.className;
+          applyColumnSizing(cell, column);
           if (column.align) cell.style.textAlign = column.align;
           applyPinnedColumn(cell, column);
           const value = column.render(item);
@@ -278,18 +292,36 @@ export class DataTable<T> {
 
 function withPinnedOffsets<T>(columns: DataColumn<T>[]): DataColumn<T>[] {
   let left = 0;
+  let mobileLeft = 0;
   for (const column of columns) {
     if (column.pinned !== "left") continue;
     column.pinnedOffset = left;
+    column.mobilePinnedOffset = mobileLeft;
     left += pixelWidth(column.width);
+    mobileLeft += pixelWidth(column.mobileWidth ?? column.width);
   }
   let right = 0;
+  let mobileRight = 0;
   for (const column of [...columns].reverse()) {
     if (column.pinned !== "right") continue;
     column.pinnedOffset = right;
+    column.mobilePinnedOffset = mobileRight;
     right += pixelWidth(column.width);
+    mobileRight += pixelWidth(column.mobileWidth ?? column.width);
   }
   return columns;
+}
+
+function applyColumnSizing<T>(
+  cell: HTMLTableCellElement,
+  column: DataColumn<T>,
+): void {
+  if (column.width) {
+    cell.style.setProperty("--column-width", column.width);
+  }
+  if (column.mobileWidth) {
+    cell.style.setProperty("--column-mobile-width", column.mobileWidth);
+  }
 }
 
 function applyPinnedColumn<T>(
@@ -301,6 +333,10 @@ function applyPinnedColumn<T>(
   cell.style.setProperty(
     "--column-pin-offset",
     `${column.pinnedOffset ?? 0}px`,
+  );
+  cell.style.setProperty(
+    "--column-mobile-pin-offset",
+    `${column.mobilePinnedOffset ?? column.pinnedOffset ?? 0}px`,
   );
 }
 

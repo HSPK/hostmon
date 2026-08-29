@@ -180,6 +180,7 @@ export interface TableColumnDefinition {
   label: string;
   path?: string;
   width?: string;
+  mobileWidth?: string;
   align?: "left" | "center" | "right";
   pinned?: boolean | "left" | "right";
   sort?: string;

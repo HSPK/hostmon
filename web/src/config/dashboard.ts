@@ -97,6 +97,8 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
           typeof column.label === "string" &&
           (column.path === undefined || typeof column.path === "string") &&
           (column.width === undefined || typeof column.width === "string") &&
+          (column.mobileWidth === undefined ||
+            typeof column.mobileWidth === "string") &&
           (column.align === undefined ||
             ["left", "center", "right"].includes(String(column.align))) &&
           (column.pinned === undefined ||
