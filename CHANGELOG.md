@@ -38,6 +38,8 @@ All notable changes to this project are documented here.
   appearance changes.
 - Kept chart editor actions visible on narrow screens with a fixed header and
   footer around an internally scrolling editor body.
+- Reflowed the Alert rule editor to a full-width single column on phones and
+  prevented action labels from wrapping.
 - Removed the duplicate state fsync and made the scheduler catch up after a
   slight overrun instead of adding another full interval.
 - Added a standard-library Prometheus exporter with `/metrics`, `/healthz`,

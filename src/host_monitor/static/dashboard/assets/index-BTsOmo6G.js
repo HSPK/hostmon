@@ -8,7 +8,7 @@
       <label>Alert<input name="alert" required maxlength="100"></label>
       <label>Level<select name="level"><option>warning</option><option>critical</option><option>info</option></select></label>
       <label class="rule-expression">Expression<input name="expr" required></label>
-      <label>Title<input name="title" required></label>
+      <label class="rule-title">Title<input name="title" required></label>
       <label class="rule-message">Message<textarea name="message" required></textarea></label>
       <label class="rule-enabled"><input name="enabled" type="checkbox"> Enabled</label>
       <div class="rule-editor-actions"><button type="button" class="button">Cancel</button><button class="button button-primary" type="submit">Save rule</button></div>
@@ -49,19 +49,21 @@
       <dialog id="chart-dialog" class="chart-dialog">
         <form id="chart-form" method="dialog">
           <header><div><h2 id="chart-dialog-title">Create chart</h2><p>Choose up to eight metrics.</p></div><button class="icon-button" value="cancel">Close</button></header>
-          <div class="form-grid">
-            <label>Title<input id="chart-title" required maxlength="80"></label>
-            <label>Style<select id="chart-style"><option value="line">Line</option><option value="area">Area</option></select></label>
-            <label>Width<select id="chart-width"><option value="1">One column</option><option value="2">Full width</option></select></label>
-            <label>Height<select id="chart-height"><option value="220">Compact</option><option value="270">Standard</option><option value="360">Tall</option><option value="480">Extra tall</option></select></label>
-            <label>Line width<input id="chart-line-width" type="number" min="0.5" max="5" step="0.5"></label>
-            <label>Y minimum<input id="chart-min" type="number" step="any" placeholder="Auto"></label>
-            <label>Y maximum<input id="chart-max" type="number" step="any" placeholder="Auto"></label>
-            <label class="metric-filter-label">Filter metrics<input id="chart-metric-filter" type="search" placeholder="cpu, gpu, latency..."></label>
-          </div>
-          <div class="metric-picker-layout">
-            <section><h3>Search results</h3><div id="chart-metric-results" class="metric-list"></div></section>
-            <section><h3>Selected metrics</h3><div id="chart-metric-selected" class="metric-list"></div></section>
+          <div class="chart-dialog-body">
+            <div class="form-grid">
+              <label>Title<input id="chart-title" required maxlength="80"></label>
+              <label>Style<select id="chart-style"><option value="line">Line</option><option value="area">Area</option></select></label>
+              <label>Width<select id="chart-width"><option value="1">One column</option><option value="2">Full width</option></select></label>
+              <label>Height<select id="chart-height"><option value="220">Compact</option><option value="270">Standard</option><option value="360">Tall</option><option value="480">Extra tall</option></select></label>
+              <label>Line width<input id="chart-line-width" type="number" min="0.5" max="5" step="0.5"></label>
+              <label>Y minimum<input id="chart-min" type="number" step="any" placeholder="Auto"></label>
+              <label>Y maximum<input id="chart-max" type="number" step="any" placeholder="Auto"></label>
+              <label class="metric-filter-label">Filter metrics<input id="chart-metric-filter" type="search" placeholder="cpu, gpu, latency..."></label>
+            </div>
+            <div class="metric-picker-layout">
+              <section><h3>Search results</h3><div id="chart-metric-results" class="metric-list"></div></section>
+              <section><h3>Selected metrics</h3><div id="chart-metric-selected" class="metric-list"></div></section>
+            </div>
           </div>
           <footer><span id="chart-selection-count">0 selected</span><div><button class="button" value="cancel">Cancel</button><button id="chart-save" class="button button-primary" value="default">Save chart</button></div></footer>
         </form>

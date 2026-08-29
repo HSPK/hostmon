@@ -298,9 +298,10 @@ body.table-page .table-scroll {
 .rule-editor[hidden] { display: none; }
 .rule-editor label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 10px; }
 .rule-editor textarea { min-height: 70px; resize: vertical; color: var(--text); border: 1px solid var(--border); background: var(--surface); }
-.rule-expression, .rule-message, .rule-editor output { grid-column: 1 / -1; }
+.rule-expression, .rule-title, .rule-message, .rule-editor output { grid-column: 1 / -1; }
 .rule-enabled { flex-direction: row !important; align-items: center; }
 .rule-editor-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.rule-editor-actions .button { white-space: nowrap; }
 .rule-editor output { color: var(--danger); white-space: pre-wrap; }
 .web-settings-grid {
   display: grid; grid-template-columns: repeat(2, minmax(180px, 280px));
@@ -509,6 +510,8 @@ body.table-page .table-scroll {
   .chart-dialog,
   .chart-dialog form { max-height: calc(100dvh - 24px); }
   .chart-dialog { width: calc(100vw - 24px); }
+  .rule-editor { grid-template-columns: 1fr; }
+  .rule-editor > * { grid-column: 1; }
   .fleet-summary { grid-template-columns: repeat(2, minmax(100px, 1fr)); }
   .form-grid { grid-template-columns: 1fr; }
   .metric-filter-label { grid-column: auto; }

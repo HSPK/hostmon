@@ -92,7 +92,7 @@ export class RulesPanel implements PanelRenderer {
       <label>Alert<input name="alert" required maxlength="100"></label>
       <label>Level<select name="level"><option>warning</option><option>critical</option><option>info</option></select></label>
       <label class="rule-expression">Expression<input name="expr" required></label>
-      <label>Title<input name="title" required></label>
+      <label class="rule-title">Title<input name="title" required></label>
       <label class="rule-message">Message<textarea name="message" required></textarea></label>
       <label class="rule-enabled"><input name="enabled" type="checkbox"> Enabled</label>
       <div class="rule-editor-actions"><button type="button" class="button">Cancel</button><button class="button button-primary" type="submit">Save rule</button></div>

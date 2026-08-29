@@ -601,6 +601,26 @@ test("creates and toggles alert rules from settings", async ({ page }) => {
   await expect(page.getByLabel("Enable gpu-hot")).not.toBeChecked();
 });
 
+test("keeps the alert editor readable on narrow screens", async ({ page }) => {
+  await page.setViewportSize({width: 390, height: 844});
+  await page.goto("/?page=alerts");
+  await page.getByRole("button", {name: "Add rule"}).click();
+
+  const editor = page.locator(".rule-editor");
+  const title = editor.locator('[name="title"]');
+  const save = editor.getByRole("button", {name: "Save rule"});
+  const editorBox = await editor.boundingBox();
+  const titleBox = await title.boundingBox();
+
+  expect(editorBox).not.toBeNull();
+  expect(titleBox).not.toBeNull();
+  expect(titleBox!.width).toBeGreaterThan(editorBox!.width * 0.9);
+  await expect(save).toBeInViewport({ratio: 1});
+  expect(
+    await save.evaluate(element => element.scrollHeight <= element.clientHeight),
+  ).toBe(true);
+});
+
 test("configures web theme and density", async ({ page }) => {
   await page.goto("/?page=settings");
   await page.locator(".web-settings-grid label").filter({
