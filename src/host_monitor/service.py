@@ -24,7 +24,7 @@ def unit_path() -> Path:
 def render_unit(settings: Settings) -> str:
     executable = shlex.quote(sys.executable)
     config = shlex.quote(str(settings.config_file))
-    # The Lark backend imports pandas on first send; its BLAS pool is unused here.
+    # Alert integrations do not need numerical-library parallelism.
     return "\n".join(
         [
             "[Unit]",

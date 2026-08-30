@@ -1,21 +1,189 @@
 from __future__ import annotations
 
+import json
 import os
 import shlex
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Sequence
 
 from expr_tracker.alerts import (
     AlertConfig,
+    AlertLevel,
     AlertMessage,
     ChannelConfig,
     Dispatcher,
     WebhookPolicy,
 )
+from expr_tracker.alerts.backends import (
+    AlertBackend,
+    LarkBackend as ExprTrackerLarkBackend,
+    SendError,
+    post_json,
+    register_backend,
+    render_text,
+)
 
 from .config import AlertSettings
 from .errors import AlertError
 from .rules import CapturedAlert
+
+
+LARK_TIMEZONE = timezone(timedelta(hours=8))
+LARK_LEVEL_EMOJI = {
+    AlertLevel.DEBUG: "\U0001f50d",
+    AlertLevel.INFO: "\u2139\ufe0f",
+    AlertLevel.WARNING: "\u26a0\ufe0f",
+    AlertLevel.ERROR: "\u274c",
+    AlertLevel.CRITICAL: "\U0001f6a8",
+}
+
+
+def _lark_heading(content: str) -> dict[str, Any]:
+    return {
+        "tag": "column_set",
+        "flex_mode": "none",
+        "background_style": "default",
+        "horizontal_spacing": "default",
+        "horizontal_align": "left",
+        "columns": [
+            {
+                "tag": "column",
+                "background_style": "default",
+                "elements": [
+                    {
+                        "tag": "div",
+                        "text": {
+                            "tag": "plain_text",
+                            "content": content,
+                            "text_size": "heading",
+                            "text_align": "left",
+                            "text_color": "default",
+                        },
+                    }
+                ],
+                "width": "auto",
+                "weight": 1,
+                "vertical_align": "top",
+                "vertical_spacing": "default",
+            }
+        ],
+    }
+
+
+def _lark_markdown(content: str) -> dict[str, str]:
+    return {
+        "tag": "markdown",
+        "content": content,
+        "text_align": "left",
+        "text_size": "normal",
+    }
+
+
+def _lark_payload(message: AlertMessage) -> dict[str, Any]:
+    title = f"{LARK_LEVEL_EMOJI.get(message.level, '')} {message.title}".strip()
+    subtitle = message.subtitle or datetime.now(LARK_TIMEZONE).strftime(
+        "%Y-%m-%d %H:%M:%S"
+    )
+    elements = [
+        _lark_heading("Message"),
+        _lark_markdown(f"```txt\n{render_text(message)}\n```"),
+    ]
+    if message.level in (AlertLevel.ERROR, AlertLevel.CRITICAL):
+        elements.extend(
+            [
+                _lark_heading("Traceback"),
+                _lark_markdown(
+                    f"```\n{(message.traceback or '').strip()}\n```"
+                ),
+            ]
+        )
+    return {
+        "msg_type": "interactive",
+        "card": {
+            "elements": elements,
+            "header": {
+                "title": {"tag": "plain_text", "content": title},
+                "subtitle": {"tag": "plain_text", "content": subtitle},
+                "template": (
+                    "red"
+                    if message.level in (AlertLevel.ERROR, AlertLevel.CRITICAL)
+                    else "green"
+                ),
+                "ud_icon": {
+                    "token": (
+                        "error_filled"
+                        if message.level in (
+                            AlertLevel.ERROR,
+                            AlertLevel.CRITICAL,
+                        )
+                        else "yes_filled"
+                    )
+                },
+            },
+        },
+    }
+
+
+class LightweightLarkBackend(AlertBackend):
+    type = "lark"
+
+    def __init__(self, config: ChannelConfig):
+        super().__init__(config)
+        self.fallback = (
+            ExprTrackerLarkBackend(config)
+            if set(config.options) - {"headers"}
+            else None
+        )
+
+    def validate(self) -> None:
+        if self.fallback is not None:
+            self.fallback.validate()
+            return
+        if not self.config.resolve_url():
+            raise ValueError(
+                f"Channel {self.config.name!r} (lark) has no webhook URL; "
+                "set 'url' or 'url_env'."
+            )
+        headers = self.config.options.get("headers")
+        if headers is not None and not isinstance(headers, dict):
+            raise ValueError("Lark channel options.headers must be an object")
+
+    def send(self, message: AlertMessage) -> None:
+        if self.fallback is not None:
+            self.fallback.send(message)
+            return
+        url = self.config.resolve_url()
+        if not url:
+            raise SendError(
+                f"Channel {self.config.name!r} has no webhook URL",
+                retryable=False,
+            )
+        timeout = (
+            self.config.policy.timeout
+            if self.config.policy is not None
+            else 10.0
+        )
+        body = post_json(
+            url,
+            _lark_payload(message),
+            timeout,
+            self.config.options.get("headers"),
+        )
+        try:
+            response = json.loads(body)
+            code = int(response["code"])
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            raise SendError(
+                f"Lark webhook returned an invalid response: {error}"
+            ) from error
+        if code != 0:
+            raise SendError(
+                f"Lark webhook failed: code={code} msg={response.get('msg')!r}"
+            )
+
+
+register_backend("lark", LightweightLarkBackend)
 
 
 def read_dotenv(

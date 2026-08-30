@@ -78,14 +78,16 @@ through entry points and are not included in the `hostmon` release artifacts.
 For Lark, the initializer has a convenience option:
 
 ```bash
-python3.11 -m pip install "hostmon[lark]"
+python3.11 -m pip install hostmon
 hmon config init \
   --lark-env-file /path/to/secrets.env \
   --lark-env-key WEBHOOK_URL
 ```
 
-This is only a convenience path. Lark is not required, and all supported
-channels can be configured directly in TOML. See
+Lark webhook delivery is lightweight and does not load the optional
+`slark`/pandas client for standard webhook configuration. The `hostmon[lark]`
+extra remains available for non-standard Slark client options. Lark is not
+required, and all supported channels can be configured directly in TOML. See
 [`docs/alerts.md`](docs/alerts.md).
 
 ## Built-in collectors

@@ -45,7 +45,7 @@ Changelog = "https://github.com/HSPK/hostmon/blob/main/CHANGELOG.md"
 
 [project.optional-dependencies]
 lark = [
-  "expr-tracker[lark]>=0.2.3,<0.3",
+  "slark>=0.1.28",
 ]
 dev = [
   "build>=1.2",

@@ -3,10 +3,15 @@ from __future__ import annotations
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
-from expr_tracker.alerts import AlertRule
+from expr_tracker.alerts import AlertMessage, AlertRule
 
-from host_monitor.alerts import AlertSender, read_dotenv
+from host_monitor.alerts import (
+    AlertSender,
+    LightweightLarkBackend,
+    read_dotenv,
+)
 from host_monitor.config import AlertSettings
 from host_monitor.errors import AlertError, RuleError
 from host_monitor.rules import RuleStore, evaluate_rules
@@ -18,6 +23,33 @@ def next_state(previous, evaluation):
         "samples": list(previous.get("samples", [])) + [evaluation.sample],
         "rules": evaluation.rule_states,
     }
+
+
+def lark_sender(
+    *, options: dict | None = None, policy: dict | None = None
+) -> AlertSender:
+    return AlertSender(
+        AlertSettings(
+            enabled=True,
+            env_file=None,
+            env={},
+            channels=(
+                {
+                    "type": "lark",
+                    "name": "lark",
+                    "url": "https://example.invalid/webhook",
+                    "min_level": "info",
+                    "options": options or {},
+                },
+            ),
+            policy=policy
+            or {
+                "max_retries": 0,
+                "rate_limit_per_minute": None,
+                "dedup_window": 0,
+            },
+        )
+    )
 
 
 class RuleEvaluationTests(unittest.TestCase):
@@ -328,6 +360,124 @@ class AlertSenderTests(unittest.TestCase):
 
         self.assertEqual(len(sink), 1)
         self.assertEqual(sink[0].title, "test")
+
+    @patch(
+        "host_monitor.alerts.post_json",
+        return_value='{"code": 0, "msg": "success"}',
+    )
+    def test_lark_alert_uses_lightweight_interactive_card(self, post):
+        sender = lark_sender()
+        message = AlertMessage(
+            title="GPU capacity",
+            subtitle="2026-08-30 18:00:00",
+            text="No free GPUs",
+            level="warning",
+        )
+        try:
+            sender.send_one(message, "lark")
+            backend = sender.dispatcher.channels["lark"].backend
+        finally:
+            sender.close()
+
+        self.assertIsInstance(backend, LightweightLarkBackend)
+        url, payload, timeout, headers = post.call_args.args
+        self.assertEqual(url, "https://example.invalid/webhook")
+        self.assertEqual(timeout, 10)
+        self.assertIsNone(headers)
+        self.assertEqual(payload["msg_type"], "interactive")
+        self.assertEqual(
+            payload["card"]["header"],
+            {
+                "title": {
+                    "tag": "plain_text",
+                    "content": "\u26a0\ufe0f GPU capacity",
+                },
+                "subtitle": {
+                    "tag": "plain_text",
+                    "content": "2026-08-30 18:00:00",
+                },
+                "template": "green",
+                "ud_icon": {"token": "yes_filled"},
+            },
+        )
+        self.assertEqual(
+            payload["card"]["elements"][1]["content"],
+            "```txt\n2026-08-30 18:00:00\nNo free GPUs\n```",
+        )
+
+    @patch(
+        "host_monitor.alerts.post_json",
+        return_value='{"code": 0, "msg": "success"}',
+    )
+    def test_lark_error_card_preserves_existing_shape(self, post):
+        sender = lark_sender(policy={"max_retries": 0})
+        message = AlertMessage(
+            title="Collector failed",
+            subtitle="2026-08-30 18:00:00",
+            text="GPU data unavailable",
+            level="error",
+            traceback="CollectorError: timeout",
+        )
+        try:
+            sender.send_one(message, "lark")
+        finally:
+            sender.close()
+
+        payload = post.call_args.args[1]
+        self.assertEqual(payload["card"]["header"]["template"], "red")
+        self.assertEqual(
+            payload["card"]["header"]["ud_icon"],
+            {"token": "error_filled"},
+        )
+        self.assertEqual(
+            payload["card"]["elements"][1]["content"],
+            (
+                "```txt\n2026-08-30 18:00:00\nGPU data unavailable\n\n"
+                "CollectorError: timeout\n```"
+            ),
+        )
+        self.assertEqual(
+            payload["card"]["elements"][3]["content"],
+            "```\nCollectorError: timeout\n```",
+        )
+
+    @patch(
+        "host_monitor.alerts.post_json",
+        return_value='{"code": 19001, "msg": "denied"}',
+    )
+    def test_lark_alert_rejects_application_error(self, post):
+        sender = lark_sender(policy={"max_retries": 0})
+        try:
+            with self.assertRaisesRegex(AlertError, "code=19001"):
+                sender.send_manual(
+                    title="test",
+                    text="message",
+                    level="warning",
+                )
+        finally:
+            sender.close()
+
+        post.assert_called_once()
+
+    @patch("host_monitor.alerts.ExprTrackerLarkBackend.send")
+    def test_lark_advanced_options_use_expr_tracker_backend(self, send):
+        sender = lark_sender(
+            options={"max_retries": 1},
+            policy={"max_retries": 0},
+        )
+        try:
+            sender.send_manual(
+                title="test",
+                text="message",
+                level="warning",
+            )
+            backend = sender.dispatcher.channels["lark"].backend
+        finally:
+            sender.close()
+
+        self.assertIsInstance(backend, LightweightLarkBackend)
+        self.assertIsNotNone(backend.fallback)
+        send.assert_called_once()
 
     def test_manual_alert_rejects_disabled_configuration(self):
         sender = AlertSender(

@@ -72,7 +72,9 @@ receive recoveries.
 
 ## Lark
 
-The Lark backend needs Expr Tracker's optional `slark` dependency:
+Lark webhook support is built into hostmon and does not load the heavyweight
+`slark`/pandas client. Install the optional extra only when using non-standard
+Slark client options:
 
 ```bash
 python -m pip install "hostmon[lark]"
