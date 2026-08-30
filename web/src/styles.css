@@ -626,6 +626,8 @@ body.table-page .table-scroll {
   *::-webkit-scrollbar { width: 8px; height: 8px; }
 }
 @media (max-width: 360px) {
+  .web-settings-grid { grid-template-columns: 1fr; }
+  .web-settings-grid > .button { justify-self: stretch; }
   .statusbar { gap: 6px; padding-right: 154px; }
   .layout-dock-button {
     min-width: 50px; padding-inline: 5px; font-size: 0;

@@ -950,6 +950,33 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   ).toBeLessThanOrEqual(
     collectorViewportBox!.x + collectorViewportBox!.width + 1,
   );
+
+  await page.goto("/?page=settings");
+  const settingsGrid = page.locator(".web-settings-grid");
+  const resetChartDefaults = page.getByRole("button", {
+    name: "Reset chart defaults",
+  });
+  await expect(resetChartDefaults).toBeInViewport({ratio: 1});
+  const settingsFit = await settingsGrid.evaluate(element => {
+    const boundary = element.getBoundingClientRect().right + 1;
+    return (
+      element.scrollWidth <= element.clientWidth &&
+      [...element.children].every(
+        child => child.getBoundingClientRect().right <= boundary,
+      )
+    );
+  });
+  const settingsColumns = await settingsGrid.evaluate(
+    element =>
+      getComputedStyle(element).gridTemplateColumns.split(" ").length,
+  );
+  const resetTextFits = await resetChartDefaults.evaluate(
+    element => element.scrollWidth <= element.clientWidth,
+  );
+
+  expect(settingsFit).toBe(true);
+  expect(settingsColumns).toBe(1);
+  expect(resetTextFits).toBe(true);
 });
 
 test("keeps tablet toolbar actions on one row", async ({ page }) => {
