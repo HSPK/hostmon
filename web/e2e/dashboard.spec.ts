@@ -811,6 +811,28 @@ test("keeps tablet toolbar actions on one row", async ({ page }) => {
   expect(toolbarBox!.height).toBeLessThan(70);
 });
 
+test("keeps narrow desktop charts on one readable column", async ({ page }) => {
+  await page.setViewportSize({ width: 900, height: 900 });
+  await page.goto("/?page=overview");
+  await expect(
+    page.locator('.panel-section[data-section="Charts"] .panel'),
+  ).toHaveCount(4);
+
+  const charts = await page
+    .locator('.panel-section[data-section="Charts"] .panel')
+    .evaluateAll(elements =>
+      elements.slice(0, 2).map(element => {
+        const box = element.getBoundingClientRect();
+        return {x: box.x, y: box.y, width: box.width};
+      }),
+    );
+
+  expect(charts).toHaveLength(2);
+  expect(charts[0]!.x).toBe(charts[1]!.x);
+  expect(charts[1]!.y).toBeGreaterThan(charts[0]!.y);
+  expect(charts[0]!.width).toBeGreaterThan(600);
+});
+
 test("avoids empty summary filler tracks on tablets", async ({ page }) => {
   await page.setViewportSize({ width: 600, height: 800 });
   await page.goto("/?page=overview");

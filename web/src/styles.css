@@ -513,6 +513,10 @@ body.table-page .table-scroll {
 @media (max-width: 1200px) {
   .toolbar-search { display: none; }
 }
+@media (max-width: 1100px) {
+  .panel-grid { grid-template-columns: 1fr; }
+  .panel-wide { grid-column: auto; }
+}
 @media (max-width: 850px) {
   .app-shell { grid-template-columns: 1fr; }
   .workspace { grid-column: 1; }
@@ -529,8 +533,6 @@ body.table-page .table-scroll {
     scrollbar-width: none;
   }
   .toolbar-actions::-webkit-scrollbar { display: none; }
-  .panel-grid { grid-template-columns: 1fr; }
-  .panel-wide { grid-column: auto; }
   .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 @media (max-width: 560px) {
