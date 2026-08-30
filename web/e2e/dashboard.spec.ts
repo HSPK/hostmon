@@ -811,6 +811,30 @@ test("keeps tablet toolbar actions on one row", async ({ page }) => {
   expect(toolbarBox!.height).toBeLessThan(70);
 });
 
+test("avoids empty summary filler tracks on tablets", async ({ page }) => {
+  await page.setViewportSize({ width: 600, height: 800 });
+  await page.goto("/?page=overview");
+
+  await expect(page.locator(".stat-grid")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(page.locator(".stat-card").first()).not.toHaveCSS(
+    "box-shadow",
+    "none",
+  );
+
+  await page.goto("/?page=gpu-fleet");
+  await expect(page.locator(".fleet-summary")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(page.locator(".fleet-summary > div").first()).not.toHaveCSS(
+    "box-shadow",
+    "none",
+  );
+});
+
 test("maintains smooth animation frame cadence", async ({ page }) => {
   await page.goto("/");
   const frameDurations = await page.evaluate(

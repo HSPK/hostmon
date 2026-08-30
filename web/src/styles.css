@@ -208,8 +208,14 @@ main { width: 100%; padding: var(--space-3); }
 .panel-body { padding: 8px; }
 .panel-actions { display: flex; gap: 4px; margin-left: auto; }
 
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 1px; background: var(--border); }
-.stat-card { min-width: 0; padding: 9px; background: var(--surface); }
+.stat-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0; background: transparent;
+}
+.stat-card {
+  min-width: 0; padding: 9px; background: var(--surface);
+  box-shadow: inset -1px 0 var(--border), inset 0 -1px var(--border);
+}
 .stat-label { display: block; color: var(--muted); font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .stat-value { display: block; margin-top: 3px; font: 600 17px ui-monospace, monospace; white-space: nowrap; }
 

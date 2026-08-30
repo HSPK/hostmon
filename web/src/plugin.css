@@ -1,11 +1,14 @@
 .fleet-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 1px;
+  gap: 0;
   margin-bottom: 8px;
-  background: var(--border);
+  background: transparent;
 }
-.fleet-summary > div { min-width: 0; padding: 9px; background: var(--surface); }
+.fleet-summary > div {
+  min-width: 0; padding: 9px; background: var(--surface);
+  box-shadow: inset -1px 0 var(--border), inset 0 -1px var(--border);
+}
 .fleet-summary span { display: block; color: var(--muted); font-size: 10px; }
 .fleet-summary strong { display: block; margin-top: 4px; font: 600 16px ui-monospace, monospace; }
 .fleet-table-scroll { max-height: none; }
