@@ -688,11 +688,11 @@ test("remains responsive on narrow screens", async ({ page }) => {
   );
   await expect(toolbarControls).toHaveCount(5);
   const toolbarRows = await toolbarControls.evaluateAll(elements =>
-    new Set(
-      elements.map(element =>
-        Math.round(element.getBoundingClientRect().top),
-      ),
-    ).size,
+  new Set(
+    elements.map(element =>
+      Math.round(element.getBoundingClientRect().top),
+    ),
+  ).size,
   );
   expect(toolbarRows).toBe(1);
   const toolbarBox = await page.locator(".toolbar").boundingBox();
@@ -826,9 +826,11 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   await page.setViewportSize({width: 320, height: 720});
   await page.goto("/?page=overview");
 
-  const toolbarRows = await page
-    .locator(".toolbar-actions > .control, .toolbar-actions > .button")
-    .evaluateAll(elements =>
+  const toolbarControls = page.locator(
+    ".toolbar-actions > .control, .toolbar-actions > .button",
+  );
+  await expect(toolbarControls).toHaveCount(5);
+  const toolbarRows = await toolbarControls.evaluateAll(elements =>
       new Set(
         elements.map(element =>
           Math.round(element.getBoundingClientRect().top),
@@ -852,6 +854,32 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
     dockBox!.x,
   );
   await expect(page.getByLabel("Time window")).toHaveValue("3600");
+
+  await page.goto("/?page=metrics");
+  const metricViewport = page.locator(
+    ".metric-explorer-panel .data-grid-viewport",
+  );
+  const metricName = page
+    .locator('.metric-table td[data-column="name"]')
+    .first();
+  const metricCurrent = page
+    .locator('.metric-table td[data-column="current"]')
+    .first();
+  await expect(metricCurrent).toBeInViewport({ratio: 1});
+  const viewportBox = await metricViewport.boundingBox();
+  const nameBox = await metricName.boundingBox();
+  const currentBox = await metricCurrent.boundingBox();
+
+  expect(viewportBox).not.toBeNull();
+  expect(nameBox).not.toBeNull();
+  expect(currentBox).not.toBeNull();
+  expect(nameBox!.width).toBeLessThanOrEqual(140);
+  expect(currentBox!.x).toBeGreaterThanOrEqual(
+    nameBox!.x + nameBox!.width - 1,
+  );
+  expect(currentBox!.x + currentBox!.width).toBeLessThanOrEqual(
+    viewportBox!.x + viewportBox!.width + 1,
+  );
 });
 
 test("keeps tablet toolbar actions on one row", async ({ page }) => {

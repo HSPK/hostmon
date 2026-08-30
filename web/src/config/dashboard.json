@@ -104,7 +104,7 @@
       "columnSpan": 2,
       "columns": [
         {"id": "select", "label": "", "width": "48px", "align": "center", "pinned": "left", "action": "select"},
-        {"id": "name", "label": "Metric", "path": "name", "width": "480px", "mobileWidth": "210px", "align": "left", "pinned": true, "sort": "name"},
+        {"id": "name", "label": "Metric", "path": "name", "width": "480px", "mobileWidth": "140px", "align": "left", "pinned": true, "sort": "name"},
         {"id": "current", "label": "Current", "path": "current", "width": "140px", "mobileWidth": "110px", "format": "metric", "sort": "current"},
         {"id": "minimum", "label": "Min", "path": "minimum", "width": "140px", "mobileWidth": "110px", "format": "metric", "sort": "minimum"},
         {"id": "average", "label": "Average", "path": "average", "width": "140px", "mobileWidth": "110px", "format": "metric", "sort": "average"},
