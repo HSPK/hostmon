@@ -1016,6 +1016,26 @@ test("avoids empty summary filler tracks on tablets", async ({ page }) => {
     "box-shadow",
     "none",
   );
+
+  await page.goto("/?page=kubernetes");
+  await expect(page.locator(".task-grid")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(page.locator(".task-grid > div").first()).not.toHaveCSS(
+    "box-shadow",
+    "none",
+  );
+
+  await page.goto("/?page=system");
+  await expect(page.locator(".system-grid")).toHaveCSS(
+    "background-color",
+    "rgba(0, 0, 0, 0)",
+  );
+  await expect(page.locator(".system-card").first()).not.toHaveCSS(
+    "box-shadow",
+    "none",
+  );
 });
 
 test("maintains smooth animation frame cadence", async ({ page }) => {
