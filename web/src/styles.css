@@ -12,6 +12,7 @@
   --text: #d9e0e8;
   --muted: #7f8b99;
   --accent: #4ea1d3;
+  --accent-contrast: #081016;
   --success: #4caf78;
   --warning: #d2a84a;
   --danger: #cf6679;
@@ -43,6 +44,7 @@
   --text: #17202a;
   --muted: #5e6b78;
   --accent: #176b9c;
+  --accent-contrast: #f5f9fc;
   --success: #257a4d;
   --warning: #8a6414;
   --danger: #a33a4b;
@@ -101,7 +103,8 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 }
 .product-mark {
   display: grid; place-items: center; width: 30px; height: 30px;
-  color: #081016; background: var(--accent); font: 700 11px ui-monospace, monospace;
+  color: var(--accent-contrast); background: var(--accent);
+  font: 700 11px ui-monospace, monospace;
 }
 .product strong { display: block; font-size: 14px; letter-spacing: .04em; }
 .product small { display: block; margin-top: 1px; color: var(--muted); font-size: 10px; text-transform: uppercase; }

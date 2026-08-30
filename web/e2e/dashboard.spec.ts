@@ -1281,16 +1281,13 @@ test("configures web theme and density", async ({ page }) => {
       ),
     )
     .toBe("#d6dde5");
-  await page.reload();
-  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await expect(page.getByLabel("Time range")).toHaveValue("86400");
-  await page.locator(".toolbar").getByRole("button", {name: "Add chart"}).click();
-  const primaryContrast = await page
-    .getByRole("button", {name: "Save chart"})
-    .evaluate(element => {
+  const elementContrast = (selector: string) =>
+    page.locator(selector).evaluate(element => {
       const channels = (value: string) => {
         const values = value.match(/[\d.]+/g)?.slice(0, 3).map(Number);
-        if (!values || values.length !== 3) throw new Error(`invalid color: ${value}`);
+        if (!values || values.length !== 3) {
+          throw new Error(`invalid color: ${value}`);
+        }
         return values;
       };
       const luminance = (value: string) => {
@@ -1314,7 +1311,12 @@ test("configures web theme and density", async ({ page }) => {
         (Math.min(foreground, background) + 0.05)
       );
     });
-  expect(primaryContrast).toBeGreaterThanOrEqual(4.5);
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.getByLabel("Time range")).toHaveValue("86400");
+  expect(await elementContrast(".product-mark")).toBeGreaterThanOrEqual(4.5);
+  await page.locator(".toolbar").getByRole("button", {name: "Add chart"}).click();
+  expect(await elementContrast("#chart-save")).toBeGreaterThanOrEqual(4.5);
   await expect(page.locator("#chart-style")).toHaveValue("area");
   await expect(page.locator("#chart-width")).toHaveValue("2");
   await expect(page.locator("#chart-height")).toHaveValue("360");
