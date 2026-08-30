@@ -208,7 +208,7 @@
       "defaultSortDirection": "desc",
       "columns": [
         {"id": "queue", "label": "Queue", "path": "queue", "width": "96px", "align": "left", "sort": "queue"},
-        {"id": "name", "label": "Workload", "path": "name", "width": "410px", "mobileWidth": "240px", "align": "left", "pinned": true, "sort": "name", "action": "details"},
+        {"id": "name", "label": "Workload", "path": "name", "width": "410px", "mobileWidth": "160px", "align": "left", "pinned": true, "sort": "name", "action": "details"},
         {"id": "status", "label": "State", "path": "status", "width": "100px", "align": "center", "format": "state"},
         {"id": "submitter", "label": "Submitter", "path": "submitter", "width": "280px", "align": "left", "sort": "submitter"},
         {"id": "running_gpus", "label": "Running GPUs", "path": "running_gpus", "width": "130px", "format": "number", "sort": "running_gpus"},

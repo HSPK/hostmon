@@ -881,6 +881,38 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
     viewportBox!.x + viewportBox!.width + 1,
   );
 
+  await page.goto("/?page=workloads");
+  const workloadViewport = page.locator(
+    ".gpu-submitters-panel .data-grid-viewport",
+  );
+  const workloadName = page
+    .locator('.submitter-table td[data-column="name"]')
+    .first();
+  const workloadPending = page
+    .locator('.submitter-table td[data-column="pending_gpus"]')
+    .first();
+  await expect(workloadName).toBeVisible();
+  await workloadViewport.evaluate(element => {
+    element.scrollLeft = element.scrollWidth;
+  });
+  await expect(workloadPending).toBeInViewport({ratio: 1});
+  const workloadViewportBox = await workloadViewport.boundingBox();
+  const workloadNameBox = await workloadName.boundingBox();
+  const workloadPendingBox = await workloadPending.boundingBox();
+
+  expect(workloadViewportBox).not.toBeNull();
+  expect(workloadNameBox).not.toBeNull();
+  expect(workloadPendingBox).not.toBeNull();
+  expect(workloadNameBox!.width).toBeLessThanOrEqual(160);
+  expect(workloadPendingBox!.x).toBeGreaterThanOrEqual(
+    workloadNameBox!.x + workloadNameBox!.width - 1,
+  );
+  expect(
+    workloadPendingBox!.x + workloadPendingBox!.width,
+  ).toBeLessThanOrEqual(
+    workloadViewportBox!.x + workloadViewportBox!.width + 1,
+  );
+
   await page.goto("/?page=alerts");
   const alertViewport = page.locator(
     ".rules-panel .data-grid-viewport",
