@@ -195,6 +195,71 @@ describe("PreferenceStore", () => {
     ).toContain("metrics");
   });
 
+  it("creates, updates, and removes metric pages safely", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    const charts = preferences.get().navigationSections.find(
+      section => section.label === "Charts",
+    )!;
+    const tables = preferences.get().navigationSections.find(
+      section => section.label === "Tables",
+    )!;
+    const pageId = preferences.addPage("Experiments", charts.id);
+    expect(pageId).toBe("page-experiments");
+    preferences.saveCustomPanel({
+      id: "custom-experiment",
+      type: "timeseries",
+      page: pageId!,
+      title: "Experiment metric",
+      metrics: ["cpu/percent"],
+      custom: true,
+    });
+    preferences.updatePage(pageId!, "Training runs", tables.id);
+
+    const restored = new PreferenceStore(DASHBOARD);
+    expect(restored.navigationItems()).toContainEqual({
+      id: pageId,
+      label: "Training runs",
+    });
+    expect(
+      restored
+        .get()
+        .navigationSections.find(section => section.id === tables.id)
+        ?.pages,
+    ).toContain(pageId);
+
+    expect(restored.removePage(pageId!)).toBe(true);
+    expect(restored.navigationItems().some(page => page.id === pageId)).toBe(
+      false,
+    );
+    expect(
+      restored.get().customPanels.find(panel => panel.id === "custom-experiment")
+        ?.page,
+    ).not.toBe(pageId);
+  });
+
+  it("hides built-in pages and preserves chart defaults", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    preferences.setChartDefaults({
+      style: "area",
+      columnSpan: 2,
+      height: 360,
+      lineWidth: 2.5,
+    });
+    expect(preferences.removePage("metrics")).toBe(true);
+
+    const restored = new PreferenceStore(DASHBOARD);
+    expect(restored.navigationItems().some(page => page.id === "metrics")).toBe(
+      false,
+    );
+    expect(restored.get().hiddenPages).toContain("metrics");
+    expect(restored.get().chartDefaults).toEqual({
+      style: "area",
+      columnSpan: 2,
+      height: 360,
+      lineWidth: 2.5,
+    });
+  });
+
   it("persists drag ordering before a target panel", () => {
     const preferences = new PreferenceStore(DASHBOARD);
     preferences.moveBefore("network", "host-utilization");

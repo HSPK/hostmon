@@ -58,7 +58,12 @@ export class DashboardApp {
   private serverPreferencesLoaded = false;
   private serverPreferences: DashboardPreferences | null = null;
   private readonly handlePopState = (): void => {
-    this.navigate(this.pageFromLocation() ?? "overview", false);
+    this.navigate(
+      this.pageFromLocation() ??
+        this.preferences.navigationItems()[0]?.id ??
+        "overview",
+      false,
+    );
   };
 
   constructor(root: HTMLElement, dashboard: DashboardDefinition) {
@@ -248,7 +253,7 @@ export class DashboardApp {
             <div class="toolbar-title"><div><h1 id="page-title">Overview</h1><p id="host-text">waiting for data</p></div></div>
             <div class="toolbar-actions">
               <input id="chart-search" class="toolbar-search" type="search" placeholder="Find chart" aria-label="Find chart">
-              <label class="control"><span class="control-label">Window</span><select id="window-select" aria-label="Time window"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option><option value="43200">12h</option><option value="86400">24h</option><option value="604800">7d</option><option value="2592000">30d</option></select></label>
+              <label class="control"><select id="window-select" aria-label="Time window"><option value="900">15m</option><option value="3600">1h</option><option value="21600">6h</option><option value="43200">12h</option><option value="86400">24h</option><option value="604800">7d</option><option value="2592000">30d</option></select></label>
               <button id="refresh-button" class="button" type="button">Refresh</button>
               <button id="pause-button" class="button" type="button">Pause</button>
               <button id="add-chart-button" class="button" type="button">Add chart</button>
@@ -273,11 +278,6 @@ export class DashboardApp {
             </section>
             <section id="layout-navigation-view" class="layout-dock-view">
               <div class="layout-settings-heading"><div><h3>Navigation sections</h3><p>Group pages and control their sidebar order.</p></div></div>
-              <form id="navigation-section-form" class="navigation-section-form">
-                <input id="navigation-section-name" aria-label="New section name" maxlength="64" placeholder="New section" required>
-                <select id="navigation-section-placement" aria-label="New section placement"><option value="main">Main</option><option value="bottom">Bottom</option></select>
-                <button class="button" type="submit">Add section</button>
-              </form>
               <div id="navigation-settings" class="navigation-settings"></div>
             </section>
             <section id="layout-panels-view" class="layout-dock-view" hidden>
@@ -313,7 +313,7 @@ export class DashboardApp {
               <section><h3>Selected metrics</h3><div id="chart-metric-selected" class="metric-list"></div></section>
             </div>
           </div>
-          <footer><span id="chart-selection-count">0 selected</span><div><button id="chart-cancel" class="button" type="button">Cancel</button><button id="chart-save" class="button button-primary" value="default">Save chart</button></div></footer>
+          <footer><div><span id="chart-selection-count">0 selected</span><button id="chart-delete" class="button button-danger" type="button" hidden>Delete chart</button></div><div><button id="chart-cancel" class="button" type="button">Cancel</button><button id="chart-save" class="button button-primary" value="default">Save chart</button></div></footer>
         </form>
       </dialog>
     `;
@@ -335,10 +335,7 @@ export class DashboardApp {
   private bindControls(): void {
     this.required("window-select").addEventListener("change", event => {
       const seconds = Number((event.target as HTMLSelectElement).value);
-      this.preferences.setWindow(seconds);
-      this.store.setWindow(seconds);
-      this.catalogCache = null;
-      void this.reloadData();
+      this.setWindow(seconds);
     });
     this.pauseButton.addEventListener("click", () => {
       this.paused = !this.paused;
@@ -352,26 +349,6 @@ export class DashboardApp {
     });
     this.required("add-chart-button").addEventListener("click", () =>
       this.openChartEditor(),
-    );
-    this.required("navigation-section-form").addEventListener(
-      "submit",
-      event => {
-        event.preventDefault();
-        const name = this.required(
-          "navigation-section-name",
-        ) as HTMLInputElement;
-        const placement = (
-          this.required(
-            "navigation-section-placement",
-          ) as HTMLSelectElement
-        ).value as "main" | "bottom";
-        if (!this.preferences.addNavigationSection(name.value, placement)) {
-          return;
-        }
-        name.value = "";
-        this.renderNavigation();
-        this.renderLayoutSettings();
-      },
     );
     this.required("export-button").addEventListener("click", () => this.exportCsv());
     this.required("layout-close").addEventListener("click", () =>
@@ -424,6 +401,9 @@ export class DashboardApp {
         this.chartDialog.close(),
       );
     }
+    this.required("chart-delete").addEventListener("click", () =>
+      this.deleteEditedChart(),
+    );
     this.required("chart-form").addEventListener("submit", event => {
       event.preventDefault();
       void this.saveChart();
@@ -461,6 +441,16 @@ export class DashboardApp {
     }
   }
 
+  private setWindow(seconds: number): void {
+    this.preferences.setWindow(seconds);
+    this.store.setWindow(seconds);
+    (this.required("window-select") as HTMLSelectElement).value = String(
+      seconds,
+    );
+    this.catalogCache = null;
+    void this.reloadData();
+  }
+
   private async loadCatalog(): Promise<MetricCatalogEntry[]> {
     if (this.catalogCache && Date.now() - this.catalogCache.loadedAt < 5000) {
       return this.catalogCache.entries;
@@ -493,9 +483,8 @@ export class DashboardApp {
   private renderNavigation(): void {
     const preferences = this.preferences.get();
     const active = preferences.activePage;
-    const items = new Map(
-      this.dashboard.navigation.map(item => [item.id, item]),
-    );
+    const navigationItems = this.preferences.navigationItems();
+    const items = new Map(navigationItems.map(item => [item.id, item]));
     const sections = preferences.navigationSections;
     this.renderNavigationRoot(
       this.required("navigation"),
@@ -511,7 +500,7 @@ export class DashboardApp {
       sections,
       true,
     );
-    const current = this.dashboard.navigation.find(item => item.id === active);
+    const current = navigationItems.find(item => item.id === active);
     this.required("page-title").textContent = current?.label ?? "Overview";
   }
 
@@ -571,7 +560,8 @@ export class DashboardApp {
   private pageFromLocation(): PageId | null {
     const requested = new URL(window.location.href).searchParams.get("page");
     return (
-      this.dashboard.navigation.find(item => item.id === requested)?.id ?? null
+      this.preferences.navigationItems().find(item => item.id === requested)
+        ?.id ?? null
     );
   }
 
@@ -598,6 +588,24 @@ export class DashboardApp {
     this.panels.length = 0;
     this.panelsRoot.replaceChildren();
     const definitions = this.preferences.visiblePanels();
+    if (!definitions.length) {
+      document.body.classList.remove("table-page");
+      const empty = document.createElement("section");
+      empty.className = "empty-page";
+      const title = document.createElement("h2");
+      title.textContent = "No panels yet";
+      const message = document.createElement("p");
+      message.textContent =
+        "Add a chart or use Panels to restore hidden content.";
+      const add = document.createElement("button");
+      add.type = "button";
+      add.className = "button button-primary";
+      add.textContent = "Add chart";
+      add.addEventListener("click", () => this.openChartEditor());
+      empty.append(title, message, add);
+      this.panelsRoot.append(empty);
+      return;
+    }
     document.body.classList.toggle(
       "table-page",
       definitions.length > 0 &&
@@ -647,6 +655,13 @@ export class DashboardApp {
             this.preferences.setAppearance(theme, density);
             this.applyAppearance();
           },
+          windowSeconds: () => this.preferences.get().windowSeconds,
+          setWindow: seconds => this.setWindow(seconds),
+          chartDefaults: () => this.preferences.get().chartDefaults,
+          setChartDefaults: defaults =>
+            this.preferences.setChartDefaults(defaults),
+          renderNavigationEditor: root =>
+            this.renderNavigationSettings(root, this.preferences.get()),
           createChart: metrics => this.openChartEditor(undefined, metrics),
           editChart: chart => this.openChartEditor(chart),
           removeChart: id => this.removeChart(id),
@@ -714,7 +729,10 @@ export class DashboardApp {
 
   private renderLayoutSettings(): void {
     const preferences = this.preferences.get();
-    this.renderNavigationSettings(preferences);
+    this.renderNavigationSettings(
+      this.required("navigation-settings"),
+      preferences,
+    );
     const root = this.required("panel-settings");
     const fragment = document.createDocumentFragment();
     for (const definition of orderedDefinitions(
@@ -790,11 +808,43 @@ export class DashboardApp {
   }
 
   private renderNavigationSettings(
+    root: HTMLElement,
     preferences: DashboardPreferences,
   ): void {
-    const root = this.required("navigation-settings");
     const sections = preferences.navigationSections;
     const fragment = document.createDocumentFragment();
+    const sectionForm = document.createElement("form");
+    sectionForm.className = "navigation-section-form";
+    const sectionName = document.createElement("input");
+    sectionName.maxLength = 64;
+    sectionName.placeholder = "New section";
+    sectionName.setAttribute("aria-label", "New section name");
+    sectionName.required = true;
+    const sectionPlacement = document.createElement("select");
+    sectionPlacement.setAttribute("aria-label", "New section placement");
+    for (const value of ["main", "bottom"] as const) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value === "main" ? "Main" : "Bottom";
+      sectionPlacement.append(option);
+    }
+    const addSection = document.createElement("button");
+    addSection.type = "submit";
+    addSection.className = "button";
+    addSection.textContent = "Add section";
+    sectionForm.append(sectionName, sectionPlacement, addSection);
+    sectionForm.addEventListener("submit", event => {
+      event.preventDefault();
+      if (
+        !this.preferences.addNavigationSection(
+          sectionName.value,
+          sectionPlacement.value as "main" | "bottom",
+        )
+      ) {
+        return;
+      }
+      this.refreshNavigationConfiguration();
+    });
     const sectionList = document.createElement("div");
     sectionList.className = "navigation-section-list";
     for (const section of sections) {
@@ -815,8 +865,7 @@ export class DashboardApp {
         this.preferences.updateNavigationSection(section.id, {
           label: name.value,
         });
-        this.renderNavigation();
-        this.renderLayoutSettings();
+        this.refreshNavigationConfiguration();
       });
       const placement = document.createElement("select");
       placement.setAttribute(
@@ -834,8 +883,7 @@ export class DashboardApp {
         this.preferences.updateNavigationSection(section.id, {
           placement: placement.value as "main" | "bottom",
         });
-        this.renderNavigation();
-        this.renderLayoutSettings();
+        this.refreshNavigationConfiguration();
       });
       fields.append(name, placement);
       const actions = document.createElement("div");
@@ -849,8 +897,7 @@ export class DashboardApp {
           return;
         }
         if (!this.preferences.removeNavigationSection(section.id)) return;
-        this.renderNavigation();
-        this.renderLayoutSettings();
+        this.refreshNavigationConfiguration();
       });
       remove.disabled = sections.length <= 1;
       actions.append(
@@ -864,13 +911,46 @@ export class DashboardApp {
     const assignments = document.createElement("div");
     assignments.className = "navigation-page-assignments";
     const heading = document.createElement("h4");
-    heading.textContent = "Page assignment";
-    assignments.append(heading);
-    for (const item of this.dashboard.navigation) {
-      const row = document.createElement("label");
+    heading.textContent = "Metric pages";
+    const pageForm = document.createElement("form");
+    pageForm.className = "navigation-page-form";
+    const pageName = document.createElement("input");
+    pageName.maxLength = 80;
+    pageName.placeholder = "New metric page";
+    pageName.setAttribute("aria-label", "New metric page name");
+    pageName.required = true;
+    const pageSection = document.createElement("select");
+    pageSection.setAttribute("aria-label", "New metric page section");
+    for (const section of sections) {
+      const option = document.createElement("option");
+      option.value = section.id;
+      option.textContent = section.label || "Unlabeled";
+      pageSection.append(option);
+    }
+    const addPage = document.createElement("button");
+    addPage.type = "submit";
+    addPage.className = "button";
+    addPage.textContent = "Add page";
+    pageForm.append(pageName, pageSection, addPage);
+    pageForm.addEventListener("submit", event => {
+      event.preventDefault();
+      const pageId = this.preferences.addPage(
+        pageName.value,
+        pageSection.value,
+      );
+      if (!pageId) return;
+      this.preferences.setActivePage(pageId);
+      this.refreshNavigationConfiguration();
+    });
+    assignments.append(heading, pageForm);
+    for (const item of this.preferences.navigationItems()) {
+      const row = document.createElement("div");
       row.className = "navigation-page-setting";
-      const label = document.createElement("span");
-      label.textContent = item.label;
+      row.dataset.navigationPageId = item.id;
+      const label = document.createElement("input");
+      label.value = item.label;
+      label.maxLength = 80;
+      label.setAttribute("aria-label", `Page name ${item.label}`);
       const select = document.createElement("select");
       select.setAttribute("aria-label", `Section for ${item.label}`);
       for (const section of sections) {
@@ -883,22 +963,44 @@ export class DashboardApp {
         sections.find(section => section.pages.includes(item.id))?.id ??
         sections[0]?.id ??
         "";
-      select.addEventListener("change", () => {
-        this.preferences.setPageNavigationSection(item.id, select.value);
-        this.renderNavigation();
-        this.renderLayoutSettings();
+      const update = (): void => {
+        this.preferences.updatePage(item.id, label.value, select.value);
+        this.refreshNavigationConfiguration();
+      };
+      label.addEventListener("change", update);
+      select.addEventListener("change", update);
+      const remove = orderButton("Delete", () => {
+        if (
+          !window.confirm(
+            `Delete the ${item.label} page? Custom charts will move to another page, and Reset layout can restore built-in pages.`,
+          )
+        ) {
+          return;
+        }
+        if (!this.preferences.removePage(item.id)) return;
+        this.refreshNavigationConfiguration();
       });
-      row.append(label, select);
+      remove.disabled = this.preferences.navigationItems().length <= 1;
+      row.append(label, select, remove);
       assignments.append(row);
     }
-    fragment.append(sectionList, assignments);
+    fragment.append(sectionForm, sectionList, assignments);
     root.replaceChildren(fragment);
+  }
+
+  private refreshNavigationConfiguration(): void {
+    const active = this.preferences.get().activePage;
+    if (this.pageFromLocation() !== active) {
+      this.updatePageRoute(active, true);
+    }
+    this.renderNavigation();
+    this.renderLayoutSettings();
+    this.renderPanels();
   }
 
   private moveNavigationSection(id: string, direction: -1 | 1): void {
     this.preferences.moveNavigationSection(id, direction);
-    this.renderNavigation();
-    this.renderLayoutSettings();
+    this.refreshNavigationConfiguration();
   }
 
   private movePanel(id: string, direction: -1 | 1): void {
@@ -946,6 +1048,7 @@ export class DashboardApp {
     initialMetrics: string[] = [],
   ): void {
     this.editingPanel = panel ?? null;
+    const defaults = this.preferences.get().chartDefaults;
     this.required("chart-dialog-title").textContent = panel
       ? "Edit chart"
       : "Create chart";
@@ -953,15 +1056,15 @@ export class DashboardApp {
       panel?.title ?? "Custom metrics";
     this.renderChartDestinations(panel?.page ?? this.defaultChartPage());
     (this.required("chart-style") as HTMLSelectElement).value =
-      panel?.style ?? "line";
+      panel?.style ?? defaults.style;
     (this.required("chart-width") as HTMLSelectElement).value = String(
-      panel?.columnSpan ?? 1,
+      panel?.columnSpan ?? defaults.columnSpan,
     );
     (this.required("chart-height") as HTMLSelectElement).value = String(
-      panel?.height ?? 270,
+      panel?.height ?? defaults.height,
     );
     (this.required("chart-line-width") as HTMLInputElement).value = String(
-      panel?.lineWidth ?? 1.5,
+      panel?.lineWidth ?? defaults.lineWidth,
     );
     (this.required("chart-min") as HTMLInputElement).value =
       panel?.range?.[0] === undefined ? "" : String(panel.range[0]);
@@ -971,6 +1074,7 @@ export class DashboardApp {
     this.chartDialog.dataset.selected = JSON.stringify(
       panel?.metrics ?? initialMetrics,
     );
+    this.required("chart-delete").toggleAttribute("hidden", !panel);
     this.renderMetricPicker();
     this.chartDialog.showModal();
   }
@@ -978,7 +1082,7 @@ export class DashboardApp {
   private renderChartDestinations(selectedPage: PageId): void {
     const select = this.required("chart-page") as HTMLSelectElement;
     const items = new Map(
-      this.dashboard.navigation.map(item => [item.id, item]),
+      this.preferences.navigationItems().map(item => [item.id, item]),
     );
     const fragment = document.createDocumentFragment();
     for (const section of this.preferences.get().navigationSections) {
@@ -1013,14 +1117,19 @@ export class DashboardApp {
         .filter(panel => panel.type === "timeseries")
         .map(panel => panel.page),
     );
-    if (chartPages.has(active)) return active;
+    if (
+      chartPages.has(active) ||
+      preferences.customPages.some(page => page.id === active)
+    ) {
+      return active;
+    }
     const orderedPages = preferences.navigationSections.flatMap(
       section => section.pages,
     );
     return (
       orderedPages.find(page => chartPages.has(page)) ??
       orderedPages[0] ??
-      this.dashboard.navigation[0]?.id ??
+      this.preferences.navigationItems()[0]?.id ??
       active
     );
   }
@@ -1154,6 +1263,18 @@ export class DashboardApp {
     this.renderPanels();
   }
 
+  private deleteEditedChart(): void {
+    const panel = this.editingPanel;
+    if (!panel || !window.confirm(`Delete the ${panel.title} chart?`)) return;
+    const builtIn = this.dashboard.panels.some(item => item.id === panel.id);
+    this.preferences.removeCustomPanel(panel.id);
+    if (builtIn) this.preferences.setVisible(panel.id, false);
+    this.editingPanel = null;
+    this.chartDialog.close();
+    this.renderLayoutSettings();
+    this.renderPanels();
+  }
+
   private toggleLayoutDock(view: LayoutView): void {
     const isActive = !this.layoutPanel.hidden && this.layoutView === view;
     this.setLayoutDock(isActive ? null : view);
@@ -1242,10 +1363,13 @@ export class DashboardApp {
   }
 
   private allPanels(): PanelDefinition[] {
+    const pages = new Set(
+      this.preferences.navigationItems().map(page => page.id),
+    );
     return [
       ...this.dashboard.panels,
       ...this.preferences.get().customPanels,
-    ];
+    ].filter(panel => pages.has(panel.page));
   }
 
   private trackedPanelMetrics(): string[] {

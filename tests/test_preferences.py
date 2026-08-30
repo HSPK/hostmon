@@ -27,6 +27,15 @@ def sample_preferences() -> dict:
         "panelColumns": {"collectors": ["name", "state"]},
         "theme": "dark",
         "density": "compact",
+        "hiddenPages": [],
+        "pageLabels": {},
+        "customPages": [],
+        "chartDefaults": {
+            "style": "line",
+            "columnSpan": 1,
+            "height": 270,
+            "lineWidth": 1.5,
+        },
         "navigationSections": [
             {
                 "id": "charts",
@@ -89,16 +98,36 @@ class DashboardPreferenceTests(unittest.TestCase):
     def test_migrates_preferences_without_navigation_sections(self):
         preferences = sample_preferences()
         del preferences["navigationSections"]
+        del preferences["hiddenPages"]
+        del preferences["pageLabels"]
+        del preferences["customPages"]
+        del preferences["chartDefaults"]
 
         normalized = validate_dashboard_preferences(preferences)
 
         self.assertEqual(normalized["navigationSections"], [])
+        self.assertEqual(normalized["hiddenPages"], [])
+        self.assertEqual(normalized["pageLabels"], {})
+        self.assertEqual(normalized["customPages"], [])
+        self.assertEqual(
+            normalized["chartDefaults"],
+            {
+                "style": "line",
+                "columnSpan": 1,
+                "height": 270,
+                "lineWidth": 1.5,
+            },
+        )
 
     def test_store_rewrites_legacy_preferences_with_navigation_sections(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "dashboard-preferences.json"
             preferences = sample_preferences()
             del preferences["navigationSections"]
+            del preferences["hiddenPages"]
+            del preferences["pageLabels"]
+            del preferences["customPages"]
+            del preferences["chartDefaults"]
             path.write_text(json.dumps(preferences), encoding="utf-8")
 
             loaded = DashboardPreferenceStore(path).load()
@@ -116,6 +145,34 @@ class DashboardPreferenceTests(unittest.TestCase):
         preferences["navigationSections"][1]["pages"] = ["overview"]
 
         with self.assertRaisesRegex(ValueError, "assigned to another section"):
+            validate_dashboard_preferences(preferences)
+
+    def test_validates_custom_pages_and_chart_defaults(self):
+        preferences = sample_preferences()
+        preferences["customPages"] = [
+            {"id": "page-experiments", "label": "Experiments"}
+        ]
+        preferences["pageLabels"] = {"overview": "Host overview"}
+        preferences["hiddenPages"] = ["metrics"]
+        preferences["chartDefaults"] = {
+            "style": "area",
+            "columnSpan": 2,
+            "height": 360,
+            "lineWidth": 2.5,
+        }
+
+        normalized = validate_dashboard_preferences(preferences)
+
+        self.assertEqual(normalized["customPages"], preferences["customPages"])
+        self.assertEqual(normalized["pageLabels"], preferences["pageLabels"])
+        self.assertEqual(normalized["hiddenPages"], ["metrics"])
+        self.assertEqual(
+            normalized["chartDefaults"],
+            preferences["chartDefaults"],
+        )
+
+        preferences["chartDefaults"]["height"] = 0
+        with self.assertRaisesRegex(ValueError, "height must be between"):
             validate_dashboard_preferences(preferences)
 
     def test_load_returns_none_before_first_save(self):

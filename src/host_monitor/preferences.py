@@ -21,8 +21,18 @@ PREFERENCE_KEYS = {
     "density",
     "customPanels",
     "navigationSections",
+    "hiddenPages",
+    "pageLabels",
+    "customPages",
+    "chartDefaults",
 }
-OPTIONAL_PREFERENCE_KEYS = {"navigationSections"}
+OPTIONAL_PREFERENCE_KEYS = {
+    "navigationSections",
+    "hiddenPages",
+    "pageLabels",
+    "customPages",
+    "chartDefaults",
+}
 
 
 def _string(value: Any, name: str, *, maximum: int = 256) -> str:
@@ -80,6 +90,81 @@ def _navigation_sections(value: Any) -> list[dict[str, Any]]:
                 "pages": pages,
             }
         )
+    return result
+
+
+def _page_labels(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict) or len(value) > 512:
+        raise ValueError("pageLabels must be an object")
+    result: dict[str, str] = {}
+    for page_id, label in value.items():
+        name = _string(page_id, "pageLabels key")
+        result[name] = _string(label, f"pageLabels.{name}", maximum=80)
+    return result
+
+
+def _custom_pages(value: Any) -> list[dict[str, str]]:
+    if not isinstance(value, list) or len(value) > 128:
+        raise ValueError("customPages must be an array")
+    result: list[dict[str, str]] = []
+    identifiers: set[str] = set()
+    for index, raw_page in enumerate(value):
+        name = f"customPages[{index}]"
+        if not isinstance(raw_page, dict):
+            raise ValueError(f"{name} must be an object")
+        unknown = set(raw_page) - {"id", "label"}
+        if unknown:
+            raise ValueError(f"{name} has unknown fields: {sorted(unknown)}")
+        page_id = _string(raw_page.get("id"), f"{name}.id")
+        if page_id in identifiers:
+            raise ValueError(f"{name}.id must be unique")
+        identifiers.add(page_id)
+        result.append(
+            {
+                "id": page_id,
+                "label": _string(
+                    raw_page.get("label"),
+                    f"{name}.label",
+                    maximum=80,
+                ),
+            }
+        )
+    return result
+
+
+def _chart_defaults(value: Any) -> dict[str, Any]:
+    defaults: dict[str, Any] = {
+        "style": "line",
+        "columnSpan": 1,
+        "height": 270,
+        "lineWidth": 1.5,
+    }
+    if value is None:
+        return defaults
+    if not isinstance(value, dict):
+        raise ValueError("chartDefaults must be an object")
+    unknown = set(value) - set(defaults)
+    if unknown:
+        raise ValueError(f"chartDefaults has unknown fields: {sorted(unknown)}")
+    result = {**defaults, **value}
+    if result["style"] not in {"line", "area"}:
+        raise ValueError("chartDefaults.style must be line or area")
+    if result["columnSpan"] not in {1, 2}:
+        raise ValueError("chartDefaults.columnSpan must be 1 or 2")
+    height = result["height"]
+    if (
+        isinstance(height, bool)
+        or not isinstance(height, (int, float))
+        or not 180 <= height <= 720
+    ):
+        raise ValueError("chartDefaults.height must be between 180 and 720")
+    line_width = result["lineWidth"]
+    if (
+        isinstance(line_width, bool)
+        or not isinstance(line_width, (int, float))
+        or not 0.5 <= line_width <= 5
+    ):
+        raise ValueError("chartDefaults.lineWidth must be between 0.5 and 5")
     return result
 
 
@@ -229,6 +314,13 @@ def validate_dashboard_preferences(value: Any) -> dict[str, Any]:
         "navigationSections": _navigation_sections(
             value.get("navigationSections", [])
         ),
+        "hiddenPages": _string_list(
+            value.get("hiddenPages", []),
+            "hiddenPages",
+        ),
+        "pageLabels": _page_labels(value.get("pageLabels", {})),
+        "customPages": _custom_pages(value.get("customPages", [])),
+        "chartDefaults": _chart_defaults(value.get("chartDefaults")),
     }
 
 

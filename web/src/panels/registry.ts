@@ -8,6 +8,7 @@ import type {
   TimeSeriesPanelDefinition,
   SystemPanelDefinition,
   RulesPanelDefinition,
+  SectionsPanelDefinition,
   WebSettingsPanelDefinition,
 } from "../domain/types";
 import { CollectorPanel } from "./collector-panel";
@@ -21,6 +22,7 @@ import { TimeSeriesPanel } from "./timeseries-panel";
 import { SystemPanel } from "./system-panel";
 import { RulesPanel } from "./rules-panel";
 import { WebSettingsPanel } from "./web-settings-panel";
+import { SectionsPanel } from "./sections-panel";
 
 export function createPanelRegistry(): PanelRegistry {
   const registry = new PanelRegistry()
@@ -66,6 +68,11 @@ export function createPanelRegistry(): PanelRegistry {
           definition as WebSettingsPanelDefinition,
           context,
         ),
+    )
+    .register(
+      "sections",
+      (definition, context) =>
+        new SectionsPanel(definition as SectionsPanelDefinition, context),
     );
   if (__HOSTMON_PLUGIN_UI__) {
     registry

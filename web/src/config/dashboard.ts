@@ -150,6 +150,7 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
     "plugin-records",
     "rules",
     "web-settings",
+    "sections",
   ].includes(value.type) &&
     (!["plugin-summary", "plugin-records"].includes(value.type) ||
       typeof value.plugin === "string");

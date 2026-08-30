@@ -281,6 +281,7 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator("#connection-text")).toHaveText("connected");
   await expect(page.locator(".statusbar")).toContainText("API ");
   await expect(page.locator(".statusbar")).toContainText("UTC+8");
+  await expect(page.locator(".toolbar-actions")).not.toContainText("Window");
   await expect(
     page.locator('[class*="drawer"], [id*="drawer"]'),
   ).toHaveCount(0);
@@ -493,6 +494,66 @@ test("configures persistent sidebar sections", async ({ page }) => {
     page.getByRole("heading", { name: "Operations" }),
   ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Metrics" })).toHaveCount(1);
+});
+
+test("manages sections and metric pages from the Sections page", async ({
+  page,
+}) => {
+  await page.goto("/?page=sections");
+  await expect(page.locator("#page-title")).toHaveText("Sections");
+  let editor = page.locator(".sections-panel");
+  await editor.getByLabel("New section name").fill("Experiments");
+  await editor.getByRole("button", {name: "Add section"}).click();
+
+  editor = page.locator(".sections-panel");
+  await editor.getByLabel("New metric page name").fill("Training metrics");
+  await editor.getByLabel("New metric page section").selectOption({
+    label: "Experiments",
+  });
+  await editor.getByRole("button", {name: "Add page"}).click();
+
+  await expect(page.locator("#page-title")).toHaveText("Training metrics");
+  await expect(page.locator(".empty-page")).toContainText("No panels yet");
+  await page.locator(".toolbar").getByRole("button", {name: "Add chart"}).click();
+  await expect(page.locator("#chart-page")).toHaveValue(
+    "page-training-metrics",
+  );
+  await page.getByRole("button", {name: "Close"}).click();
+
+  await page.getByRole("button", {name: "Sections"}).click();
+  editor = page.locator(".sections-panel");
+  const pageRow = editor.locator(
+    '[data-navigation-page-id="page-training-metrics"]',
+  );
+  await pageRow.locator("input").fill("Training runs");
+  await pageRow.locator("input").press("Tab");
+  await page.reload();
+  await expect(
+    page.locator(
+      '.sections-panel [data-navigation-page-id="page-training-metrics"] input',
+    ),
+  ).toHaveValue("Training runs");
+
+  page.once("dialog", dialog => dialog.accept());
+  await page
+    .locator(
+      '.sections-panel [data-navigation-page-id="page-training-metrics"]',
+    )
+    .getByRole("button", {name: "Delete"})
+    .click();
+  await expect(
+    page.locator('[data-navigation-page-id="page-training-metrics"]'),
+  ).toHaveCount(0);
+  page.once("dialog", dialog => dialog.accept());
+  await page
+    .locator(
+      '.sections-panel [data-navigation-section-id="custom-experiments"]',
+    )
+    .getByRole("button", {name: "Delete"})
+    .click();
+  await expect(
+    page.locator('[data-navigation-section-id="custom-experiments"]'),
+  ).toHaveCount(0);
 });
 
 test("supports deep links and browser workspace history", async ({ page }) => {
@@ -932,6 +993,7 @@ test("drags panels and edits built-in chart configuration", async ({ page }) => 
       panel => panel.title === "Custom host utilization",
     ) ?? false;
   });
+
   await page.getByRole("button", { name: "Save chart" }).click();
   await persisted;
   await expect(
@@ -952,6 +1014,21 @@ test("drags panels and edits built-in chart configuration", async ({ page }) => 
   await expect(
     page.locator('[data-panel-id="host-utilization"]'),
   ).toHaveClass(/panel-highlight/);
+});
+
+test("deletes a chart from its editor", async ({ page }) => {
+  await page.goto("/?page=overview");
+  const chart = page.locator('[data-panel-id="host-utilization"]');
+  await chart.getByRole("button", { name: "Edit" }).click();
+  await expect(page.locator("#chart-delete")).toBeVisible();
+  page.once("dialog", dialog => dialog.accept());
+  await page.locator("#chart-delete").click();
+
+  await expect(chart).toHaveCount(0);
+  await page.reload();
+  await expect(
+    page.locator('[data-panel-id="host-utilization"]'),
+  ).toHaveCount(0);
 });
 
 test("creates and toggles alert rules from settings", async ({ page }) => {
@@ -1005,6 +1082,12 @@ test("configures web theme and density", async ({ page }) => {
   await page.locator(".web-settings-grid label").filter({
     hasText: "Density",
   }).locator("select").selectOption("comfortable");
+  await page.getByLabel("Time range").selectOption("86400");
+  await page.getByLabel("Default chart style").selectOption("area");
+  await page.getByLabel("Default chart width").selectOption("2");
+  await page.getByLabel("Default chart height").selectOption("360");
+  await page.getByLabel("Default line width").fill("2.5");
+  await page.getByLabel("Default line width").press("Tab");
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.locator("html")).toHaveAttribute(
     "data-density",
@@ -1021,6 +1104,12 @@ test("configures web theme and density", async ({ page }) => {
     .toBe("#d6dde5");
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.getByLabel("Time range")).toHaveValue("86400");
+  await page.locator(".toolbar").getByRole("button", {name: "Add chart"}).click();
+  await expect(page.locator("#chart-style")).toHaveValue("area");
+  await expect(page.locator("#chart-width")).toHaveValue("2");
+  await expect(page.locator("#chart-height")).toHaveValue("360");
+  await expect(page.locator("#chart-line-width")).toHaveValue("2.5");
 });
 
 test("merges unrelated preference changes from stale clients", async ({

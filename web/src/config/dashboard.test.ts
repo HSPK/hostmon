@@ -17,6 +17,7 @@ describe("dashboard definition", () => {
       "plugin-records",
       "rules",
       "web-settings",
+      "sections",
     ]);
 
     expect(new Set(ids).size).toBe(ids.length);

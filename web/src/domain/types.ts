@@ -261,6 +261,10 @@ export interface WebSettingsPanelDefinition extends BasePanelDefinition {
   type: "web-settings";
 }
 
+export interface SectionsPanelDefinition extends BasePanelDefinition {
+  type: "sections";
+}
+
 export type PanelDefinition =
   | StatPanelDefinition
   | TimeSeriesPanelDefinition
@@ -271,7 +275,8 @@ export type PanelDefinition =
   | GPUFleetPanelDefinition
   | GPUSubmittersPanelDefinition
   | RulesPanelDefinition
-  | WebSettingsPanelDefinition;
+  | WebSettingsPanelDefinition
+  | SectionsPanelDefinition;
 
 export type PageId = string;
 
@@ -287,6 +292,18 @@ export interface NavigationSection {
   label: string;
   placement: "main" | "bottom";
   pages: PageId[];
+}
+
+export interface CustomPageDefinition {
+  id: PageId;
+  label: string;
+}
+
+export interface ChartDefaults {
+  style: "line" | "area";
+  columnSpan: 1 | 2;
+  height: number;
+  lineWidth: number;
 }
 
 export interface DashboardDefinition {
@@ -307,4 +324,8 @@ export interface DashboardPreferences {
   density: "compact" | "comfortable";
   customPanels: TimeSeriesPanelDefinition[];
   navigationSections: NavigationSection[];
+  hiddenPages: PageId[];
+  pageLabels: Record<PageId, string>;
+  customPages: CustomPageDefinition[];
+  chartDefaults: ChartDefaults;
 }

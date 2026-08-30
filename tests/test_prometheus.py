@@ -434,6 +434,20 @@ class PrometheusHTTPTests(unittest.TestCase):
                 "theme": "dark",
                 "density": "compact",
                 "customPanels": [],
+                "hiddenPages": [],
+                "pageLabels": {"overview": "Host overview"},
+                "customPages": [
+                    {
+                        "id": "page-experiments",
+                        "label": "Experiments",
+                    }
+                ],
+                "chartDefaults": {
+                    "style": "area",
+                    "columnSpan": 2,
+                    "height": 360,
+                    "lineWidth": 2.5,
+                },
                 "navigationSections": [
                     {
                         "id": "charts",

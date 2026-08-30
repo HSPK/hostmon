@@ -1,4 +1,5 @@
 import type {
+  ChartDefaults,
   MetricCatalogEntry,
   PanelDefinition,
   TimeSeriesPanelDefinition,
@@ -31,6 +32,11 @@ export interface PanelContext {
       theme: DashboardPreferences["theme"],
       density: DashboardPreferences["density"],
     ): void;
+    windowSeconds(): number;
+    setWindow(seconds: number): void;
+    chartDefaults(): ChartDefaults;
+    setChartDefaults(defaults: ChartDefaults): void;
+    renderNavigationEditor(root: HTMLElement): void;
     createChart(metrics?: string[]): void;
     editChart(panel: TimeSeriesPanelDefinition): void;
     removeChart(panelId: string): void;

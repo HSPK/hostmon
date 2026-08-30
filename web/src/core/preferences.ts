@@ -1,6 +1,9 @@
 import type {
+  ChartDefaults,
+  CustomPageDefinition,
   DashboardDefinition,
   DashboardPreferences,
+  NavigationItem,
   NavigationSection,
   PanelDefinition,
   PageId,
@@ -21,6 +24,10 @@ export const PREFERENCE_FIELDS: PreferenceField[] = [
   "density",
   "customPanels",
   "navigationSections",
+  "hiddenPages",
+  "pageLabels",
+  "customPages",
+  "chartDefaults",
 ];
 
 export class PreferenceStore {
@@ -63,6 +70,10 @@ export class PreferenceStore {
         ...section,
         pages: [...section.pages],
       })),
+      hiddenPages: [...this.value.hiddenPages],
+      pageLabels: {...this.value.pageLabels},
+      customPages: this.value.customPages.map(page => ({...page})),
+      chartDefaults: {...this.value.chartDefaults},
     };
   }
 
@@ -129,6 +140,10 @@ export class PreferenceStore {
     });
   }
 
+  navigationItems(): NavigationItem[] {
+    return effectiveNavigationItems(this.definition, this.value);
+  }
+
   setVisible(panelId: string, visible: boolean): void {
     const hidden = new Set(this.value.hiddenPanels);
     if (visible) hidden.delete(panelId);
@@ -173,6 +188,7 @@ export class PreferenceStore {
   }
 
   setActivePage(page: PageId, persist = true): void {
+    if (!this.navigationItems().some(item => item.id === page)) return;
     this.value.activePage = page;
     if (persist) this.save("activePage");
   }
@@ -265,7 +281,7 @@ export class PreferenceStore {
       section => section.id === sectionId,
     );
     if (
-      !this.definition.navigation.some(item => item.id === page) ||
+      !this.navigationItems().some(item => item.id === page) ||
       !target
     ) {
       return;
@@ -275,6 +291,93 @@ export class PreferenceStore {
     }
     target.pages.push(page);
     this.save("navigationSections");
+  }
+
+  addPage(label: string, sectionId: string): string | null {
+    const normalized = label.trim().slice(0, 80);
+    const section = this.value.navigationSections.find(
+      item => item.id === sectionId,
+    );
+    if (!normalized || !section) return null;
+    const known = new Set(this.navigationItems().map(item => item.id));
+    const base = `page-${slug(normalized) || "metrics"}`;
+    let id = base;
+    let suffix = 2;
+    while (known.has(id)) id = `${base}-${suffix++}`;
+    this.value.customPages.push({id, label: normalized});
+    section.pages.push(id);
+    this.save("customPages", "navigationSections");
+    return id;
+  }
+
+  updatePage(pageId: PageId, label: string, sectionId: string): void {
+    const normalized = label.trim().slice(0, 80);
+    const section = this.value.navigationSections.find(
+      item => item.id === sectionId,
+    );
+    const page = this.navigationItems().find(item => item.id === pageId);
+    if (!normalized || !section || !page) return;
+    const custom = this.value.customPages.find(item => item.id === pageId);
+    const fields: PreferenceField[] = ["navigationSections"];
+    if (custom) {
+      custom.label = normalized;
+      fields.push("customPages");
+    } else {
+      const original = this.definition.navigation.find(
+        item => item.id === pageId,
+      );
+      if (original?.label === normalized) delete this.value.pageLabels[pageId];
+      else this.value.pageLabels[pageId] = normalized;
+      fields.push("pageLabels");
+    }
+    for (const item of this.value.navigationSections) {
+      item.pages = item.pages.filter(id => id !== pageId);
+    }
+    section.pages.push(pageId);
+    this.save(...fields);
+  }
+
+  removePage(pageId: PageId): boolean {
+    const pages = this.navigationItems();
+    if (pages.length <= 1 || !pages.some(page => page.id === pageId)) {
+      return false;
+    }
+    const chartPages = new Set(
+      this.definition.panels
+        .filter(panel => panel.type === "timeseries")
+        .map(panel => panel.page),
+    );
+    const customPages = new Set(this.value.customPages.map(page => page.id));
+    const fallback =
+      pages.find(
+        page =>
+          page.id !== pageId &&
+          (chartPages.has(page.id) || customPages.has(page.id)),
+      )?.id ?? pages.find(page => page.id !== pageId)!.id;
+    const customIndex = this.value.customPages.findIndex(
+      page => page.id === pageId,
+    );
+    if (customIndex >= 0) this.value.customPages.splice(customIndex, 1);
+    else if (!this.value.hiddenPages.includes(pageId)) {
+      this.value.hiddenPages.push(pageId);
+    }
+    delete this.value.pageLabels[pageId];
+    for (const section of this.value.navigationSections) {
+      section.pages = section.pages.filter(id => id !== pageId);
+    }
+    this.value.customPanels = this.value.customPanels.map(panel =>
+      panel.page === pageId ? {...panel, page: fallback} : panel,
+    );
+    if (this.value.activePage === pageId) this.value.activePage = fallback;
+    this.save(
+      "hiddenPages",
+      "pageLabels",
+      "customPages",
+      "navigationSections",
+      "customPanels",
+      "activePage",
+    );
+    return true;
   }
 
   panelState<T extends Record<string, string | number | boolean | null>>(
@@ -310,6 +413,11 @@ export class PreferenceStore {
     this.value.theme = theme;
     this.value.density = density;
     if (fields.length) this.save(...fields);
+  }
+
+  setChartDefaults(defaults: ChartDefaults): void {
+    this.value.chartDefaults = normalizeChartDefaults(defaults);
+    this.save("chartDefaults");
   }
 
   saveCustomPanel(panel: TimeSeriesPanelDefinition): void {
@@ -350,6 +458,10 @@ export class PreferenceStore {
       density: "compact",
       customPanels: [],
       navigationSections: defaultNavigationSections(this.definition),
+      hiddenPages: [],
+      pageLabels: {},
+      customPages: [],
+      chartDefaults: defaultChartDefaults(),
     };
   }
 
@@ -368,6 +480,27 @@ export class PreferenceStore {
       value && typeof value === "object"
         ? value as Partial<DashboardPreferences>
         : {};
+    const customPages = normalizeCustomPages(
+      parsed.customPages,
+      this.definition,
+    );
+    const hiddenPages = normalizeHiddenPages(
+      parsed.hiddenPages,
+      this.definition,
+      customPages.length > 0,
+    );
+    const pageLabels = normalizePageLabels(
+      parsed.pageLabels,
+      this.definition,
+      customPages,
+    );
+    const navigationItems = effectiveNavigationItems(this.definition, {
+      hiddenPages,
+      pageLabels,
+      customPages,
+    });
+    const pageIds = new Set(navigationItems.map(item => item.id));
+    const fallbackPage = navigationItems[0]?.id ?? "overview";
     return {
         hiddenPanels: Array.isArray(parsed.hiddenPanels)
           ? parsed.hiddenPanels.filter(item => typeof item === "string")
@@ -379,9 +512,9 @@ export class PreferenceStore {
           typeof parsed.windowSeconds === "number"
             ? parsed.windowSeconds
             : this.definition.defaultWindowSeconds,
-        activePage: isPageId(parsed.activePage, this.definition)
+        activePage: isPageId(parsed.activePage, pageIds)
           ? parsed.activePage
-          : "overview",
+          : fallbackPage,
         panelState: parsePanelState(parsed),
         panelColumns: isPanelColumns(parsed.panelColumns)
           ? Object.fromEntries(
@@ -401,13 +534,18 @@ export class PreferenceStore {
           parsed.density === "comfortable" ? "comfortable" : "compact",
         customPanels: Array.isArray(parsed.customPanels)
           ? parsed.customPanels.filter(panel =>
-              isCustomPanel(panel, this.definition),
+              isCustomPanel(panel, pageIds),
             ).map(normalizeCustomPanel)
           : [],
         navigationSections: normalizeNavigationSections(
           parsed.navigationSections,
           this.definition,
+          navigationItems,
         ),
+        hiddenPages,
+        pageLabels,
+        customPages,
+        chartDefaults: normalizeChartDefaults(parsed.chartDefaults),
     };
   }
 
@@ -524,14 +662,14 @@ function isLegacyWorkloadView(
 
 function isPageId(
   value: unknown,
-  definition: DashboardDefinition,
+  pages: Set<PageId>,
 ): value is PageId {
-  return definition.navigation.some(item => item.id === value);
+  return typeof value === "string" && pages.has(value);
 }
 
 function isCustomPanel(
   value: unknown,
-  definition: DashboardDefinition,
+  pages: Set<PageId>,
 ): value is TimeSeriesPanelDefinition {
   if (!value || typeof value !== "object") return false;
   const panel = value as Partial<TimeSeriesPanelDefinition>;
@@ -540,7 +678,7 @@ function isCustomPanel(
     typeof panel.title === "string" &&
     panel.type === "timeseries" &&
     typeof panel.page === "string" &&
-    isPageId(panel.page, definition) &&
+    isPageId(panel.page, pages) &&
     Array.isArray(panel.metrics) &&
     panel.metrics.every(metric => typeof metric === "string")
   );
@@ -560,6 +698,124 @@ function normalizeCustomPanel(
       panel.lineWidth >= 0.5 &&
       panel.lineWidth <= 5
         ? panel.lineWidth
+        : 1.5,
+  };
+}
+
+function effectiveNavigationItems(
+  definition: DashboardDefinition,
+  value: Pick<
+    DashboardPreferences,
+    "hiddenPages" | "pageLabels" | "customPages"
+  >,
+): NavigationItem[] {
+  return [
+    ...definition.navigation
+      .filter(item => !value.hiddenPages.includes(item.id))
+      .map(item => ({
+        ...item,
+        label: value.pageLabels[item.id] ?? item.label,
+      })),
+    ...value.customPages.map(page => ({...page})),
+  ];
+}
+
+function normalizeCustomPages(
+  value: unknown,
+  definition: DashboardDefinition,
+): CustomPageDefinition[] {
+  if (!Array.isArray(value)) return [];
+  const identifiers = new Set(definition.navigation.map(item => item.id));
+  const pages: CustomPageDefinition[] = [];
+  for (const candidate of value.slice(0, 128)) {
+    if (!candidate || typeof candidate !== "object") continue;
+    const page = candidate as Partial<CustomPageDefinition>;
+    if (
+      typeof page.id !== "string" ||
+      !page.id ||
+      page.id.length > 256 ||
+      identifiers.has(page.id) ||
+      typeof page.label !== "string" ||
+      !page.label.trim() ||
+      page.label.length > 80
+    ) {
+      continue;
+    }
+    identifiers.add(page.id);
+    pages.push({id: page.id, label: page.label.trim()});
+  }
+  return pages;
+}
+
+function normalizeHiddenPages(
+  value: unknown,
+  definition: DashboardDefinition,
+  hasCustomPages: boolean,
+): PageId[] {
+  const known = new Set(definition.navigation.map(item => item.id));
+  const hidden = Array.isArray(value)
+    ? [...new Set(
+        value.filter(
+          (item): item is PageId =>
+            typeof item === "string" && known.has(item),
+        ),
+      )]
+    : [];
+  if (!hasCustomPages && hidden.length >= definition.navigation.length) {
+    hidden.shift();
+  }
+  return hidden;
+}
+
+function normalizePageLabels(
+  value: unknown,
+  definition: DashboardDefinition,
+  customPages: CustomPageDefinition[],
+): Record<PageId, string> {
+  if (!value || typeof value !== "object") return {};
+  const known = new Set([
+    ...definition.navigation.map(item => item.id),
+    ...customPages.map(item => item.id),
+  ]);
+  return Object.fromEntries(
+    Object.entries(value)
+      .filter(
+        ([id, label]) =>
+          known.has(id) &&
+          typeof label === "string" &&
+          Boolean(label.trim()) &&
+          label.length <= 80,
+      )
+      .map(([id, label]) => [id, (label as string).trim()]),
+  );
+}
+
+function defaultChartDefaults(): ChartDefaults {
+  return {
+    style: "line",
+    columnSpan: 1,
+    height: 270,
+    lineWidth: 1.5,
+  };
+}
+
+function normalizeChartDefaults(value: unknown): ChartDefaults {
+  if (!value || typeof value !== "object") return defaultChartDefaults();
+  const candidate = value as Partial<ChartDefaults>;
+  return {
+    style: candidate.style === "area" ? "area" : "line",
+    columnSpan: candidate.columnSpan === 2 ? 2 : 1,
+    height:
+      typeof candidate.height === "number" &&
+      candidate.height >= 180 &&
+      candidate.height <= 720
+        ? candidate.height
+        : 270,
+    lineWidth:
+      typeof candidate.lineWidth === "number" &&
+      candidate.lineWidth >= 0.5 &&
+      candidate.lineWidth <= 5
+        ? candidate.lineWidth
         : 1.5,
   };
 }
@@ -593,14 +849,19 @@ function defaultNavigationSections(
 function normalizeNavigationSections(
   value: unknown,
   definition: DashboardDefinition,
+  navigationItems: NavigationItem[],
 ): NavigationSection[] {
-  const defaults = defaultNavigationSections(definition);
-  if (!Array.isArray(value) || !value.length) return defaults;
-  const knownPages = new Set(definition.navigation.map(item => item.id));
+  const knownPages = new Set(navigationItems.map(item => item.id));
+  const defaults = defaultNavigationSections(definition).map(section => ({
+    ...section,
+    pages: section.pages.filter(page => knownPages.has(page)),
+  }));
   const sectionIds = new Set<string>();
   const assignedPages = new Set<PageId>();
   const sections: NavigationSection[] = [];
-  for (const candidate of value.slice(0, 64)) {
+  const candidates =
+    Array.isArray(value) && value.length ? value.slice(0, 64) : defaults;
+  for (const candidate of candidates) {
     if (!candidate || typeof candidate !== "object") continue;
     const section = candidate as Partial<NavigationSection>;
     if (
@@ -630,8 +891,13 @@ function normalizeNavigationSections(
     });
     sectionIds.add(section.id);
   }
-  if (!sections.length) return defaults;
-  for (const item of definition.navigation) {
+  if (!sections.length) {
+    sections.push(...defaults);
+    for (const section of defaults) {
+      for (const page of section.pages) assignedPages.add(page);
+    }
+  }
+  for (const item of navigationItems) {
     if (assignedPages.has(item.id)) continue;
     const defaultSection = defaults.find(section =>
       section.pages.includes(item.id),
