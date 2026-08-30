@@ -157,7 +157,9 @@ button:focus-visible, input:focus-visible, select:focus-visible {
 .button { padding: 0 10px; }
 .button:hover, .icon-button:hover, .table-action:hover { border-color: var(--border-strong); background: var(--surface-3); }
 .button:disabled { opacity: .45; cursor: default; }
-.button-primary { border-color: #3d7fa8; background: #245a79; }
+.button-primary {
+  color: #f5f9fc; border-color: #3d7fa8; background: #245a79;
+}
 .button-primary:hover { background: #2d6a8e; }
 .button-danger { color: #f6c8cf; border-color: #713642; background: #421f28; }
 .button-danger:hover { border-color: #95505e; background: #572832; }

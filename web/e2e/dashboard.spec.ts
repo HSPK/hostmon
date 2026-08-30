@@ -1285,6 +1285,36 @@ test("configures web theme and density", async ({ page }) => {
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
   await expect(page.getByLabel("Time range")).toHaveValue("86400");
   await page.locator(".toolbar").getByRole("button", {name: "Add chart"}).click();
+  const primaryContrast = await page
+    .getByRole("button", {name: "Save chart"})
+    .evaluate(element => {
+      const channels = (value: string) => {
+        const values = value.match(/[\d.]+/g)?.slice(0, 3).map(Number);
+        if (!values || values.length !== 3) throw new Error(`invalid color: ${value}`);
+        return values;
+      };
+      const luminance = (value: string) => {
+        const components = channels(value).map(component => {
+          const normalized = component / 255;
+          return normalized <= 0.03928
+            ? normalized / 12.92
+            : ((normalized + 0.055) / 1.055) ** 2.4;
+        });
+        return (
+          0.2126 * components[0]! +
+          0.7152 * components[1]! +
+          0.0722 * components[2]!
+        );
+      };
+      const style = getComputedStyle(element);
+      const foreground = luminance(style.color);
+      const background = luminance(style.backgroundColor);
+      return (
+        (Math.max(foreground, background) + 0.05) /
+        (Math.min(foreground, background) + 0.05)
+      );
+    });
+  expect(primaryContrast).toBeGreaterThanOrEqual(4.5);
   await expect(page.locator("#chart-style")).toHaveValue("area");
   await expect(page.locator("#chart-width")).toHaveValue("2");
   await expect(page.locator("#chart-height")).toHaveValue("360");
