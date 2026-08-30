@@ -24,6 +24,7 @@ def unit_path() -> Path:
 def render_unit(settings: Settings) -> str:
     executable = shlex.quote(sys.executable)
     config = shlex.quote(str(settings.config_file))
+    # The Lark backend imports pandas on first send; its BLAS pool is unused here.
     return "\n".join(
         [
             "[Unit]",
@@ -37,6 +38,7 @@ def render_unit(settings: Settings) -> str:
             "Restart=on-failure",
             "RestartSec=5s",
             "Environment=PYTHONUNBUFFERED=1",
+            "Environment=OPENBLAS_NUM_THREADS=1",
             "UMask=0077",
             "NoNewPrivileges=true",
             "PrivateTmp=true",

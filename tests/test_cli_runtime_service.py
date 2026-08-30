@@ -202,6 +202,7 @@ class ServiceTests(unittest.TestCase):
         self.assertIn("-m host_monitor", unit)
         self.assertIn(f"--config {path}", unit)
         self.assertIn("Restart=on-failure", unit)
+        self.assertIn("Environment=OPENBLAS_NUM_THREADS=1", unit)
         self.assertIn("WantedBy=default.target", unit)
 
 
