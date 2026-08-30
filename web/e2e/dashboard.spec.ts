@@ -683,15 +683,17 @@ test("remains responsive on narrow screens", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/");
 
-  const toolbarRows = await page
-    .locator(".toolbar-actions > .control, .toolbar-actions > .button")
-    .evaluateAll(elements =>
-      new Set(
-        elements.map(element =>
-          Math.round(element.getBoundingClientRect().top),
-        ),
-      ).size,
-    );
+  const toolbarControls = page.locator(
+    ".toolbar-actions > .control, .toolbar-actions > .button",
+  );
+  await expect(toolbarControls).toHaveCount(5);
+  const toolbarRows = await toolbarControls.evaluateAll(elements =>
+    new Set(
+      elements.map(element =>
+        Math.round(element.getBoundingClientRect().top),
+      ),
+    ).size,
+  );
   expect(toolbarRows).toBe(1);
   const toolbarBox = await page.locator(".toolbar").boundingBox();
   expect(toolbarBox).not.toBeNull();
