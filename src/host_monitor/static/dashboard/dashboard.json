@@ -85,8 +85,8 @@
       "title": "Collector health",
       "columnSpan": 2,
       "columns": [
-        {"id": "name", "label": "Collector", "path": "name", "width": "220px", "mobileWidth": "180px", "align": "left", "pinned": true, "sort": "name"},
-        {"id": "state", "label": "State", "path": "state", "width": "90px", "align": "center", "format": "state", "sort": "state"},
+        {"id": "name", "label": "Collector", "path": "name", "width": "220px", "mobileWidth": "160px", "align": "left", "pinned": true, "sort": "name"},
+        {"id": "state", "label": "State", "path": "state", "width": "90px", "mobileWidth": "70px", "align": "center", "format": "state", "sort": "state"},
         {"id": "duration", "label": "Last duration", "path": "duration", "width": "130px", "format": "number", "unit": "ms", "sort": "duration"},
         {"id": "refresh", "label": "Interval", "path": "refresh_seconds", "width": "100px", "format": "duration", "sort": "refresh_seconds"},
         {"id": "updated", "label": "Last data refresh (UTC+8)", "path": "last_success_at", "width": "190px", "format": "timestamp", "sort": "last_success_at"},
@@ -121,7 +121,7 @@
       "columnSpan": 2,
       "columns": [
         {"id": "enabled", "label": "", "width": "52px", "align": "center", "pinned": "left", "action": "enabled"},
-        {"id": "alert", "label": "Alert", "path": "alert", "width": "260px", "mobileWidth": "190px", "align": "left", "pinned": true, "sort": "alert"},
+        {"id": "alert", "label": "Alert", "path": "alert", "width": "260px", "mobileWidth": "130px", "align": "left", "pinned": true, "sort": "alert"},
         {"id": "level", "label": "Level", "path": "level", "width": "110px", "align": "left", "sort": "level"},
         {"id": "expr", "label": "Expression", "path": "expr", "width": "620px", "align": "left", "sort": "expr"},
         {"id": "actions", "label": "", "width": "120px", "pinned": "right", "action": "actions"}

@@ -880,6 +880,76 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   expect(currentBox!.x + currentBox!.width).toBeLessThanOrEqual(
     viewportBox!.x + viewportBox!.width + 1,
   );
+
+  await page.goto("/?page=alerts");
+  const alertViewport = page.locator(
+    ".rules-panel .data-grid-viewport",
+  );
+  const alertEnabled = page
+    .locator('.rules-table td[data-column="enabled"]')
+    .first();
+  const alertName = page
+    .locator('.rules-table td[data-column="alert"]')
+    .first();
+  const alertActions = page
+    .locator('.rules-table td[data-column="actions"]')
+    .first();
+  await expect(alertActions).toBeInViewport({ratio: 1});
+  const alertViewportBox = await alertViewport.boundingBox();
+  const alertEnabledBox = await alertEnabled.boundingBox();
+  const alertNameBox = await alertName.boundingBox();
+  const alertActionsBox = await alertActions.boundingBox();
+
+  expect(alertViewportBox).not.toBeNull();
+  expect(alertEnabledBox).not.toBeNull();
+  expect(alertNameBox).not.toBeNull();
+  expect(alertActionsBox).not.toBeNull();
+  expect(alertNameBox!.x).toBeGreaterThanOrEqual(
+    alertEnabledBox!.x + alertEnabledBox!.width - 1,
+  );
+  expect(alertNameBox!.x + alertNameBox!.width).toBeLessThanOrEqual(
+    alertActionsBox!.x + 1,
+  );
+  expect(
+    alertActionsBox!.x + alertActionsBox!.width,
+  ).toBeLessThanOrEqual(
+    alertViewportBox!.x + alertViewportBox!.width + 1,
+  );
+
+  await page.goto("/?page=collectors");
+  const collectorViewport = page.locator(
+    ".collector-panel .data-grid-viewport",
+  );
+  const collectorName = page
+    .locator('.health-table td[data-column="name"]')
+    .first();
+  const collectorState = page
+    .locator('.health-table td[data-column="state"]')
+    .first();
+  const collectorDetails = page
+    .locator('.health-table td[data-column="details"]')
+    .first();
+  await expect(collectorDetails).toBeInViewport({ratio: 1});
+  const collectorViewportBox = await collectorViewport.boundingBox();
+  const collectorNameBox = await collectorName.boundingBox();
+  const collectorStateBox = await collectorState.boundingBox();
+  const collectorDetailsBox = await collectorDetails.boundingBox();
+
+  expect(collectorViewportBox).not.toBeNull();
+  expect(collectorNameBox).not.toBeNull();
+  expect(collectorStateBox).not.toBeNull();
+  expect(collectorDetailsBox).not.toBeNull();
+  expect(collectorStateBox!.x).toBeGreaterThanOrEqual(
+    collectorNameBox!.x + collectorNameBox!.width - 1,
+  );
+  expect(
+    collectorStateBox!.x + collectorStateBox!.width,
+  ).toBeLessThanOrEqual(collectorDetailsBox!.x + 1);
+  expect(
+    collectorDetailsBox!.x + collectorDetailsBox!.width,
+  ).toBeLessThanOrEqual(
+    collectorViewportBox!.x + collectorViewportBox!.width + 1,
+  );
 });
 
 test("keeps tablet toolbar actions on one row", async ({ page }) => {
