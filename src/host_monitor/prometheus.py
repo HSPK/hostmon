@@ -41,6 +41,7 @@ INVALID_NAME = re.compile(r"[^a-zA-Z0-9_:]")
 PLUGIN_NAME = re.compile(r"^[a-zA-Z0-9_]+$")
 WEB_EXECUTOR_WORKERS = 4
 LONG_HISTORY_CACHE_SECONDS = 15.0
+LONG_HISTORY_CACHE_ENTRIES = 16
 
 
 @dataclass(frozen=True)
@@ -347,8 +348,9 @@ class PrometheusExporter:
             raise MonitorError("history directory is not configured")
         key = (round(seconds, 3), maximum_points, tuple(metrics))
         now = time.monotonic()
+        self._prune_long_history_cache(now)
         cached = self._long_history_cache.get(key)
-        if cached is not None and now - cached[0] <= LONG_HISTORY_CACHE_SECONDS:
+        if cached is not None:
             return cached[1]
         task = self._long_history_inflight.get(key)
         if task is None:
@@ -368,10 +370,25 @@ class PrometheusExporter:
         finally:
             if task.done():
                 self._long_history_inflight.pop(key, None)
-        if len(self._long_history_cache) >= 16:
-            self._long_history_cache.clear()
-        self._long_history_cache[key] = (time.monotonic(), payload)
+        stored_at = time.monotonic()
+        self._prune_long_history_cache(stored_at)
+        if len(self._long_history_cache) >= LONG_HISTORY_CACHE_ENTRIES:
+            oldest = min(
+                self._long_history_cache.items(),
+                key=lambda item: item[1][0],
+            )[0]
+            del self._long_history_cache[oldest]
+        self._long_history_cache[key] = (stored_at, payload)
         return payload
+
+    def _prune_long_history_cache(self, now: float) -> None:
+        expired = [
+            key
+            for key, (stored_at, _) in self._long_history_cache.items()
+            if now - stored_at > LONG_HISTORY_CACHE_SECONDS
+        ]
+        for key in expired:
+            del self._long_history_cache[key]
 
     async def _catalog(self, request: web.Request) -> web.Response:
         try:

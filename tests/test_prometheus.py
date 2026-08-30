@@ -19,6 +19,7 @@ from host_monitor.dashboard import DashboardStore, infer_metric_metadata
 from host_monitor.dashboard import load_history_window, load_recent_history
 from host_monitor.errors import MonitorError
 from host_monitor.prometheus import (
+    LONG_HISTORY_CACHE_ENTRIES,
     PrometheusExporter,
     StateSnapshot,
     prometheus_names,
@@ -641,6 +642,57 @@ class PrometheusHTTPTests(unittest.TestCase):
         self.assertEqual(loader.call_count, 1)
         self.assertEqual(len(payloads), 8)
         self.assertTrue(all(payload == payloads[0] for payload in payloads))
+
+    def test_long_history_cache_prunes_expired_payloads(self):
+        self.exporter.history_directory = Path(self.directory.name)
+        now = time.monotonic()
+        expired_key = (21601.0, 100, ("expired",))
+        fresh_key = (21602.0, 100, ("fresh",))
+        self.exporter._long_history_cache = {
+            expired_key: (now - 1000, {"source": "expired"}),
+            fresh_key: (now, {"source": "fresh"}),
+        }
+        payload = {"source": "new"}
+
+        with patch(
+            "host_monitor.prometheus.load_history_window",
+            return_value=payload,
+        ):
+            result = asyncio.run(
+                self.exporter._long_history(21603, 100, ["new"])
+            )
+
+        self.assertIs(result, payload)
+        self.assertNotIn(expired_key, self.exporter._long_history_cache)
+        self.assertIn(fresh_key, self.exporter._long_history_cache)
+
+    def test_long_history_cache_evicts_only_oldest_payload(self):
+        self.exporter.history_directory = Path(self.directory.name)
+        now = time.monotonic()
+        new_key = (23000.0, 100, ("new",))
+        keys = [
+            (22000.0 + index, 100, (f"metric-{index}",))
+            for index in range(LONG_HISTORY_CACHE_ENTRIES)
+        ]
+        self.exporter._long_history_cache = {
+            key: (now - 1 + index / 100, {"index": index})
+            for index, key in enumerate(keys)
+        }
+
+        with patch(
+            "host_monitor.prometheus.load_history_window",
+            return_value={"source": "new"},
+        ):
+            asyncio.run(self.exporter._long_history(23000, 100, ["new"]))
+
+        self.assertEqual(
+            len(self.exporter._long_history_cache),
+            LONG_HISTORY_CACHE_ENTRIES,
+        )
+        self.assertNotIn(keys[0], self.exporter._long_history_cache)
+        self.assertIn(new_key, self.exporter._long_history_cache)
+        for key in keys[1:]:
+            self.assertIn(key, self.exporter._long_history_cache)
 
     def test_websocket_rejects_cross_origin_client(self):
         self.save_state(time.time())
