@@ -508,6 +508,57 @@ test("fetches plugin documents only after collector success advances", async ({
   await expect.poll(() => requests).toBe(3);
 });
 
+test("reports panel load failures without unhandled rejections", async ({
+  page,
+}) => {
+  await page.route("**/api/catalog?*", route =>
+    route.fulfill({status: 503, body: "temporary failure"}),
+  );
+  const pageErrors: string[] = [];
+  page.on("pageerror", error => pageErrors.push(String(error)));
+
+  await page.goto("/?page=metrics");
+  await expect(page.locator(".panel-feedback")).toHaveText(
+    /^Could not load metric catalog: \/api\/catalog\?seconds=\d+ returned HTTP 503$/,
+  );
+  await expect(page.locator(".panel-feedback")).toHaveAttribute(
+    "role",
+    "alert",
+  );
+  expect(pageErrors).toEqual([]);
+});
+
+test("preserves panel data when a refresh fails", async ({page}) => {
+  let fail = false;
+  await page.route("**/api/plugins/cluster_gpu_usage", route =>
+    fail
+      ? route.fulfill({status: 503, body: "temporary failure"})
+      : route.fulfill({
+          json: {
+            name: "cluster_gpu_usage",
+            updated_at: now,
+            schema_version: 3,
+            refresh_seconds: 60,
+            refresh_after_seconds: 60,
+            document: clusterGPUReport,
+          },
+        }),
+  );
+  const pageErrors: string[] = [];
+  page.on("pageerror", error => pageErrors.push(String(error)));
+
+  await page.goto("/?page=gpu-fleet");
+  await expect(page.locator(".fleet-table")).toContainText("56 / 64");
+  fail = true;
+  await page.getByRole("button", {name: "Refresh"}).click();
+
+  await expect(page.locator(".panel-feedback")).toContainText(
+    "Could not load GPU fleet data",
+  );
+  await expect(page.locator(".fleet-table")).toContainText("56 / 64");
+  expect(pageErrors).toEqual([]);
+});
+
 test("searches metrics and persists a custom chart", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Metrics" }).click();

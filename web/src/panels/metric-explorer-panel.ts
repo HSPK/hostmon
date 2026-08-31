@@ -3,7 +3,7 @@ import type {
   MetricsPanelDefinition,
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
-import { panelShell } from "./panel";
+import { panelShell, PanelFeedback } from "./panel";
 import {
   compareByPath,
   configuredColumns,
@@ -30,6 +30,7 @@ export class MetricExplorerPanel implements PanelRenderer {
   private readonly next: HTMLButtonElement;
   private catalog: MetricCatalogEntry[] = [];
   private readonly selected = new Set<string>();
+  private readonly feedback = new PanelFeedback();
   private lastLoaded = 0;
   private loading = false;
   private page = 0;
@@ -104,7 +105,7 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.table.element.append(
       tableFooter(this.count, this.previous, this.next),
     );
-    shell.body.append(controls, this.table.element);
+    shell.body.append(controls, this.feedback.element, this.table.element);
     void this.load();
   }
 
@@ -119,8 +120,11 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.loading = true;
     try {
       this.catalog = await this.context.actions.loadCatalog();
+      this.feedback.clear();
       this.lastLoaded = Date.now();
       this.render();
+    } catch (error) {
+      this.feedback.show("Could not load metric catalog", error);
     } finally {
       this.loading = false;
     }

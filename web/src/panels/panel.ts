@@ -49,6 +49,29 @@ export interface PanelRenderer {
   destroy(): void;
 }
 
+export class PanelFeedback {
+  readonly element: HTMLOutputElement;
+
+  constructor() {
+    this.element = document.createElement("output");
+    this.element.className = "panel-feedback";
+    this.element.setAttribute("role", "alert");
+    this.element.setAttribute("aria-live", "polite");
+    this.element.hidden = true;
+  }
+
+  clear(): void {
+    this.element.hidden = true;
+    this.element.textContent = "";
+  }
+
+  show(message: string, error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    this.element.textContent = `${message}: ${detail}`;
+    this.element.hidden = false;
+  }
+}
+
 export type PanelFactory<T extends PanelDefinition = PanelDefinition> = (
   definition: T,
   context: PanelContext,

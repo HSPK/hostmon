@@ -4,7 +4,7 @@ import type {
   GPUFleetPanelDefinition,
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
-import { panelShell } from "./panel";
+import { panelShell, PanelFeedback } from "./panel";
 import {
   configuredColumns,
   compareByPath,
@@ -20,6 +20,7 @@ export class GPUFleetPanel implements PanelRenderer {
   private readonly body: HTMLElement;
   private readonly columns: DataColumn<ClusterGPUCapacityRow>[];
   private readonly table: DataTable<ClusterGPUCapacityRow>;
+  private readonly feedback = new PanelFeedback();
   private report: ClusterGPUReport | null = null;
   private loading = false;
   private sort = "";
@@ -42,6 +43,7 @@ export class GPUFleetPanel implements PanelRenderer {
         this.render();
       },
     );
+    shell.body.append(this.feedback.element);
     void this.load();
   }
 
@@ -58,9 +60,12 @@ export class GPUFleetPanel implements PanelRenderer {
       const report = await this.context.actions.loadPlugin<ClusterGPUReport>(
         this.definition.plugin,
       );
+      this.feedback.clear();
       if (this.report === report) return;
       this.report = report;
       this.render();
+    } catch (error) {
+      this.feedback.show("Could not load GPU fleet data", error);
     } finally {
       this.loading = false;
     }
@@ -92,7 +97,11 @@ export class GPUFleetPanel implements PanelRenderer {
       );
     }
     this.table.setRows(rows, this.columns, "No capacity data");
-    this.body.replaceChildren(summary, this.table.element);
+    this.body.replaceChildren(
+      this.feedback.element,
+      summary,
+      this.table.element,
+    );
   }
 }
 

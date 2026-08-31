@@ -8,7 +8,7 @@ import type {
   WorkloadView,
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
-import { panelShell } from "./panel";
+import { panelShell, PanelFeedback } from "./panel";
 import {
   compareByPath,
   configuredColumns,
@@ -38,6 +38,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   private readonly previous: HTMLButtonElement;
   private readonly next: HTMLButtonElement;
   private readonly dialog: HTMLDialogElement;
+  private readonly feedback = new PanelFeedback();
   private report: ClusterGPUReport | null = null;
   private loading = false;
   private searchPersistTimer: number | null = null;
@@ -130,7 +131,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.table.element.append(
       tableFooter(this.count, this.previous, this.next),
     );
-    shell.body.append(controls, this.table.element);
+    shell.body.append(controls, this.feedback.element, this.table.element);
 
     this.dialog = document.createElement("dialog");
     this.dialog.className = "workload-dialog";
@@ -163,6 +164,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
       const report = await this.context.actions.loadPlugin<ClusterGPUReport>(
         this.definition.plugin,
       );
+      this.feedback.clear();
       if (this.report === report) return;
       this.report = report;
       const queues = ["all", ...this.report.capacity.map(row => row.queue)];
@@ -179,6 +181,8 @@ export class GPUSubmittersPanel implements PanelRenderer {
       if (this.queue.value !== selected) this.persistView();
       this.renderRows();
       this.syncSelectedDetails();
+    } catch (error) {
+      this.feedback.show("Could not load GPU workloads", error);
     } finally {
       this.loading = false;
     }

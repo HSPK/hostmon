@@ -3,7 +3,7 @@ import type {
   CollectorPanelDefinition,
 } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
-import { panelShell } from "./panel";
+import { panelShell, PanelFeedback } from "./panel";
 import {
   compareByPath,
   configuredColumns,
@@ -19,6 +19,7 @@ export class CollectorPanel implements PanelRenderer {
   private readonly table: DataTable<CollectorRow>;
   private readonly columns: DataColumn<CollectorRow>[];
   private readonly dialog: HTMLDialogElement;
+  private readonly feedback = new PanelFeedback();
   private diagnostics: CollectorDiagnostic[] = [];
   private lastLoaded = 0;
   private loading = false;
@@ -53,7 +54,7 @@ export class CollectorPanel implements PanelRenderer {
         this.render();
       },
     );
-    shell.body.append(this.table.element);
+    shell.body.append(this.feedback.element, this.table.element);
     this.dialog = document.createElement("dialog");
     this.dialog.className = "collector-dialog";
     this.dialog.setAttribute("aria-label", "Collector details");
@@ -83,8 +84,11 @@ export class CollectorPanel implements PanelRenderer {
     this.loading = true;
     try {
       this.diagnostics = await this.context.actions.loadCollectors();
+      this.feedback.clear();
       this.lastLoaded = Date.now();
       this.render();
+    } catch (error) {
+      this.feedback.show("Could not load collector diagnostics", error);
     } finally {
       this.loading = false;
     }
