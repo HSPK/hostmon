@@ -117,6 +117,8 @@ export interface PluginDocument<T> {
   name: string;
   updated_at: number;
   schema_version: number | null;
+  refresh_seconds: number;
+  refresh_after_seconds: number;
   document: T;
 }
 

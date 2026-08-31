@@ -198,6 +198,8 @@ test.beforeEach(async ({ page }) => {
       body: JSON.stringify({
         name: "cluster_gpu_usage",
         updated_at: now,
+        refresh_seconds: 60,
+        refresh_after_seconds: 60,
         document: clusterGPUReport,
       }),
     }),
@@ -445,6 +447,54 @@ test("reconnects when a websocket stream stops publishing samples", async ({
     timeout: 2_000,
   });
   await expect.poll(() => connections).toBeGreaterThan(1);
+});
+
+test("caches plugin documents until the server refresh deadline", async ({
+  page,
+}) => {
+  let requests = 0;
+  let sendSnapshot: ((timestamp: number) => void) | null = null;
+  await page.route("**/api/plugins/cluster_gpu_usage", route => {
+    requests++;
+    return route.fulfill({
+      json: {
+        name: "cluster_gpu_usage",
+        updated_at: now,
+        schema_version: 3,
+        refresh_seconds: 60,
+        refresh_after_seconds: 0.5,
+        document: clusterGPUReport,
+      },
+    });
+  });
+  await page.routeWebSocket("**/api/ws", socket => {
+    sendSnapshot = timestamp =>
+      socket.send(
+        JSON.stringify({
+          timestamp,
+          host: "test-host",
+          metrics,
+          fields,
+        }),
+      );
+    sendSnapshot(now + 10);
+  });
+
+  await page.goto("/?page=gpu-fleet");
+  await expect(page.locator(".fleet-table")).toContainText("56 / 64");
+  await expect.poll(() => requests).toBe(1);
+  if (!sendSnapshot) throw new Error("WebSocket route was not connected");
+
+  sendSnapshot(now + 20);
+  await page.waitForTimeout(100);
+  expect(requests).toBe(1);
+
+  await page.waitForTimeout(500);
+  sendSnapshot(now + 30);
+  await expect.poll(() => requests).toBe(2);
+
+  await page.getByRole("button", {name: "Refresh"}).click();
+  await expect.poll(() => requests).toBe(3);
 });
 
 test("searches metrics and persists a custom chart", async ({ page }) => {

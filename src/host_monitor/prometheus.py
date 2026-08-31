@@ -456,13 +456,40 @@ class PrometheusExporter:
         )
         if document is None:
             raise web.HTTPNotFound(text=f"plugin document not found: {name}\n")
+        refresh_seconds = self._collector_refresh_seconds(name)
+        updated_at = plugin_state.get("at")
+        age = (
+            max(0.0, time.time() - float(updated_at))
+            if isinstance(updated_at, (int, float))
+            else 0.0
+        )
         return self._json_response(
             {
                 "name": name,
-                "updated_at": plugin_state.get("at"),
+                "updated_at": updated_at,
                 "schema_version": plugin_state.get("schema_version"),
+                "refresh_seconds": refresh_seconds,
+                "refresh_after_seconds": max(1.0, refresh_seconds - age),
                 "document": document,
             }
+        )
+
+    def _collector_refresh_seconds(self, name: str) -> float:
+        setting = next(
+            (
+                item
+                for item in self.collector_settings
+                if item.name == name
+            ),
+            None,
+        )
+        if setting is None:
+            return self.interval_seconds
+        return float(
+            setting.options.get(
+                "poll_interval_seconds",
+                self.interval_seconds,
+            )
         )
 
     def _require_same_origin(self, request: web.Request) -> None:
@@ -530,10 +557,7 @@ class PrometheusExporter:
             )
             if not isinstance(envelope, dict):
                 envelope = {}
-            refresh = setting.options.get(
-                "poll_interval_seconds",
-                self.interval_seconds,
-            )
+            refresh = self._collector_refresh_seconds(setting.name)
             prefix = f"monitor/collector/{setting.name}"
             up = float(metrics.get(f"{prefix}/up", 0)) if isinstance(metrics, dict) else 0
             stale = (

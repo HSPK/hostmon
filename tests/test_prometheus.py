@@ -391,6 +391,13 @@ class PrometheusHTTPTests(unittest.TestCase):
         self.assertEqual(context.exception.code, 503)
 
     def test_serves_plugin_document(self):
+        plugin_updated_at = time.time()
+        self.exporter.collector_settings += (
+            CollectorSettings(
+                name="document_plugin",
+                options={"poll_interval_seconds": 60},
+            ),
+        )
         StateStore(self.state_file).save(
             {
                 "samples": [],
@@ -400,7 +407,7 @@ class PrometheusHTTPTests(unittest.TestCase):
                         "_hostmon_envelope": 1,
                         "plugin_state": {
                             "schema_version": 3,
-                            "at": 100,
+                            "at": plugin_updated_at,
                             "report": {"usage": [{"submitter": "run-a"}]},
                         },
                     }
@@ -420,6 +427,9 @@ class PrometheusHTTPTests(unittest.TestCase):
             document = json.load(response)
 
         self.assertEqual(document["schema_version"], 3)
+        self.assertEqual(document["refresh_seconds"], 60)
+        self.assertGreater(document["refresh_after_seconds"], 55)
+        self.assertLessEqual(document["refresh_after_seconds"], 60)
         self.assertEqual(document["document"]["usage"][0]["submitter"], "run-a")
 
     def test_persists_dashboard_preferences_over_http(self):

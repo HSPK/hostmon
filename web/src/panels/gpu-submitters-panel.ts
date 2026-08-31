@@ -39,7 +39,6 @@ export class GPUSubmittersPanel implements PanelRenderer {
   private readonly next: HTMLButtonElement;
   private readonly dialog: HTMLDialogElement;
   private report: ClusterGPUReport | null = null;
-  private lastLoaded = 0;
   private loading = false;
   private searchPersistTimer: number | null = null;
   private page = 0;
@@ -140,7 +139,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   }
 
   update(): void {
-    if (Date.now() - this.lastLoaded > 30_000) void this.load();
+    void this.load();
   }
 
   destroy(): void {
@@ -156,10 +155,11 @@ export class GPUSubmittersPanel implements PanelRenderer {
     if (this.loading) return;
     this.loading = true;
     try {
-      this.report = await this.context.actions.loadPlugin<ClusterGPUReport>(
+      const report = await this.context.actions.loadPlugin<ClusterGPUReport>(
         this.definition.plugin,
       );
-      this.lastLoaded = Date.now();
+      if (this.report === report) return;
+      this.report = report;
       const queues = ["all", ...this.report.capacity.map(row => row.queue)];
       const selected = this.queue.value || this.workloadView().queue;
       this.queue.replaceChildren(

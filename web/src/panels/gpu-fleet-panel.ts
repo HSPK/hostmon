@@ -21,7 +21,6 @@ export class GPUFleetPanel implements PanelRenderer {
   private readonly columns: DataColumn<ClusterGPUCapacityRow>[];
   private readonly table: DataTable<ClusterGPUCapacityRow>;
   private report: ClusterGPUReport | null = null;
-  private lastLoaded = 0;
   private loading = false;
   private sort = "";
   private direction: SortDirection = "asc";
@@ -47,7 +46,7 @@ export class GPUFleetPanel implements PanelRenderer {
   }
 
   update(): void {
-    if (Date.now() - this.lastLoaded > 30_000) void this.load();
+    void this.load();
   }
 
   destroy(): void {}
@@ -56,10 +55,11 @@ export class GPUFleetPanel implements PanelRenderer {
     if (this.loading) return;
     this.loading = true;
     try {
-      this.report = await this.context.actions.loadPlugin<ClusterGPUReport>(
+      const report = await this.context.actions.loadPlugin<ClusterGPUReport>(
         this.definition.plugin,
       );
-      this.lastLoaded = Date.now();
+      if (this.report === report) return;
+      this.report = report;
       this.render();
     } finally {
       this.loading = false;

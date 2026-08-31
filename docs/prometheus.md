@@ -33,7 +33,7 @@ history, rules, and alerts remain active.
 | `/api/history` | Compact columnar history, bounded and downsampled in memory |
 | `/api/catalog` | Current/min/average/p95/max statistics for every metric |
 | `/api/preferences` | GET/PUT atomically persisted dashboard preferences |
-| `/api/plugins/{name}` | Latest structured document exported by a collector plugin |
+| `/api/plugins/{name}` | Latest structured plugin document plus refresh/cache timing |
 | `/api/ws` | WebSocket stream for live updates |
 
 ```bash
@@ -49,6 +49,10 @@ dashboard uses the server-provided inactivity timeout to reconnect silent
 streams; only a newer sample restores the connected state after a timeout.
 Dashboard display values can declare `format: "timestamp"` to render Unix
 seconds consistently in UTC+8.
+
+Plugin responses include `refresh_seconds` and `refresh_after_seconds`.
+Dashboard panels use these values to share one in-flight request and avoid
+downloading an unchanged plugin document between collector refreshes.
 
 ## Prometheus scrape configuration
 

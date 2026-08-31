@@ -54,8 +54,9 @@ export class DashboardApp {
     null;
   private readonly pluginCache = new Map<
     string,
-    {loadedAt: number; document: unknown}
+    {expiresAt: number; document: unknown}
   >();
+  private readonly pluginRequests = new Map<string, Promise<unknown>>();
   private updateQueued = false;
   private renderGeneration = 0;
   private paused = false;
@@ -97,7 +98,6 @@ export class DashboardApp {
       onSnapshot: snapshot => {
         this.store.append(snapshot);
         this.catalogCache = null;
-        this.pluginCache.clear();
       },
       onState: state => this.setConnectionState(state),
     });
@@ -362,6 +362,7 @@ export class DashboardApp {
     });
     this.required("refresh-button").addEventListener("click", () => {
       this.catalogCache = null;
+      this.pluginCache.clear();
       void this.reloadData();
     });
     this.required("add-chart-button").addEventListener("click", () =>
@@ -493,15 +494,31 @@ export class DashboardApp {
 
   private async loadPlugin<T>(name: string): Promise<T> {
     const cached = this.pluginCache.get(name);
-    if (cached && Date.now() - cached.loadedAt < 5000) {
+    if (cached && Date.now() < cached.expiresAt) {
       return cached.document as T;
     }
-    const response = await this.api.plugin<T>(name);
-    this.pluginCache.set(name, {
-      loadedAt: Date.now(),
-      document: response.document,
+    const pending = this.pluginRequests.get(name);
+    if (pending) return pending as Promise<T>;
+    const request = this.api.plugin<T>(name).then(response => {
+      const refreshAfterSeconds =
+        Number.isFinite(response.refresh_after_seconds) &&
+        response.refresh_after_seconds > 0
+          ? response.refresh_after_seconds
+          : 5;
+      this.pluginCache.set(name, {
+        expiresAt: Date.now() + refreshAfterSeconds * 1000,
+        document: response.document,
+      });
+      return response.document;
     });
-    return response.document;
+    this.pluginRequests.set(name, request);
+    try {
+      return await request;
+    } finally {
+      if (this.pluginRequests.get(name) === request) {
+        this.pluginRequests.delete(name);
+      }
+    }
   }
 
   private historyPointBudget(): number {
