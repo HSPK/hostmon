@@ -1135,6 +1135,95 @@ test("requests bounded adaptive history for long windows", async ({ page }) => {
   expect(maximum).toBeLessThanOrEqual(2400);
 });
 
+test("loads history only for visible chart pages", async ({ page }) => {
+  const historyRequests: URL[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/history") historyRequests.push(url);
+  });
+
+  await page.goto("/?page=workloads");
+  await expect(page.locator("#page-title")).toHaveText("Workloads");
+  await page.waitForTimeout(100);
+  expect(historyRequests).toHaveLength(0);
+
+  await page.getByRole("button", {name: "Overview"}).click();
+  await expect.poll(() => historyRequests.length).toBe(1);
+  const overviewMetrics =
+    historyRequests[0]!.searchParams.get("metrics")?.split(",") ?? [];
+  expect(overviewMetrics).toContain("cpu/percent");
+  expect(overviewMetrics).not.toContain(
+    "cluster_gpu/queue/total/capacity_gpus",
+  );
+  await expect
+    .poll(() =>
+      page
+        .locator('[data-panel-id="host-utilization"] .series-legend span')
+        .first()
+        .evaluate(element =>
+          getComputedStyle(element)
+            .getPropertyValue("--series-color")
+            .trim(),
+        ),
+    )
+    .toBe("#4ea1d3");
+  const seriesPixels = await page
+    .locator('[data-panel-id="host-utilization"] canvas')
+    .evaluate(canvas => {
+      const context = (canvas as HTMLCanvasElement).getContext("2d");
+      if (!context) return 0;
+      const pixels = context.getImageData(
+        0,
+        0,
+        context.canvas.width,
+        context.canvas.height,
+      ).data;
+      let count = 0;
+      for (let index = 0; index < pixels.length; index += 4) {
+        if (
+          Math.abs(pixels[index]! - 78) <= 8 &&
+          Math.abs(pixels[index + 1]! - 161) <= 8 &&
+          Math.abs(pixels[index + 2]! - 211) <= 8 &&
+          pixels[index + 3]! > 0
+        ) {
+          count++;
+        }
+      }
+      return count;
+    });
+  expect(seriesPixels).toBeGreaterThan(0);
+
+  await page.getByRole("button", {name: "GPU Fleet"}).click();
+  await expect.poll(() => historyRequests.length).toBe(2);
+  const fleetMetrics =
+    historyRequests[1]!.searchParams.get("metrics")?.split(",") ?? [];
+  expect(fleetMetrics).toContain(
+    "cluster_gpu/queue/total/capacity_gpus",
+  );
+  expect(fleetMetrics).not.toContain("cpu/percent");
+
+  await page.getByRole("button", {name: "Workloads"}).click();
+  await page.waitForTimeout(100);
+  expect(historyRequests).toHaveLength(2);
+});
+
+test("exports complete chart history on demand", async ({ page }) => {
+  await page.goto("/?page=workloads");
+  const historyRequest = page.waitForRequest(request => {
+    const url = new URL(request.url());
+    return (
+      url.pathname === "/api/history" &&
+      url.searchParams.get("metrics")?.includes("cpu/percent") === true &&
+      url.searchParams
+        .get("metrics")
+        ?.includes("cluster_gpu/queue/total/capacity_gpus") === true
+    );
+  });
+
+  await page.getByRole("button", {name: "Export"}).click();
+  await historyRequest;
+});
+
 test("drags panels and edits built-in chart configuration", async ({ page }) => {
   await page.goto("/?page=overview");
   const network = page.locator('[data-panel-id="network"]');

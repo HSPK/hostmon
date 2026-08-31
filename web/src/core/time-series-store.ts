@@ -7,6 +7,20 @@ import type {
 
 export type StoreListener = () => void;
 
+export function historyToCsv(
+  history: Pick<HistoryResponse, "timestamps" | "series">,
+  metrics: string[],
+): string {
+  const header = ["timestamp", ...metrics].join(",");
+  const rows = history.timestamps.map((timestamp, index) => {
+    const values = metrics.map(
+      name => history.series[name]?.[index] ?? "",
+    );
+    return [new Date(timestamp * 1000).toISOString(), ...values].join(",");
+  });
+  return [header, ...rows].join("\n");
+}
+
 export class TimeSeriesStore {
   readonly timestamps: number[] = [];
   readonly series = new Map<string, Array<number | null>>();
@@ -120,12 +134,15 @@ export class TimeSeriesStore {
   }
 
   exportCsv(metrics: string[]): string {
-    const header = ["timestamp", ...metrics].join(",");
-    const rows = this.timestamps.map((timestamp, index) => {
-      const values = metrics.map(name => this.series.get(name)?.[index] ?? "");
-      return [new Date(timestamp * 1000).toISOString(), ...values].join(",");
-    });
-    return [header, ...rows].join("\n");
+    return historyToCsv(
+      {
+        timestamps: this.timestamps,
+        series: Object.fromEntries(
+          metrics.map(name => [name, this.series.get(name) ?? []]),
+        ),
+      },
+      metrics,
+    );
   }
 
   private trim(cutoff: number): void {

@@ -12,6 +12,7 @@ export class TimeSeriesPanel implements PanelRenderer {
   readonly element: HTMLElement;
   private readonly chartHost: HTMLElement;
   private readonly resizeObserver: ResizeObserver;
+  private readonly legendItems = new Map<string, HTMLElement>();
   private plot: uPlot;
   private lastWidth = 0;
   private lastHeight = 0;
@@ -42,6 +43,7 @@ export class TimeSeriesPanel implements PanelRenderer {
         "--series-color",
         configured?.color ?? metadata?.color ?? "#7dd3fc",
       );
+      this.legendItems.set(metric, item);
       legend.append(item);
     }
     shell.header.append(legend);
@@ -85,14 +87,16 @@ export class TimeSeriesPanel implements PanelRenderer {
 
   update(): void {
     const revision = this.context.store.revision();
-    if (revision !== this.lastRevision) {
+    const dataChanged = revision !== this.lastRevision;
+    if (dataChanged) {
       this.lastRevision = revision;
+      this.updateLegend();
       this.plot.setData(this.data(), false);
     }
     const latest =
       this.context.store.latestTimestamp || Date.now() / 1000;
     const scaleKey = `${latest}:${this.context.store.windowSeconds}`;
-    if (scaleKey === this.lastScaleKey) return;
+    if (scaleKey === this.lastScaleKey && !dataChanged) return;
     this.lastScaleKey = scaleKey;
     this.plot.setScale("x", {
       min: latest - this.context.store.windowSeconds,
@@ -113,6 +117,25 @@ export class TimeSeriesPanel implements PanelRenderer {
     return this.context.store.alignedData(
       this.definition.metrics,
     ) as uPlot.AlignedData;
+  }
+
+  private updateLegend(): void {
+    for (const metric of this.definition.metrics) {
+      const item = this.legendItems.get(metric);
+      if (!item) continue;
+      const configured = this.definition.series?.[metric];
+      const metadata = this.context.store.metadata.get(metric);
+      item.textContent = configured?.label ?? metadata?.label ?? metric;
+      item.style.setProperty("--series-color", this.seriesColor(metric));
+    }
+  }
+
+  private seriesColor(metric: string): string {
+    return (
+      this.definition.series?.[metric]?.color ??
+      this.context.store.metadata.get(metric)?.color ??
+      "#7dd3fc"
+    );
   }
 
   private options(): uPlot.Options {
@@ -162,14 +185,13 @@ export class TimeSeriesPanel implements PanelRenderer {
           const configured = this.definition.series?.[metric];
           const series: uPlot.Series = {
             label: configured?.label ?? metadata?.label ?? metric,
-            stroke: configured?.color ?? metadata?.color ?? "#7dd3fc",
+            stroke: () => this.seriesColor(metric),
             width: this.definition.lineWidth ?? 1.5,
             spanGaps: true,
             points: { show: false },
           };
-          const color = configured?.color ?? metadata?.color;
-          if (this.definition.style === "area" && color) {
-            series.fill = `${color}24`;
+          if (this.definition.style === "area") {
+            series.fill = () => `${this.seriesColor(metric)}24`;
           }
           return series;
         }),

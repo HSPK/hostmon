@@ -5,7 +5,10 @@ import {
   PreferenceStore,
   type PreferenceField,
 } from "./core/preferences";
-import { TimeSeriesStore } from "./core/time-series-store";
+import {
+  historyToCsv,
+  TimeSeriesStore,
+} from "./core/time-series-store";
 import { RealtimeClient } from "./core/websocket-client";
 import type {
   ConnectionState,
@@ -350,7 +353,9 @@ export class DashboardApp {
     this.required("add-chart-button").addEventListener("click", () =>
       this.openChartEditor(),
     );
-    this.required("export-button").addEventListener("click", () => this.exportCsv());
+    this.required("export-button").addEventListener("click", () => {
+      void this.exportCsv();
+    });
     this.required("layout-close").addEventListener("click", () =>
       this.setLayoutDock(null),
     );
@@ -417,18 +422,22 @@ export class DashboardApp {
     this.refreshController?.abort();
     const controller = new AbortController();
     this.refreshController = controller;
+    const metrics = this.activeChartMetrics();
+    this.store.track(metrics);
     try {
       const [history, status] = await Promise.all([
-        this.api.history(
-          this.store.windowSeconds,
-          this.historyPointBudget(),
-          controller.signal,
-          this.store.tracked(),
-        ),
+        metrics.length
+          ? this.api.history(
+              this.store.windowSeconds,
+              this.historyPointBudget(),
+              controller.signal,
+              metrics,
+            )
+          : Promise.resolve(null),
         this.api.status(controller.signal),
       ]);
       if (controller.signal.aborted) return;
-      this.store.replaceHistory(history);
+      if (history) this.store.replaceHistory(history);
       this.store.applyStatus(status);
       this.hostText.textContent = status.host;
       this.required("sidebar-host").textContent = status.host;
@@ -549,12 +558,17 @@ export class DashboardApp {
     root.replaceChildren(fragment);
   }
 
-  private navigate(page: PageId, updateHistory = true): void {
+  private navigate(
+    page: PageId,
+    updateHistory = true,
+    reload = true,
+  ): void {
     const changed = this.preferences.get().activePage !== page;
     this.preferences.setActivePage(page);
     if (updateHistory && changed) this.updatePageRoute(page);
     this.renderNavigation();
     this.renderPanels();
+    if (reload && changed) void this.reloadData();
   }
 
   private pageFromLocation(): PageId | null {
@@ -749,6 +763,12 @@ export class DashboardApp {
       checkbox.addEventListener("change", () => {
         this.preferences.setVisible(definition.id, checkbox.checked);
         this.renderPanels();
+        if (
+          definition.page === this.preferences.get().activePage &&
+          definition.type === "timeseries"
+        ) {
+          void this.reloadData();
+        }
       });
       label.append(
         checkbox,
@@ -1250,7 +1270,7 @@ export class DashboardApp {
     this.preferences.saveCustomPanel(panel);
     this.store.track(metrics);
     this.chartDialog.close();
-    this.navigate(panel.page);
+    this.navigate(panel.page, true, false);
     await this.reloadData();
     this.renderLayoutSettings();
     this.renderPanels();
@@ -1261,6 +1281,7 @@ export class DashboardApp {
     this.preferences.removeCustomPanel(panelId);
     this.renderLayoutSettings();
     this.renderPanels();
+    void this.reloadData();
   }
 
   private deleteEditedChart(): void {
@@ -1273,6 +1294,7 @@ export class DashboardApp {
     this.chartDialog.close();
     this.renderLayoutSettings();
     this.renderPanels();
+    void this.reloadData();
   }
 
   private toggleLayoutDock(view: LayoutView): void {
@@ -1345,21 +1367,31 @@ export class DashboardApp {
     );
   }
 
-  private exportCsv(): void {
-    const metrics = this.allPanels()
-      .filter(
-        (panel): panel is TimeSeriesPanelDefinition =>
-          panel.type === "timeseries",
-      )
-      .flatMap(panel => panel.metrics);
-    const blob = new Blob([this.store.exportCsv([...new Set(metrics)])], {
-      type: "text/csv;charset=utf-8",
-    });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = `hostmon-${new Date().toISOString()}.csv`;
-    link.click();
-    URL.revokeObjectURL(link.href);
+  private async exportCsv(): Promise<void> {
+    const metrics = [...new Set(this.trackedPanelMetrics())];
+    if (!metrics.length) return;
+    const button = this.required("export-button") as HTMLButtonElement;
+    button.disabled = true;
+    try {
+      const history = await this.api.history(
+        this.store.windowSeconds,
+        this.historyPointBudget(),
+        undefined,
+        metrics,
+      );
+      const blob = new Blob([historyToCsv(history, metrics)], {
+        type: "text/csv;charset=utf-8",
+      });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = `hostmon-${new Date().toISOString()}.csv`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    } catch (error) {
+      console.error("Dashboard export failed", error);
+    } finally {
+      button.disabled = false;
+    }
   }
 
   private allPanels(): PanelDefinition[] {
@@ -1379,6 +1411,19 @@ export class DashboardApp {
           panel.type === "timeseries",
       )
       .flatMap(panel => panel.metrics);
+  }
+
+  private activeChartMetrics(): string[] {
+    return [
+      ...new Set(
+        this.preferences.visiblePanels()
+          .filter(
+            (panel): panel is TimeSeriesPanelDefinition =>
+              panel.type === "timeseries",
+          )
+          .flatMap(panel => panel.metrics),
+      ),
+    ];
   }
 
   private required(id: string): HTMLElement {

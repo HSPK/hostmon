@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { HistoryResponse } from "../domain/types";
-import { TimeSeriesStore } from "./time-series-store";
+import { historyToCsv, TimeSeriesStore } from "./time-series-store";
 
 describe("TimeSeriesStore", () => {
   it("loads columnar history and appends live snapshots", () => {
@@ -56,6 +56,19 @@ describe("TimeSeriesStore", () => {
     });
 
     const csv = store.exportCsv(["cpu/percent"]);
+
+    expect(csv).toContain("timestamp,cpu/percent");
+    expect(csv).toContain(",25");
+  });
+
+  it("exports a standalone history response", () => {
+    const csv = historyToCsv(
+      {
+        timestamps: [1],
+        series: {"cpu/percent": [25]},
+      },
+      ["cpu/percent"],
+    );
 
     expect(csv).toContain("timestamp,cpu/percent");
     expect(csv).toContain(",25");
