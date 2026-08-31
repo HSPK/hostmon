@@ -56,6 +56,7 @@ export class CollectorPanel implements PanelRenderer {
     shell.body.append(this.table.element);
     this.dialog = document.createElement("dialog");
     this.dialog.className = "collector-dialog";
+    this.dialog.setAttribute("aria-label", "Collector details");
     this.dialog.innerHTML = `
       <header><h2>Collector details</h2><button class="icon-button" type="button">Close</button></header>
       <pre></pre>
@@ -104,6 +105,10 @@ export class CollectorPanel implements PanelRenderer {
   }
 
   private openDetails(row: CollectorRow): void {
+    this.dialog.setAttribute(
+      "aria-label",
+      `${row.name} collector details`,
+    );
     this.dialog.querySelector("h2")!.textContent = row.name;
     this.dialog.querySelector("pre")!.textContent = JSON.stringify(
       {

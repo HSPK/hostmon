@@ -316,7 +316,7 @@ export class DashboardApp {
           <button id="layout-panels-button" class="layout-dock-button" type="button" data-compact-label="Panels" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Panels</button>
         </nav>
       </aside>
-      <dialog id="chart-dialog" class="chart-dialog">
+      <dialog id="chart-dialog" class="chart-dialog" aria-labelledby="chart-dialog-title">
         <form id="chart-form" method="dialog">
           <header><div><h2 id="chart-dialog-title">Create chart</h2><p>Choose up to eight metrics.</p></div><button id="chart-close" class="icon-button" type="button">Close</button></header>
           <div class="chart-dialog-body">

@@ -328,6 +328,9 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".collector-dialog")).toContainText(
     "deadline_seconds",
   );
+  await expect(
+    page.getByRole("dialog", {name: "cpu collector details"}),
+  ).toBeVisible();
   await expect(page.locator(".collector-dialog")).toContainText(
     "last_refresh_duration_ms",
   );
@@ -513,6 +516,9 @@ test("searches metrics and persists a custom chart", async ({ page }) => {
   );
 
   await page.getByRole("button", { name: "Add chart" }).click();
+  await expect(
+    page.getByRole("dialog", {name: "Create chart"}),
+  ).toBeVisible();
   const saveChart = page.getByRole("button", {name: "Save chart"});
   await expect(saveChart).toBeDisabled();
   await expect(page.locator("#chart-page")).toHaveValue("overview");
@@ -1045,6 +1051,9 @@ test("remains responsive on narrow screens", async ({ page }) => {
     .getByRole("button", {name: "Overview"})
     .click();
   await page.getByRole("button", { name: "Edit" }).first().click();
+  await expect(
+    page.getByRole("dialog", {name: "Edit chart"}),
+  ).toBeVisible();
   await expect(page.getByRole("button", { name: "Save chart" }))
     .toBeInViewport({ratio: 1});
   const editorBodyScrolls = await page
