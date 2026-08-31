@@ -26,6 +26,8 @@ import { createPanelRegistry } from "./panels/registry";
 
 type LayoutView = "pages" | "navigation" | "panels";
 
+const NAVIGATION_RELOAD_DELAY_MS = 100;
+
 interface PluginCacheEntry {
   expiresAt: number;
   updatedAt: number;
@@ -56,6 +58,7 @@ export class DashboardApp {
   private pauseButton!: HTMLButtonElement;
   private operationLatency!: HTMLElement;
   private refreshController: AbortController | null = null;
+  private navigationReloadTimer: number | null = null;
   private catalogCache: { loadedAt: number; entries: MetricCatalogEntry[] } | null =
     null;
   private readonly pluginCache = new Map<string, PluginCacheEntry>();
@@ -441,6 +444,7 @@ export class DashboardApp {
   }
 
   private async reloadData(): Promise<void> {
+    this.clearNavigationReload();
     this.refreshController?.abort();
     const controller = new AbortController();
     this.refreshController = controller;
@@ -744,7 +748,23 @@ export class DashboardApp {
     if (updateHistory && changed) this.updatePageRoute(page);
     this.renderNavigation();
     this.renderPanels();
-    if (reload && changed) void this.reloadData();
+    if (reload && changed) this.scheduleNavigationReload();
+  }
+
+  private scheduleNavigationReload(): void {
+    this.refreshController?.abort();
+    this.clearNavigationReload();
+    this.navigationReloadTimer = window.setTimeout(() => {
+      this.navigationReloadTimer = null;
+      void this.reloadData();
+    }, NAVIGATION_RELOAD_DELAY_MS);
+  }
+
+  private clearNavigationReload(): void {
+    if (this.navigationReloadTimer !== null) {
+      clearTimeout(this.navigationReloadTimer);
+      this.navigationReloadTimer = null;
+    }
   }
 
   private pageFromLocation(): PageId | null {
@@ -1652,6 +1672,7 @@ export class DashboardApp {
   }
 
   private destroy(): void {
+    this.clearNavigationReload();
     this.refreshController?.abort();
     this.realtime.stop();
     this.systemTheme.removeEventListener(

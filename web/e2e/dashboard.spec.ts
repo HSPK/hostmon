@@ -1465,6 +1465,30 @@ test("loads history only for visible chart pages", async ({ page }) => {
   expect(historyRequests).toHaveLength(2);
 });
 
+test("debounces history requests during rapid page navigation", async ({
+  page,
+}) => {
+  const historyRequests: URL[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/history") historyRequests.push(url);
+  });
+
+  await page.goto("/?page=overview");
+  await expect.poll(() => historyRequests.length).toBe(1);
+  await page.getByRole("button", {name: "GPU Fleet"}).click();
+  await page.getByRole("button", {name: "Overview"}).click();
+  await page.getByRole("button", {name: "GPU Fleet"}).click();
+
+  await expect(page.locator("#page-title")).toHaveText("GPU Fleet");
+  await expect.poll(() => historyRequests.length).toBe(2);
+  await page.waitForTimeout(100);
+  expect(historyRequests).toHaveLength(2);
+  expect(historyRequests[1]!.searchParams.get("metrics")).toContain(
+    "cluster_gpu/queue/total/capacity_gpus",
+  );
+});
+
 test("exports complete chart history on demand", async ({ page }) => {
   await page.goto("/?page=workloads");
   const historyRequest = page.waitForRequest(request => {
