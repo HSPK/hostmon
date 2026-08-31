@@ -17,6 +17,7 @@ import {
   type SortDirection,
 } from "./data-table";
 import {
+  formatItemCount,
   pageButton,
   tableFooter,
   TABLE_PAGE_SIZE,
@@ -206,7 +207,8 @@ export class GPUSubmittersPanel implements PanelRenderer {
       (this.page + 1) * TABLE_PAGE_SIZE,
     );
     this.count.textContent =
-      `${rows.length} workloads | ${this.page + 1}/${pages}`;
+      `${formatItemCount(rows.length, "workload")} | ` +
+      `${this.page + 1}/${pages}`;
     this.previous.disabled = this.page === 0;
     this.next.disabled = this.page >= pages - 1;
     this.table.setRows(

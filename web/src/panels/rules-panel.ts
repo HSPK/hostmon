@@ -11,7 +11,7 @@ import {
   type DataColumn,
   type SortDirection,
 } from "./data-table";
-import { tableFooter } from "./table-controls";
+import { formatItemCount, tableFooter } from "./table-controls";
 
 export class RulesPanel implements PanelRenderer {
   readonly element: HTMLElement;
@@ -157,7 +157,8 @@ export class RulesPanel implements PanelRenderer {
       .sort((left, right) =>
         compareByPath(left, right, this.sort, this.sortDirection),
       );
-    this.count.textContent = `${rules.length} / ${this.rules.length} rules`;
+    this.count.textContent =
+      `${rules.length} / ${formatItemCount(this.rules.length, "rule")}`;
     this.table.setRows(rules, this.columns, "No alert rules match the filter");
   }
 

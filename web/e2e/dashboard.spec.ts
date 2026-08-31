@@ -787,6 +787,10 @@ test("filters and sorts workload triage views", async ({ page }) => {
   const search = page.locator(
     ".gpu-submitters-panel input[type=search]",
   );
+  await search.fill("training-job-001");
+  await expect(page.locator(".table-count")).toHaveText(
+    "1 workload | 1/1",
+  );
   const searchSaved = page.waitForResponse(response => {
     const request = response.request();
     return (

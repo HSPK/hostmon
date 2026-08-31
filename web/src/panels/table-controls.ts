@@ -1,5 +1,13 @@
 export const TABLE_PAGE_SIZE = 75;
 
+export function formatItemCount(
+  count: number,
+  singular: string,
+  plural = `${singular}s`,
+): string {
+  return `${count} ${count === 1 ? singular : plural}`;
+}
+
 export function pageButton(
   label: string,
   action: () => void,
