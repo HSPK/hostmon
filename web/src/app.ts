@@ -370,6 +370,7 @@ export class DashboardApp {
     this.required("refresh-button").addEventListener("click", () => {
       this.catalogCache = null;
       this.pluginCache.clear();
+      for (const panel of this.panels) panel.refresh?.();
       void this.reloadData();
     });
     this.required("add-chart-button").addEventListener("click", () =>

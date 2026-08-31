@@ -46,6 +46,7 @@ export interface PanelContext {
 export interface PanelRenderer {
   readonly element: HTMLElement;
   update(): void;
+  refresh?(): void;
   destroy(): void;
 }
 

@@ -51,6 +51,10 @@ export class GPUFleetPanel implements PanelRenderer {
     void this.load();
   }
 
+  refresh(): void {
+    void this.load();
+  }
+
   destroy(): void {}
 
   private async load(): Promise<void> {

@@ -113,6 +113,10 @@ export class MetricExplorerPanel implements PanelRenderer {
     if (Date.now() - this.lastLoaded > 10_000) void this.load();
   }
 
+  refresh(): void {
+    void this.load();
+  }
+
   destroy(): void {}
 
   private async load(): Promise<void> {

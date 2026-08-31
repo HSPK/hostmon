@@ -604,6 +604,43 @@ test("retries a failed alert rules load on refresh", async ({page}) => {
   expect(pageErrors).toEqual([]);
 });
 
+test("refreshes successful panel APIs on demand", async ({page}) => {
+  let requests = 0;
+  let rules = [
+    {
+      alert: "initial-rule",
+      expr: "cpu.percent >= 90",
+      level: "warning",
+      title: "Initial",
+      message: "Initial rule",
+      enabled: true,
+      for: 1,
+      mode: "level",
+      cooldown: 60,
+    },
+  ];
+  await page.route(rulesApiPattern, route => {
+    requests++;
+    return route.fulfill({json: {rules}});
+  });
+
+  await page.goto("/?page=alerts");
+  await expect(page.locator(".rules-table tbody tr")).toHaveCount(1);
+  rules = [
+    ...rules,
+    {
+      ...rules[0]!,
+      alert: "external-rule",
+      title: "External",
+    },
+  ];
+  await page.getByRole("button", {name: "Refresh"}).click();
+
+  await expect(page.locator(".rules-table tbody tr")).toHaveCount(2);
+  await expect(page.locator(".rules-table")).toContainText("external-rule");
+  expect(requests).toBeGreaterThanOrEqual(2);
+});
+
 test("searches metrics and persists a custom chart", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Metrics" }).click();

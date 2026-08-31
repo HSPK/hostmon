@@ -148,6 +148,10 @@ export class GPUSubmittersPanel implements PanelRenderer {
     void this.load();
   }
 
+  refresh(): void {
+    void this.load();
+  }
+
   destroy(): void {
     if (this.searchPersistTimer !== null) {
       clearTimeout(this.searchPersistTimer);

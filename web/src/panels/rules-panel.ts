@@ -145,6 +145,11 @@ export class RulesPanel implements PanelRenderer {
   update(): void {
     if (this.loadFailed) void this.load();
   }
+
+  refresh(): void {
+    void this.load();
+  }
+
   destroy(): void {}
 
   private async load(): Promise<void> {

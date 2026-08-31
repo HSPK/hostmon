@@ -75,6 +75,10 @@ export class CollectorPanel implements PanelRenderer {
     if (Date.now() - this.lastLoaded > 10_000) void this.load();
   }
 
+  refresh(): void {
+    void this.load();
+  }
+
   destroy(): void {
     this.dialog.remove();
   }
