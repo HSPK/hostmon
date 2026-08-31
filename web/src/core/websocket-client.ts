@@ -8,11 +8,29 @@ export interface WebSocketClientCallbacks {
 export class RealtimeClient {
   private socket: WebSocket | null = null;
   private reconnectTimer: number | null = null;
+  private inactivityTimer: number | null = null;
+  private inactivityTimeoutMilliseconds: number | null = null;
+  private latestTimestamp = Number.NEGATIVE_INFINITY;
+  private hasReceivedStreamSnapshot = false;
   private attempt = 0;
   private stopped = false;
   private paused = false;
 
   constructor(private readonly callbacks: WebSocketClientCallbacks) {}
+
+  configureInactivityTimeout(
+    timeoutSeconds: number,
+    latestTimestamp: number,
+  ): void {
+    if (!Number.isFinite(timeoutSeconds) || timeoutSeconds <= 0) {
+      throw new RangeError("WebSocket inactivity timeout must be positive");
+    }
+    if (!Number.isFinite(latestTimestamp)) {
+      throw new RangeError("Latest sample timestamp must be finite");
+    }
+    this.inactivityTimeoutMilliseconds = timeoutSeconds * 1000;
+    this.latestTimestamp = latestTimestamp;
+  }
 
   start(): void {
     this.stopped = false;
@@ -22,16 +40,21 @@ export class RealtimeClient {
   stop(): void {
     this.stopped = true;
     this.clearReconnect();
-    this.socket?.close(1000, "client stopped");
+    this.clearInactivity();
+    const socket = this.socket;
     this.socket = null;
+    socket?.close(1000, "client stopped");
   }
 
   setPaused(paused: boolean): void {
     this.paused = paused;
     this.callbacks.onState(paused ? "paused" : "connecting");
     if (paused) {
-      this.socket?.close(1000, "paused");
       this.clearReconnect();
+      this.clearInactivity();
+      const socket = this.socket;
+      this.socket = null;
+      socket?.close(1000, "paused");
     } else if (!this.stopped) {
       this.attempt = 0;
       this.connect();
@@ -46,24 +69,51 @@ export class RealtimeClient {
     this.socket = socket;
 
     socket.onopen = () => {
-      this.attempt = 0;
-      this.callbacks.onState("connected");
+      if (this.socket !== socket) return;
+      this.armInactivity(socket);
     };
     socket.onmessage = event => {
+      if (this.socket !== socket) return;
       try {
         const snapshot = JSON.parse(String(event.data)) as MetricSnapshot;
-        if (typeof snapshot.timestamp === "number" && snapshot.metrics) {
+        if (Number.isFinite(snapshot.timestamp) && snapshot.metrics) {
           this.callbacks.onSnapshot(snapshot);
+          const isNewer = snapshot.timestamp > this.latestTimestamp;
+          if (isNewer) {
+            this.latestTimestamp = snapshot.timestamp;
+          }
+          if (isNewer || !this.hasReceivedStreamSnapshot) {
+            this.hasReceivedStreamSnapshot = true;
+            this.attempt = 0;
+            this.armInactivity(socket);
+            this.callbacks.onState("connected");
+          }
         }
       } catch (error) {
         console.error("Invalid dashboard snapshot", error);
       }
     };
-    socket.onerror = () => socket.close();
+    socket.onerror = () => {
+      if (this.socket === socket) socket.close();
+    };
     socket.onclose = () => {
-      if (this.socket === socket) this.socket = null;
+      if (this.socket !== socket) return;
+      this.socket = null;
+      this.clearInactivity();
       if (!this.stopped && !this.paused) this.scheduleReconnect();
     };
+  }
+
+  private armInactivity(socket: WebSocket): void {
+    this.clearInactivity();
+    if (this.inactivityTimeoutMilliseconds === null) return;
+    this.inactivityTimer = window.setTimeout(() => {
+      this.inactivityTimer = null;
+      if (this.socket !== socket || this.stopped || this.paused) return;
+      this.socket = null;
+      socket.close(4000, "stream inactive");
+      this.scheduleReconnect();
+    }, this.inactivityTimeoutMilliseconds);
   }
 
   private scheduleReconnect(): void {
@@ -85,6 +135,13 @@ export class RealtimeClient {
     if (this.reconnectTimer !== null) {
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = null;
+    }
+  }
+
+  private clearInactivity(): void {
+    if (this.inactivityTimer !== null) {
+      clearTimeout(this.inactivityTimer);
+      this.inactivityTimer = null;
     }
   }
 }

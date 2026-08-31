@@ -151,6 +151,7 @@ test.beforeEach(async ({ page }) => {
         metrics,
         fields,
         websocket_clients: 1,
+        websocket_inactivity_timeout_seconds: 30,
       }),
     }),
   );
@@ -401,6 +402,43 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await page.getByRole("button", { name: "System" }).click();
   await expect(page.locator(".system-grid")).toContainText("/api/ws");
   await expect(page.locator(".system-grid")).toContainText("/healthz");
+});
+
+test("reconnects when a websocket stream stops publishing samples", async ({
+  page,
+}) => {
+  let connections = 0;
+  await page.route("**/api/status", route =>
+    route.fulfill({
+      json: {
+        host: "test-host",
+        version: "0.1.1.dev0",
+        updated_at: now,
+        metrics,
+        fields,
+        websocket_clients: 1,
+        websocket_inactivity_timeout_seconds: 0.5,
+      },
+    }),
+  );
+  await page.routeWebSocket("**/api/ws", socket => {
+    connections++;
+    socket.send(
+      JSON.stringify({
+        timestamp: now,
+        host: "test-host",
+        metrics,
+        fields,
+      }),
+    );
+  });
+
+  await page.goto("/");
+  await expect(page.locator("#connection-text")).toHaveText("connected");
+  await expect(page.locator("#connection-text")).toHaveText("reconnecting", {
+    timeout: 2_000,
+  });
+  await expect.poll(() => connections).toBeGreaterThan(1);
 });
 
 test("searches metrics and persists a custom chart", async ({ page }) => {

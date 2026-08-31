@@ -256,6 +256,7 @@ class PrometheusHTTPTests(unittest.TestCase):
         self.assertEqual(status["host"], "host-a")
         self.assertEqual(status["version"], "0.1.1.dev0")
         self.assertEqual(status["fields"]["task"], "training-a")
+        self.assertEqual(status["websocket_inactivity_timeout_seconds"], 30)
         self.assertEqual(catalog["metrics"][0]["name"], "cpu/percent")
 
     def test_serves_dashboard_history_and_websocket(self):

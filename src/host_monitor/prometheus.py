@@ -285,6 +285,9 @@ class PrometheusExporter:
                 "metrics": snapshot.metrics,
                 "fields": snapshot.fields,
                 "websocket_clients": len(self._clients),
+                "websocket_inactivity_timeout_seconds": (
+                    self.settings.max_sample_age_seconds
+                ),
             }
         )
 

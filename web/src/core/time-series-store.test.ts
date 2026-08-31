@@ -113,6 +113,7 @@ describe("TimeSeriesStore", () => {
       metrics: {"cpu/percent": 10},
       fields: {},
       websocket_clients: 0,
+      websocket_inactivity_timeout_seconds: 30,
     });
     expect(store.revision()).toBe(initial);
     store.append({

@@ -29,7 +29,7 @@ history, rules, and alerts remain active.
 | `/` | Built-in TypeScript/uPlot operations dashboard |
 | `/metrics` | Prometheus text exposition |
 | `/healthz` | HTTP 200 for a fresh sample, HTTP 503 for a stale/unavailable sample |
-| `/api/status` | Latest metrics and non-numeric template fields as JSON |
+| `/api/status` | Latest metrics, template fields, and the WebSocket inactivity timeout as JSON |
 | `/api/history` | Compact columnar history, bounded and downsampled in memory |
 | `/api/catalog` | Current/min/average/p95/max statistics for every metric |
 | `/api/preferences` | GET/PUT atomically persisted dashboard preferences |
@@ -44,7 +44,9 @@ curl http://127.0.0.1:9108/api/status
 
 Open <http://127.0.0.1:9108/> for a zero-configuration dashboard. It uses no
 external JavaScript or CSS, never scans long-term JSONL files in request
-handlers, and receives new points over WebSocket instead of polling.
+handlers, and receives new points over WebSocket instead of polling. The
+dashboard uses the server-provided inactivity timeout to reconnect silent
+streams; only a newer sample restores the connected state after a timeout.
 
 ## Prometheus scrape configuration
 

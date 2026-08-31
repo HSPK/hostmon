@@ -450,6 +450,10 @@ export class DashboardApp {
       ]);
       if (controller.signal.aborted) return;
       if (history) this.store.replaceHistory(history);
+      this.realtime.configureInactivityTimeout(
+        status.websocket_inactivity_timeout_seconds,
+        status.updated_at,
+      );
       this.store.applyStatus(status);
       this.hostText.textContent = status.host;
       this.required("sidebar-host").textContent = status.host;

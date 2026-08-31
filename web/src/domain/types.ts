@@ -22,6 +22,7 @@ export interface StatusResponse {
   metrics: Record<MetricName, number>;
   fields: Record<string, string | number | boolean | null>;
   websocket_clients: number;
+  websocket_inactivity_timeout_seconds: number;
 }
 
 export interface HistoryResponse {
