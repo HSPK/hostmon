@@ -559,6 +559,51 @@ test("preserves panel data when a refresh fails", async ({page}) => {
   expect(pageErrors).toEqual([]);
 });
 
+test("retries a failed alert rules load on refresh", async ({page}) => {
+  let fail = true;
+  let requests = 0;
+  await page.route(rulesApiPattern, route => {
+    requests++;
+    return fail
+      ? route.fulfill({status: 503, body: "temporary failure"})
+      : route.fulfill({
+          json: {
+            rules: [
+              {
+                alert: "recovered-rule",
+                expr: "cpu.percent >= 90",
+                level: "warning",
+                title: "Recovered",
+                message: "Recovered rule",
+                enabled: true,
+                for: 1,
+                mode: "level",
+                cooldown: 60,
+              },
+            ],
+          },
+        });
+  });
+  const pageErrors: string[] = [];
+  page.on("pageerror", error => pageErrors.push(String(error)));
+
+  await page.goto("/?page=alerts");
+  await expect(page.locator(".rules-feedback")).toContainText(
+    "Could not load rules",
+  );
+  fail = false;
+  await page.getByRole("button", {name: "Refresh"}).click();
+
+  await expect(page.locator(".rules-feedback")).toBeHidden();
+  await expect(page.locator(".rules-table tbody tr")).toHaveCount(1);
+  await expect(page.locator(".rules-table")).toContainText("recovered-rule");
+  expect(requests).toBeGreaterThanOrEqual(2);
+  const recoveredRequests = requests;
+  await page.waitForTimeout(250);
+  expect(requests).toBe(recoveredRequests);
+  expect(pageErrors).toEqual([]);
+});
+
 test("searches metrics and persists a custom chart", async ({ page }) => {
   await page.goto("/");
   await page.getByRole("button", { name: "Metrics" }).click();

@@ -25,6 +25,8 @@ export class RulesPanel implements PanelRenderer {
   private editing: AlertRuleConfig | null = null;
   private sort = "alert";
   private sortDirection: SortDirection = "asc";
+  private loading = false;
+  private loadFailed = false;
 
   constructor(
     definition: RulesPanelDefinition,
@@ -137,15 +139,28 @@ export class RulesPanel implements PanelRenderer {
       this.editor,
       this.table.element,
     );
-    void this.load().catch(error => this.showFeedback("Could not load rules", error));
+    void this.load();
   }
 
-  update(): void {}
+  update(): void {
+    if (this.loadFailed) void this.load();
+  }
   destroy(): void {}
 
   private async load(): Promise<void> {
-    this.rules = await this.context.actions.loadRules();
-    this.render();
+    if (this.loading) return;
+    this.loading = true;
+    try {
+      this.rules = await this.context.actions.loadRules();
+      this.loadFailed = false;
+      this.clearFeedback();
+      this.render();
+    } catch (error) {
+      this.loadFailed = true;
+      this.showFeedback("Could not load rules", error);
+    } finally {
+      this.loading = false;
+    }
   }
 
   private render(): void {
