@@ -427,7 +427,10 @@ export class DashboardApp {
     this.required("chart-delete").addEventListener("click", () =>
       this.deleteEditedChart(),
     );
-    this.required("chart-form").addEventListener("submit", event => {
+    const chartForm = this.required("chart-form") as HTMLFormElement;
+    chartForm.addEventListener("input", () => this.updateChartSaveState());
+    chartForm.addEventListener("change", () => this.updateChartSaveState());
+    chartForm.addEventListener("submit", event => {
       event.preventDefault();
       void this.saveChart();
     });
@@ -1386,6 +1389,21 @@ export class DashboardApp {
     this.required("chart-metric-selected").replaceChildren(selectedFragment);
     this.required("chart-selection-count").textContent =
       `${selected.length} selected`;
+    this.updateChartSaveState(selected);
+  }
+
+  private updateChartSaveState(selectedMetrics?: string[]): void {
+    const metrics =
+      selectedMetrics ??
+      (JSON.parse(
+        this.chartDialog.dataset.selected ?? "[]",
+      ) as string[]);
+    const form = this.required("chart-form") as HTMLFormElement;
+    const save = this.required("chart-save") as HTMLButtonElement;
+    save.disabled =
+      metrics.length < 1 ||
+      metrics.length > 8 ||
+      !form.checkValidity();
   }
 
   private async saveChart(): Promise<void> {

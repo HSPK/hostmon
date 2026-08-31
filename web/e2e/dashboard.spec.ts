@@ -513,15 +513,21 @@ test("searches metrics and persists a custom chart", async ({ page }) => {
   );
 
   await page.getByRole("button", { name: "Add chart" }).click();
+  const saveChart = page.getByRole("button", {name: "Save chart"});
+  await expect(saveChart).toBeDisabled();
   await expect(page.locator("#chart-page")).toHaveValue("overview");
   await page.locator("#chart-metric-filter").fill("custom/latency");
   await page.locator(".metric-option").filter({ hasText: "custom/latency_ms" }).click();
+  await expect(saveChart).toBeEnabled();
   await expect(page.locator("#chart-metric-selected")).toContainText(
     "custom/latency_ms",
   );
+  await page.locator("#chart-title").fill("");
+  await expect(saveChart).toBeDisabled();
   await page.locator("#chart-title").fill("Request latency");
+  await expect(saveChart).toBeEnabled();
   await page.locator("#chart-style").selectOption("area");
-  await page.getByRole("button", { name: "Save chart" }).click();
+  await saveChart.click();
 
   await expect(page.locator("#page-title")).toHaveText("Overview");
   await expect(page.locator('[data-panel-id^="custom-"]')).toContainText(
@@ -1710,6 +1716,7 @@ test("configures web theme and density", async ({ page }) => {
   await expect(page.getByLabel("Time range")).toHaveValue("86400");
   expect(await elementContrast(".product-mark")).toBeGreaterThanOrEqual(4.5);
   await page.locator(".toolbar").getByRole("button", {name: "Add chart"}).click();
+  await page.locator(".metric-option").first().click();
   expect(await elementContrast("#chart-save")).toBeGreaterThanOrEqual(4.5);
   await expect(page.locator("#chart-style")).toHaveValue("area");
   await expect(page.locator("#chart-width")).toHaveValue("2");
