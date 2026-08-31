@@ -290,6 +290,7 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
     "Charts",
     "Tables",
     "Manage",
+    "Other",
   ]);
 
   await page.getByRole("button", { name: "Collectors" }).click();
@@ -450,6 +451,9 @@ test("defaults new charts to the current chart page", async ({ page }) => {
 
 test("configures persistent sidebar sections", async ({ page }) => {
   await page.goto("/?page=settings");
+  await expect(
+    page.getByRole("button", {name: "Sections", exact: true}),
+  ).toHaveCount(0);
   const dock = page.locator(".layout-dock-nav");
   const dockBox = await dock.boundingBox();
   expect(dockBox).not.toBeNull();
@@ -468,45 +472,76 @@ test("configures persistent sidebar sections", async ({ page }) => {
     '.navigation-setting[data-navigation-section-id="custom-operations"]',
   );
   await expect(operations).toHaveCount(1);
-  await operations.getByRole("button", { name: "Up" }).click();
   await page.getByLabel("Section for Metrics").selectOption({
     label: "Operations",
   });
-  const sidebarSection = page.locator(".nav-section").filter({
+  await page.locator("#layout-close").click();
+  let sidebarSection = page.locator(".sidebar .nav-section").filter({
     has: page.getByRole("heading", { name: "Operations" }),
   });
   await expect(
     sidebarSection.getByRole("button", { name: "Metrics" }),
   ).toHaveCount(1);
+  const sectionActions = sidebarSection.locator(".nav-section-actions");
+  await expect(sectionActions).toHaveCSS("opacity", "0");
+  await sidebarSection.hover();
+  await expect(sectionActions).toHaveCSS("opacity", "1");
+  await sidebarSection.getByRole("button", {
+    name: "Edit Operations section",
+  }).click();
+  const sectionName = page.getByLabel("Name for Operations section");
+  await expect(sectionName).toBeFocused();
+  await sectionName.fill("Experiments");
+  await sectionName.press("Tab");
+  await page.locator("#layout-close").click();
+  sidebarSection = page.locator(".sidebar .nav-section").filter({
+    has: page.getByRole("heading", {name: "Experiments"}),
+  });
+  const chartsSection = page.locator(".sidebar .nav-section").filter({
+    has: page.getByRole("heading", {name: "Charts", exact: true}),
+  });
+  await sidebarSection.hover();
+  await sidebarSection.getByRole("button", {
+    name: "Drag Experiments section",
+  }).dragTo(chartsSection.locator(".nav-section-header"));
+  await expect
+    .poll(() =>
+      page
+        .locator(".sidebar .nav-main .nav-section h3")
+        .allTextContents(),
+    )
+    .toEqual(["Experiments", "Charts", "Tables", "Manage"]);
 
   await page.reload();
   await page.locator("#layout-navigation-button").click();
   await expect(page.getByLabel("Section for Metrics")).toHaveValue(
     "custom-operations",
   );
+  await page.locator("#layout-close").click();
   page.once("dialog", dialog => dialog.accept());
-  await page
-    .locator(
-      '.navigation-setting[data-navigation-section-id="custom-operations"]',
-    )
-    .getByRole("button", { name: "Delete" })
-    .click();
+  sidebarSection = page.locator(".sidebar .nav-section").filter({
+    has: page.getByRole("heading", {name: "Experiments"}),
+  });
+  await sidebarSection.hover();
+  await sidebarSection.getByRole("button", {
+    name: "Delete Experiments section",
+  }).click();
   await expect(
-    page.getByRole("heading", { name: "Operations" }),
+    page.getByRole("heading", {name: "Experiments"}),
   ).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Metrics" })).toHaveCount(1);
 });
 
-test("manages sections and metric pages from the Sections page", async ({
+test("manages sections and metric pages from the Navigation dock", async ({
   page,
 }) => {
-  await page.goto("/?page=sections");
-  await expect(page.locator("#page-title")).toHaveText("Sections");
-  let editor = page.locator(".sections-panel");
+  await page.goto("/?page=overview");
+  await page.locator("#layout-navigation-button").click();
+  let editor = page.locator("#layout-navigation-view");
   await editor.getByLabel("New section name").fill("Experiments");
   await editor.getByRole("button", {name: "Add section"}).click();
 
-  editor = page.locator(".sections-panel");
+  editor = page.locator("#layout-navigation-view");
   await editor.getByLabel("New metric page name").fill("Training metrics");
   await editor.getByLabel("New metric page section").selectOption({
     label: "Experiments",
@@ -514,6 +549,7 @@ test("manages sections and metric pages from the Sections page", async ({
   await editor.getByRole("button", {name: "Add page"}).click();
 
   await expect(page.locator("#page-title")).toHaveText("Training metrics");
+  await page.locator("#layout-close").click();
   await expect(page.locator(".empty-page")).toContainText("No panels yet");
   await page.locator(".toolbar").getByRole("button", {name: "Add chart"}).click();
   await expect(page.locator("#chart-page")).toHaveValue(
@@ -521,24 +557,25 @@ test("manages sections and metric pages from the Sections page", async ({
   );
   await page.getByRole("button", {name: "Close"}).click();
 
-  await page.getByRole("button", {name: "Sections"}).click();
-  editor = page.locator(".sections-panel");
+  await page.locator("#layout-navigation-button").click();
+  editor = page.locator("#layout-navigation-view");
   const pageRow = editor.locator(
     '[data-navigation-page-id="page-training-metrics"]',
   );
   await pageRow.locator("input").fill("Training runs");
   await pageRow.locator("input").press("Tab");
   await page.reload();
+  await page.locator("#layout-navigation-button").click();
   await expect(
     page.locator(
-      '.sections-panel [data-navigation-page-id="page-training-metrics"] input',
+      '#layout-navigation-view [data-navigation-page-id="page-training-metrics"] input',
     ),
   ).toHaveValue("Training runs");
 
   page.once("dialog", dialog => dialog.accept());
   await page
     .locator(
-      '.sections-panel [data-navigation-page-id="page-training-metrics"]',
+      '#layout-navigation-view [data-navigation-page-id="page-training-metrics"]',
     )
     .getByRole("button", {name: "Delete"})
     .click();
@@ -548,7 +585,7 @@ test("manages sections and metric pages from the Sections page", async ({
   page.once("dialog", dialog => dialog.accept());
   await page
     .locator(
-      '.sections-panel [data-navigation-section-id="custom-experiments"]',
+      '#layout-navigation-view [data-navigation-section-id="custom-experiments"]',
     )
     .getByRole("button", {name: "Delete"})
     .click();
@@ -1402,7 +1439,7 @@ test("rolls back failed alert mutations and reports the error", async ({
       new URL(response.url()).pathname === "/api/rules/high-cpu"
     );
   });
-  await page.getByRole("button", {name: "Delete"}).click();
+  await page.getByRole("button", {name: "Delete", exact: true}).click();
   expect((await deleteFailure).status()).toBe(503);
   await expect(page.locator(".rules-feedback")).toContainText(
     "Could not delete high-cpu",

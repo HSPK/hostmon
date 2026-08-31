@@ -7,7 +7,6 @@
     {"id": "collectors", "label": "Collectors", "group": "Tables"},
     {"id": "alerts", "label": "Alerts", "group": "Manage"},
     {"id": "settings", "label": "Settings", "placement": "bottom"},
-    {"id": "sections", "label": "Sections", "placement": "bottom"},
     {"id": "system", "label": "System", "placement": "bottom"}
   ],
   "panels": [
@@ -128,7 +127,6 @@
       ]
     },
     {"id": "web-settings", "type": "web-settings", "page": "settings", "title": "Web settings", "columnSpan": 2},
-    {"id": "sections", "type": "sections", "page": "sections", "section": "Configuration", "title": "Sections and metric pages", "columnSpan": 2},
     {
       "id": "system",
       "type": "system",

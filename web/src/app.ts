@@ -15,6 +15,7 @@ import type {
   DashboardDefinition,
   DashboardPreferences,
   MetricCatalogEntry,
+  NavigationSection,
   PageId,
   PanelDefinition,
   TimeSeriesPanelDefinition,
@@ -543,10 +544,17 @@ export class DashboardApp {
         const sectionRoot = document.createElement("div");
         sectionRoot.className = "nav-section";
         sectionRoot.dataset.navigationSectionId = section.id;
-        if (section.label) {
-          const title = document.createElement("h3");
-          title.textContent = section.label;
-          sectionRoot.append(title);
+        if (closeAfterNavigation) {
+          if (section.label) {
+            const title = document.createElement("h3");
+            title.textContent = section.label;
+            sectionRoot.append(title);
+          }
+        } else {
+          sectionRoot.append(
+            this.sidebarSectionHeader(section, sections.length),
+          );
+          this.bindNavigationSectionDrag(sectionRoot, section);
         }
         for (const page of section.pages) {
           const item = items.get(page);
@@ -567,6 +575,107 @@ export class DashboardApp {
       fragment.append(container);
     }
     root.replaceChildren(fragment);
+  }
+
+  private sidebarSectionHeader(
+    section: NavigationSection,
+    sectionCount: number,
+  ): HTMLElement {
+    const label = section.label || "Other";
+    const header = document.createElement("div");
+    header.className = "nav-section-header";
+    const title = document.createElement("h3");
+    title.textContent = label;
+    const actions = document.createElement("div");
+    actions.className = "nav-section-actions";
+    const drag = sidebarSectionButton(
+      "::",
+      `Drag ${label} section`,
+      () => {},
+    );
+    drag.classList.add("nav-section-drag");
+    drag.draggable = true;
+    drag.addEventListener("dragstart", event => {
+      if (!event.dataTransfer) return;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData(
+        "text/x-hostmon-navigation-section",
+        section.id,
+      );
+      header.closest(".nav-section")?.classList.add("dragging");
+    });
+    drag.addEventListener("dragend", () => {
+      document.querySelectorAll(".nav-section").forEach(item =>
+        item.classList.remove("dragging", "drag-over"),
+      );
+    });
+    const edit = sidebarSectionButton(
+      "Edit",
+      `Edit ${label} section`,
+      () => this.editNavigationSection(section),
+    );
+    const remove = sidebarSectionButton(
+      "Delete",
+      `Delete ${label} section`,
+      () => {
+        if (
+          !window.confirm(
+            `Delete the ${label} navigation section? Its pages will be moved to another section.`,
+          )
+        ) {
+          return;
+        }
+        if (!this.preferences.removeNavigationSection(section.id)) return;
+        this.refreshNavigationConfiguration();
+      },
+    );
+    remove.disabled = sectionCount <= 1;
+    actions.append(drag, edit, remove);
+    header.append(title, actions);
+    return header;
+  }
+
+  private editNavigationSection(section: NavigationSection): void {
+    this.setLayoutDock("navigation");
+    requestAnimationFrame(() => {
+      const input = this.required("navigation-settings")
+        .querySelector<HTMLInputElement>(
+          `[data-navigation-section-id="${CSS.escape(section.id)}"] input`,
+        );
+      input?.focus();
+      input?.select();
+    });
+  }
+
+  private bindNavigationSectionDrag(
+    root: HTMLElement,
+    target: NavigationSection,
+  ): void {
+    const type = "text/x-hostmon-navigation-section";
+    root.addEventListener("dragover", event => {
+      if (!event.dataTransfer?.types.includes(type)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      root.classList.add("drag-over");
+    });
+    root.addEventListener("dragleave", event => {
+      const related = event.relatedTarget;
+      if (!(related instanceof Node) || !root.contains(related)) {
+        root.classList.remove("drag-over");
+      }
+    });
+    root.addEventListener("drop", event => {
+      const sourceId = event.dataTransfer?.getData(type);
+      if (!sourceId || sourceId === target.id) return;
+      event.preventDefault();
+      const bounds = root.getBoundingClientRect();
+      this.preferences.moveNavigationSectionRelative(
+        sourceId,
+        target.id,
+        event.clientY > bounds.top + bounds.height / 2,
+      );
+      this.refreshNavigationConfiguration();
+    });
   }
 
   private navigate(
@@ -1486,6 +1595,21 @@ function orderButton(label: string, action: () => void): HTMLButtonElement {
   button.type = "button";
   button.className = "table-action";
   button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
+}
+
+function sidebarSectionButton(
+  label: string,
+  accessibleLabel: string,
+  action: () => void,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "nav-section-action";
+  button.textContent = label;
+  button.setAttribute("aria-label", accessibleLabel);
+  button.title = accessibleLabel;
   button.addEventListener("click", action);
   return button;
 }

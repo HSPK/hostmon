@@ -257,6 +257,33 @@ export class PreferenceStore {
     this.save("navigationSections");
   }
 
+  moveNavigationSectionRelative(
+    sourceId: string,
+    targetId: string,
+    after: boolean,
+  ): void {
+    if (sourceId === targetId) return;
+    const sourceIndex = this.value.navigationSections.findIndex(
+      section => section.id === sourceId,
+    );
+    const target = this.value.navigationSections.find(
+      section => section.id === targetId,
+    );
+    if (sourceIndex < 0 || !target) return;
+    const [source] = this.value.navigationSections.splice(sourceIndex, 1);
+    if (!source) return;
+    source.placement = target.placement;
+    const targetIndex = this.value.navigationSections.findIndex(
+      section => section.id === targetId,
+    );
+    this.value.navigationSections.splice(
+      targetIndex + (after ? 1 : 0),
+      0,
+      source,
+    );
+    this.save("navigationSections");
+  }
+
   removeNavigationSection(sectionId: string): boolean {
     const sections = this.value.navigationSections;
     if (sections.length <= 1) return false;

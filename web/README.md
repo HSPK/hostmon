@@ -77,6 +77,10 @@ rebuilding the frontend.
 
 Navigation groups and the default layout are declarative:
 
+Use the **Navigation** dock to add sections and metric pages. On desktop,
+hover or focus a sidebar section heading to edit or delete it, or drag its
+handle to reorder it.
+
 ```json
 {
   "id": "network",

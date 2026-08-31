@@ -115,6 +115,32 @@ button:focus-visible, input:focus-visible, select:focus-visible {
   overflow-y: auto; border-top: 1px solid var(--border);
 }
 .nav-section { min-width: 0; }
+.nav-section-header {
+  position: relative; display: flex; align-items: center; min-height: 20px;
+  margin: 10px 2px 3px 10px; padding-right: 76px;
+}
+.sidebar .nav-section-header h3 { min-width: 0; margin: 0; }
+.nav-section-actions {
+  position: absolute; right: 0; display: flex; gap: 2px;
+  opacity: 0; pointer-events: none;
+}
+.nav-section:hover > .nav-section-header .nav-section-actions,
+.nav-section:focus-within > .nav-section-header .nav-section-actions {
+  opacity: 1; pointer-events: auto;
+}
+.nav-section-action {
+  min-width: 0; height: 18px; padding: 0 3px; color: var(--muted);
+  border: 1px solid transparent; background: var(--chrome);
+  cursor: pointer; font-size: 8px;
+}
+.nav-section-action:hover,
+.nav-section-action:focus-visible {
+  color: var(--text); border-color: var(--border-strong);
+}
+.nav-section-action:disabled { opacity: .4; cursor: default; }
+.nav-section-drag { cursor: grab; font-family: ui-monospace, monospace; }
+.nav-section.dragging { opacity: .45; }
+.nav-section.drag-over { box-shadow: inset 0 2px var(--accent); }
 .sidebar nav h3, .mobile-page-navigation h3 {
   margin: 12px 10px 4px; color: var(--muted);
   font-size: 9px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase;
