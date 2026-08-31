@@ -337,6 +337,11 @@ body.table-page .table-scroll {
 .rule-editor-actions { display: flex; justify-content: flex-end; gap: 6px; }
 .rule-editor-actions .button { white-space: nowrap; }
 .rule-editor output { color: var(--danger); white-space: pre-wrap; }
+.rules-feedback {
+  display: block; margin: 0 0 8px; color: var(--danger);
+  overflow-wrap: anywhere;
+}
+.rules-feedback[hidden] { display: none; }
 .web-settings-grid {
   display: grid; grid-template-columns: repeat(2, minmax(180px, 280px));
   gap: 12px; padding: 8px 0;

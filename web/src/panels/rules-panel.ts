@@ -20,6 +20,7 @@ export class RulesPanel implements PanelRenderer {
   private readonly search: HTMLInputElement;
   private readonly count: HTMLElement;
   private readonly editor: HTMLFormElement;
+  private readonly feedback: HTMLOutputElement;
   private rules: AlertRuleConfig[] = [];
   private editing: AlertRuleConfig | null = null;
   private sort = "alert";
@@ -54,11 +55,26 @@ export class RulesPanel implements PanelRenderer {
           enabled.checked = rule.enabled;
           enabled.setAttribute("aria-label", `Enable ${rule.alert}`);
           enabled.addEventListener("change", async () => {
-            await this.context.actions.updateRule(rule.alert, {
-              ...rule,
-              enabled: enabled.checked,
-            });
-            await this.load();
+            const requested = enabled.checked;
+            enabled.disabled = true;
+            this.clearFeedback();
+            try {
+              await this.context.actions.updateRule(rule.alert, {
+                ...rule,
+                enabled: requested,
+              });
+              this.rules = this.rules.map(item =>
+                item.alert === rule.alert
+                  ? {...item, enabled: requested}
+                  : item,
+              );
+              this.render();
+            } catch (error) {
+              enabled.checked = rule.enabled;
+              this.showFeedback(`Could not update ${rule.alert}`, error);
+            } finally {
+              enabled.disabled = false;
+            }
           });
           return enabled;
         },
@@ -67,7 +83,7 @@ export class RulesPanel implements PanelRenderer {
           actions.className = "row-actions";
           actions.append(
             action("Edit", () => this.openEditor(rule)),
-            action("Delete", () => void this.remove(rule)),
+            action("Delete", button => void this.remove(rule, button)),
           );
           return actions;
         },
@@ -96,7 +112,7 @@ export class RulesPanel implements PanelRenderer {
       <label class="rule-message">Message<textarea name="message" required></textarea></label>
       <label class="rule-enabled"><input name="enabled" type="checkbox"> Enabled</label>
       <div class="rule-editor-actions"><button type="button" class="button">Cancel</button><button class="button button-primary" type="submit">Save rule</button></div>
-      <output></output>
+      <output role="alert" aria-live="polite"></output>
     `;
     this.editor.querySelector<HTMLButtonElement>('button[type="button"]')
       ?.addEventListener("click", () => {
@@ -107,8 +123,18 @@ export class RulesPanel implements PanelRenderer {
       void this.save();
     });
     this.table.element.append(tableFooter(this.count));
-    shell.body.append(controls, this.editor, this.table.element);
-    void this.load();
+    this.feedback = document.createElement("output");
+    this.feedback.className = "rules-feedback";
+    this.feedback.setAttribute("role", "alert");
+    this.feedback.setAttribute("aria-live", "polite");
+    this.feedback.hidden = true;
+    shell.body.append(
+      controls,
+      this.feedback,
+      this.editor,
+      this.table.element,
+    );
+    void this.load().catch(error => this.showFeedback("Could not load rules", error));
   }
 
   update(): void {}
@@ -137,6 +163,7 @@ export class RulesPanel implements PanelRenderer {
 
   private openEditor(rule?: AlertRuleConfig): void {
     this.editing = rule ?? null;
+    this.clearFeedback();
     const fields = this.editor.elements as typeof this.editor.elements & {
       alert: HTMLInputElement;
       expr: HTMLInputElement;
@@ -174,6 +201,10 @@ export class RulesPanel implements PanelRenderer {
       message: String(data.get("message") ?? ""),
       enabled: data.get("enabled") === "on",
     };
+    const save = this.editor.querySelector<HTMLButtonElement>(
+      'button[type="submit"]',
+    )!;
+    save.disabled = true;
     try {
       if (this.editing) {
         await this.context.actions.updateRule(this.editing.alert, rule);
@@ -184,21 +215,49 @@ export class RulesPanel implements PanelRenderer {
       await this.load();
     } catch (error) {
       this.editor.querySelector("output")!.textContent = String(error);
+    } finally {
+      save.disabled = false;
     }
   }
 
-  private async remove(rule: AlertRuleConfig): Promise<void> {
+  private async remove(
+    rule: AlertRuleConfig,
+    button: HTMLButtonElement,
+  ): Promise<void> {
     if (!window.confirm(`Delete alert rule ${rule.alert}?`)) return;
-    await this.context.actions.deleteRule(rule.alert);
-    await this.load();
+    button.disabled = true;
+    this.clearFeedback();
+    try {
+      await this.context.actions.deleteRule(rule.alert);
+      this.rules = this.rules.filter(item => item.alert !== rule.alert);
+      this.render();
+    } catch (error) {
+      this.showFeedback(`Could not delete ${rule.alert}`, error);
+    } finally {
+      button.disabled = false;
+    }
+  }
+
+  private clearFeedback(): void {
+    this.feedback.textContent = "";
+    this.feedback.hidden = true;
+  }
+
+  private showFeedback(message: string, error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    this.feedback.textContent = `${message}: ${detail}`;
+    this.feedback.hidden = false;
   }
 }
 
-function action(label: string, handler: () => void): HTMLButtonElement {
+function action(
+  label: string,
+  handler: (button: HTMLButtonElement) => void,
+): HTMLButtonElement {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "table-action";
   button.textContent = label;
-  button.addEventListener("click", handler);
+  button.addEventListener("click", () => handler(button));
   return button;
 }

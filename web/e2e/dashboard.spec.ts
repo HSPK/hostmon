@@ -3,6 +3,7 @@ import dashboardDefinition from "../src/config/dashboard.json" with {
   type: "json",
 };
 
+const rulesApiPattern = /\/api\/rules(?:\/[^/?]+)?(?:\?.*)?$/;
 const now = Date.now() / 1000;
 const metrics = {
   "cpu/percent": 42,
@@ -200,7 +201,7 @@ test.beforeEach(async ({ page }) => {
       }),
     }),
   );
-  await page.route("**/api/rules*", async route => {
+  await page.route(rulesApiPattern, async route => {
     const request = route.request();
     const name = new URL(request.url()).pathname.split("/").at(-1);
     if (request.method() === "POST") {
@@ -1338,6 +1339,75 @@ test("creates and toggles alert rules from settings", async ({ page }) => {
   await expect(page.locator(".rules-table")).toContainText("gpu-hot");
   await page.getByLabel("Enable gpu-hot").uncheck();
   await expect(page.getByLabel("Enable gpu-hot")).not.toBeChecked();
+});
+
+test("rolls back failed alert mutations and reports the error", async ({
+  page,
+}) => {
+  await page.unroute(rulesApiPattern);
+  await page.route(rulesApiPattern, route => {
+    if (route.request().method() === "GET") {
+      return route.fulfill({
+        json: {
+          rules: [
+            {
+              alert: "high-cpu",
+              expr: "cpu.percent >= 90",
+              level: "warning",
+              title: "High CPU",
+              message: "CPU is high",
+              enabled: true,
+              for: 3,
+              mode: "level",
+              cooldown: 300,
+            },
+          ],
+        },
+      });
+    }
+    return route.fulfill({
+      status: 503,
+      json: {error: "synthetic write failure"},
+    });
+  });
+  const pageErrors: Error[] = [];
+  page.on("pageerror", error => pageErrors.push(error));
+  await page.goto("/?page=alerts");
+
+  const enabled = page.getByLabel("Enable high-cpu");
+  const updateFailure = page.waitForResponse(response => {
+    const request = response.request();
+    return (
+      request.method() === "PUT" &&
+      new URL(response.url()).pathname === "/api/rules/high-cpu"
+    );
+  });
+  await enabled.uncheck();
+  expect((await updateFailure).status()).toBe(503);
+  await expect(enabled).toBeChecked();
+  await expect(enabled).toBeEnabled();
+  await expect(page.locator(".rules-feedback")).toContainText(
+    "Could not update high-cpu",
+  );
+  await expect(page.locator(".rules-feedback")).toHaveAttribute(
+    "role",
+    "alert",
+  );
+
+  page.once("dialog", dialog => dialog.accept());
+  const deleteFailure = page.waitForResponse(response => {
+    const request = response.request();
+    return (
+      request.method() === "DELETE" &&
+      new URL(response.url()).pathname === "/api/rules/high-cpu"
+    );
+  });
+  await page.getByRole("button", {name: "Delete"}).click();
+  expect((await deleteFailure).status()).toBe(503);
+  await expect(page.locator(".rules-feedback")).toContainText(
+    "Could not delete high-cpu",
+  );
+  expect(pageErrors).toEqual([]);
 });
 
 test("keeps the alert editor readable on narrow screens", async ({ page }) => {
