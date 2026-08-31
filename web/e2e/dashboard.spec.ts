@@ -1485,9 +1485,18 @@ test("debounces history requests during rapid page navigation", async ({
 
   await page.goto("/?page=overview");
   await expect.poll(() => historyRequests.length).toBe(1);
-  await page.getByRole("button", {name: "GPU Fleet"}).click();
-  await page.getByRole("button", {name: "Overview"}).click();
-  await page.getByRole("button", {name: "GPU Fleet"}).click();
+  await page.evaluate(() => {
+    const navigate = (label: string): void => {
+      const button = [...document.querySelectorAll<HTMLButtonElement>(
+        "#navigation .nav-item",
+      )].find(item => item.textContent === label);
+      if (!button) throw new Error(`Missing ${label} navigation button`);
+      button.click();
+    };
+    navigate("GPU Fleet");
+    navigate("Overview");
+    navigate("GPU Fleet");
+  });
 
   await expect(page.locator("#page-title")).toHaveText("GPU Fleet");
   await expect.poll(() => historyRequests.length).toBe(2);
