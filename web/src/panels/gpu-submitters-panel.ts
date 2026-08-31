@@ -57,6 +57,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.search.placeholder = "Filter workload, submitter, or creator ID";
     this.search.addEventListener("input", () => {
       this.page = 0;
+      this.table.scrollToTop();
       this.scheduleViewPersistence();
       this.renderRows();
     });
@@ -64,6 +65,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.queue.setAttribute("aria-label", "Queue");
     this.queue.addEventListener("change", () => {
       this.page = 0;
+      this.table.scrollToTop();
       this.persistView();
       this.renderRows();
     });
@@ -76,6 +78,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     ]);
     this.state.addEventListener("change", () => {
       this.page = 0;
+      this.table.scrollToTop();
       this.persistView();
       this.renderRows();
     });
@@ -88,10 +91,12 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.count.className = "table-count";
     this.previous = pageButton("Previous", () => {
       this.page = Math.max(0, this.page - 1);
+      this.table.scrollToTop();
       this.renderRows();
     });
     this.next = pageButton("Next", () => {
       this.page++;
+      this.table.scrollToTop();
       this.renderRows();
     });
     controls.append(this.search, this.queue, this.state);

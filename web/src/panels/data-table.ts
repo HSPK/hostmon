@@ -212,6 +212,7 @@ export class DataTable<T> {
               ? "desc"
               : "asc";
           this.setSort(column.sortValue!, direction);
+          this.scrollToTop();
           onSort(column.sortValue!, direction);
         });
         cell.append(button);
@@ -243,6 +244,10 @@ export class DataTable<T> {
           : "none",
       );
     }
+  }
+
+  scrollToTop(): void {
+    this.viewport.scrollTop = 0;
   }
 
   setRows(rows: T[], columns: DataColumn<T>[], emptyMessage: string): void {

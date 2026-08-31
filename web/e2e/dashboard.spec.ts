@@ -1507,6 +1507,63 @@ test("debounces history requests during rapid page navigation", async ({
   );
 });
 
+test("returns paginated tables to the top after view changes", async ({
+  page,
+}) => {
+  const entries = Array.from({length: 160}, (_, index) => {
+    const name = `custom/metric-${String(index).padStart(3, "0")}`;
+    return {
+      name,
+      metadata: {label: name, unit: "", color: "#4ea1d3"},
+      current: index,
+      minimum: 0,
+      maximum: index,
+      average: index / 2,
+      p95: index,
+      samples: 60,
+    };
+  });
+  await page.route("**/api/catalog?*", route =>
+    route.fulfill({json: {seconds: 3600, metrics: entries}}),
+  );
+  await page.goto("/?page=metrics");
+  await expect(page.locator(".table-count")).toHaveText(
+    "160 / 160 | 1/3",
+  );
+  const viewport = page.locator(
+    ".metric-explorer-panel .data-grid-viewport",
+  );
+  const scrollToBottom = () =>
+    viewport.evaluate(element => {
+      element.scrollTop = element.scrollHeight;
+    });
+  const scrollTop = () =>
+    viewport.evaluate(element => element.scrollTop);
+
+  await scrollToBottom();
+  await page.getByRole("button", {name: "Next"}).click();
+  await expect(page.locator(".table-count")).toHaveText(
+    "160 / 160 | 2/3",
+  );
+  expect(await scrollTop()).toBe(0);
+
+  await scrollToBottom();
+  await page.locator(".metric-table thead button").first().click();
+  await expect(page.locator(".table-count")).toHaveText(
+    "160 / 160 | 1/3",
+  );
+  expect(await scrollTop()).toBe(0);
+
+  await scrollToBottom();
+  await page
+    .locator(".metric-explorer-panel input[type=search]")
+    .fill("metric-15");
+  await expect(page.locator(".table-count")).toHaveText(
+    "10 / 160 | 1/1",
+  );
+  expect(await scrollTop()).toBe(0);
+});
+
 test("exports complete chart history on demand", async ({ page }) => {
   await page.goto("/?page=workloads");
   const historyRequest = page.waitForRequest(request => {

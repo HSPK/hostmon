@@ -48,6 +48,7 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.search.autocomplete = "off";
     this.search.addEventListener("input", () => {
       this.page = 0;
+      this.table.scrollToTop();
       this.render();
     });
     this.create = document.createElement("button");
@@ -62,10 +63,12 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.count.className = "table-count";
     this.previous = pageButton("Previous", () => {
       this.page = Math.max(0, this.page - 1);
+      this.table.scrollToTop();
       this.render();
     });
     this.next = pageButton("Next", () => {
       this.page++;
+      this.table.scrollToTop();
       this.render();
     });
     controls.append(this.search, this.create);

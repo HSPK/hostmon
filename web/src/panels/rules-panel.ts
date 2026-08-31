@@ -37,7 +37,10 @@ export class RulesPanel implements PanelRenderer {
     this.search = document.createElement("input");
     this.search.type = "search";
     this.search.placeholder = "Filter alert rules";
-    this.search.addEventListener("input", () => this.render());
+    this.search.addEventListener("input", () => {
+      this.table.scrollToTop();
+      this.render();
+    });
     const add = document.createElement("button");
     add.type = "button";
     add.className = "button button-primary";
