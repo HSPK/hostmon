@@ -39,6 +39,7 @@ def render_unit(settings: Settings) -> str:
             "RestartSec=5s",
             "Environment=PYTHONUNBUFFERED=1",
             "Environment=OPENBLAS_NUM_THREADS=1",
+            "Environment=MALLOC_ARENA_MAX=2",
             "UMask=0077",
             "NoNewPrivileges=true",
             "PrivateTmp=true",

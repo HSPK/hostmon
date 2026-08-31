@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import re
 from collections import defaultdict
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Callable
@@ -335,11 +335,21 @@ class ClusterGPUUsageCollector:
         )
         if self.max_parallel_queries < 1:
             raise ValueError("max_parallel_queries must be positive")
+        self._executor = ThreadPoolExecutor(
+            max_workers=min(
+                self.max_parallel_queries,
+                len(self.queues) + 1,
+            ),
+            thread_name_prefix="hostmon-cluster-gpu",
+        )
         self.client = KubectlClient(
             str(options.get("kubectl", "kubectl")),
             context=str(options.get("context", "")),
             timeout_seconds=self.timeout,
         )
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     def _json(self, *arguments: str) -> dict[str, Any]:
         return self.client.json(*arguments)
@@ -378,38 +388,32 @@ class ClusterGPUUsageCollector:
                     refreshed=False,
                 )
         request_timeout = f"--request-timeout={max(1, int(self.timeout))}s"
-        with ThreadPoolExecutor(
-            max_workers=min(
-                self.max_parallel_queries,
-                len(self.queues) + 1,
-            ),
-            thread_name_prefix="hostmon-cluster-gpu",
-        ) as executor:
-            pod_futures = {
-                queue: executor.submit(
-                    self._json,
-                    "get",
-                    "pods",
-                    "--namespace",
-                    queue,
-                    "--output=json",
-                    request_timeout,
-                )
-                for queue in self.queues
-            }
-            queue_future = executor.submit(
+        pod_futures = {
+            queue: self._executor.submit(
                 self._json,
                 "get",
-                "queues.scheduling.volcano.sh",
-                *self.queues,
+                "pods",
+                "--namespace",
+                queue,
                 "--output=json",
                 request_timeout,
             )
-            queue_pods = {
-                queue: KubectlClient.items(future.result(), "pod")
-                for queue, future in pod_futures.items()
-            }
-            queue_payload = queue_future.result()
+            for queue in self.queues
+        }
+        queue_future = self._executor.submit(
+            self._json,
+            "get",
+            "queues.scheduling.volcano.sh",
+            *self.queues,
+            "--output=json",
+            request_timeout,
+        )
+        wait((*pod_futures.values(), queue_future))
+        queue_pods = {
+            queue: KubectlClient.items(future.result(), "pod")
+            for queue, future in pod_futures.items()
+        }
+        queue_payload = queue_future.result()
         queue_objects = KubectlClient.items(
             queue_payload,
             "Volcano queue",

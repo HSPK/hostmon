@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import threading
 import unittest
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from unittest.mock import patch
 
@@ -646,14 +647,55 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
                 with lock:
                     active -= 1
 
-        with patch.object(collector, "_json", side_effect=query):
-            result = collector.collect(None, 100)
+        try:
+            with patch.object(collector, "_json", side_effect=query):
+                result = collector.collect(None, 100)
+        finally:
+            collector.close()
 
         self.assertEqual(peak, 3)
         self.assertEqual(
             result.metrics["cluster_gpu/queue/total/capacity_gpus"],
             16,
         )
+
+    def test_reuses_cluster_query_executor(self):
+        def query(*arguments):
+            if arguments[1] == "pods":
+                return {"items": []}
+            return {
+                "items": [
+                    {
+                        "metadata": {"name": "queue-a"},
+                        "spec": {
+                            "capability": {
+                                "nvidia.com/gpu": "8",
+                                "cpu": "100",
+                            }
+                        },
+                        "status": {
+                            "allocated": {
+                                "nvidia.com/gpu": "0",
+                                "cpu": "0",
+                            }
+                        },
+                    }
+                ]
+            }
+
+        with patch(
+            "hostmon_cluster_gpu.cluster_gpu_usage.ThreadPoolExecutor",
+            wraps=ThreadPoolExecutor,
+        ) as executor_type:
+            collector = ClusterGPUUsageCollector({"queues": ["queue-a"]})
+            try:
+                with patch.object(collector, "_json", side_effect=query):
+                    first = collector.collect(None, 100)
+                    collector.collect(first.state, 200)
+            finally:
+                collector.close()
+
+        executor_type.assert_called_once()
 
 
 if __name__ == "__main__":

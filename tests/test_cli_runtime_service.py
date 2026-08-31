@@ -203,6 +203,7 @@ class ServiceTests(unittest.TestCase):
         self.assertIn(f"--config {path}", unit)
         self.assertIn("Restart=on-failure", unit)
         self.assertIn("Environment=OPENBLAS_NUM_THREADS=1", unit)
+        self.assertIn("Environment=MALLOC_ARENA_MAX=2", unit)
         self.assertIn("WantedBy=default.target", unit)
 
 
