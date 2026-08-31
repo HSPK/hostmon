@@ -822,6 +822,33 @@ test("remains responsive on narrow screens", async ({ page }) => {
   expect(editorBodyScrolls).toBe(true);
 });
 
+test("moves keyboard focus into and out of the layout dock", async ({
+  page,
+}) => {
+  await page.setViewportSize({width: 320, height: 720});
+  await page.goto("/?page=overview");
+  const pages = page.locator("#layout-pages-button");
+  const close = page.locator("#layout-close");
+
+  await pages.focus();
+  await page.keyboard.press("Enter");
+  await expect(page.locator("#layout-panel")).toBeVisible();
+  await expect(close).toBeFocused();
+
+  await page.keyboard.press("Tab");
+  await expect
+    .poll(() =>
+      page.evaluate(() =>
+        Boolean(document.activeElement?.closest("#layout-panel")),
+      ),
+    )
+    .toBe(true);
+
+  await page.keyboard.press("Escape");
+  await expect(page.locator("#layout-panel")).not.toBeVisible();
+  await expect(pages).toBeFocused();
+});
+
 test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   await page.setViewportSize({width: 320, height: 720});
   await page.goto("/?page=overview");

@@ -38,6 +38,7 @@ export class DashboardApp {
   private readonly root: HTMLElement;
   private panelsRoot!: HTMLElement;
   private layoutPanel!: HTMLElement;
+  private layoutTrigger: HTMLElement | null = null;
   private layoutView: LayoutView = "navigation";
   private chartDialog!: HTMLDialogElement;
   private connectionDot!: HTMLElement;
@@ -1316,8 +1317,10 @@ export class DashboardApp {
   }
 
   private setLayoutDock(view: LayoutView | null): void {
+    const wasOpen = !this.layoutPanel.hidden;
     if (view) {
       this.layoutView = view;
+      this.layoutTrigger = this.required(`layout-${view}-button`);
       if (view === "pages") this.renderNavigation();
       else this.renderLayoutSettings();
     }
@@ -1350,6 +1353,13 @@ export class DashboardApp {
       button.classList.toggle("active", active);
       button.setAttribute("aria-expanded", String(active));
       button.setAttribute("aria-pressed", String(active));
+    }
+    if (open) {
+      requestAnimationFrame(() => this.required("layout-close").focus());
+    } else if (wasOpen) {
+      const trigger = this.layoutTrigger;
+      this.layoutTrigger = null;
+      requestAnimationFrame(() => trigger?.focus());
     }
   }
 
