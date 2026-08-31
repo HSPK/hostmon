@@ -686,7 +686,10 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
         with patch(
             "hostmon_cluster_gpu.cluster_gpu_usage.ThreadPoolExecutor",
             wraps=ThreadPoolExecutor,
-        ) as executor_type:
+        ) as executor_type, patch(
+            "hostmon_cluster_gpu.cluster_gpu_usage._trim_native_heap",
+            return_value=True,
+        ) as trim:
             collector = ClusterGPUUsageCollector({"queues": ["queue-a"]})
             try:
                 with patch.object(collector, "_json", side_effect=query):
@@ -696,6 +699,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
                 collector.close()
 
         executor_type.assert_called_once()
+        self.assertEqual(trim.call_count, 2)
 
 
 if __name__ == "__main__":

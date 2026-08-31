@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import ctypes
+import gc
 import json
 import re
 from collections import defaultdict
@@ -14,6 +16,19 @@ from .kubectl_client import KubectlClient, parse_quantity
 
 METRIC_COMPONENT = re.compile(r"[^a-zA-Z0-9_]+")
 STATE_SCHEMA_VERSION = 3
+
+
+def _trim_native_heap() -> bool:
+    try:
+        process = ctypes.CDLL(None)
+    except OSError:
+        return False
+    trim = getattr(process, "malloc_trim", None)
+    if trim is None:
+        return False
+    trim.argtypes = [ctypes.c_size_t]
+    trim.restype = ctypes.c_int
+    return bool(trim(0))
 
 
 @dataclass
@@ -435,7 +450,7 @@ class ClusterGPUUsageCollector:
             workloads=workloads,
         )
         metrics = report_metrics(report)
-        return CollectorResult(
+        result = CollectorResult(
             metrics=metrics,
             state={
                 "schema_version": STATE_SCHEMA_VERSION,
@@ -444,3 +459,15 @@ class ClusterGPUUsageCollector:
                 "report": report,
             },
         )
+        del (
+            pod_futures,
+            queue_future,
+            queue_pods,
+            queue_payload,
+            queue_objects,
+            usage,
+            workloads,
+        )
+        gc.collect()
+        _trim_native_heap()
+        return result
