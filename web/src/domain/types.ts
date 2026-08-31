@@ -82,6 +82,7 @@ export type WorkloadStateFilter =
 export type WorkloadSort = string;
 
 export interface WorkloadView {
+  query: string;
   queue: string;
   state: WorkloadStateFilter;
   sort: WorkloadSort;

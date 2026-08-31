@@ -22,6 +22,8 @@ import {
   TABLE_PAGE_SIZE,
 } from "./table-controls";
 
+const SEARCH_PERSIST_DELAY_MS = 250;
+
 export class GPUSubmittersPanel implements PanelRenderer {
   readonly element: HTMLElement;
   private readonly table: DataTable<ClusterGPUWorkloadRow>;
@@ -38,6 +40,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   private report: ClusterGPUReport | null = null;
   private lastLoaded = 0;
   private loading = false;
+  private searchPersistTimer: number | null = null;
   private page = 0;
   private activeSelection: WorkloadSelection | null = null;
 
@@ -54,6 +57,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     this.search.placeholder = "Filter workload, submitter, or creator ID";
     this.search.addEventListener("input", () => {
       this.page = 0;
+      this.scheduleViewPersistence();
       this.renderRows();
     });
     this.queue = document.createElement("select");
@@ -76,6 +80,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
       this.renderRows();
     });
     const view = this.workloadView();
+    this.search.value = view.query;
     this.state.value = view.state;
     this.sort = view.sort;
     this.sortDirection = view.sortDirection;
@@ -138,6 +143,11 @@ export class GPUSubmittersPanel implements PanelRenderer {
   }
 
   destroy(): void {
+    if (this.searchPersistTimer !== null) {
+      clearTimeout(this.searchPersistTimer);
+      this.searchPersistTimer = null;
+      this.persistView();
+    }
     this.dialog.remove();
   }
 
@@ -208,11 +218,22 @@ export class GPUSubmittersPanel implements PanelRenderer {
 
   private persistView(): void {
     this.context.actions.setPanelState(this.definition.id, {
+      query: this.search.value,
       queue: this.queue.value || "all",
       state: this.state.value as WorkloadStateFilter,
       sort: this.sort,
       sortDirection: this.sortDirection,
     });
+  }
+
+  private scheduleViewPersistence(): void {
+    if (this.searchPersistTimer !== null) {
+      clearTimeout(this.searchPersistTimer);
+    }
+    this.searchPersistTimer = window.setTimeout(() => {
+      this.searchPersistTimer = null;
+      this.persistView();
+    }, SEARCH_PERSIST_DELAY_MS);
   }
 
   private syncSelectedDetails(): void {
@@ -289,6 +310,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
 
   private workloadView(): WorkloadView {
     return this.context.actions.panelState(this.definition.id, {
+      query: "",
       queue: "all",
       state: "all",
       sort: this.definition.defaultSort ?? "name",

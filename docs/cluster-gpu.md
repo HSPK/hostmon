@@ -64,4 +64,6 @@ GET /api/plugins/cluster_gpu_usage
 ```
 
 This avoids high-cardinality submitter names in metric history while still
-supporting rich GPU Fleet and Workloads UI views.
+supporting rich GPU Fleet and Workloads UI views. The Workloads query, queue,
+state, and sort settings persist through the dashboard's generic `panelState`
+preferences.

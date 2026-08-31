@@ -784,18 +784,40 @@ test("filters and sorts workload triage views", async ({ page }) => {
     "queued-job-001",
   );
 
-  await page.locator(".gpu-submitters-panel input[type=search]").fill(
-    "missing-workload",
+  const search = page.locator(
+    ".gpu-submitters-panel input[type=search]",
   );
+  const searchSaved = page.waitForResponse(response => {
+    const request = response.request();
+    return (
+      request.method() === "PATCH" &&
+      new URL(request.url()).pathname === "/api/preferences" &&
+      request.postData()?.includes('"query":"missing-workload"') === true
+    );
+  });
+  await search.fill("missing-workload");
+  await searchSaved;
   await expect(page.locator(".table-empty")).toHaveText(
     "No workloads match the current filters",
   );
+
+  await page.getByRole("button", {name: "Metrics"}).click();
+  await page.goBack();
+  await expect(page.locator("#page-title")).toHaveText("Workloads");
+  await expect(search).toHaveValue("missing-workload");
+  await expect(page.locator(".table-empty")).toHaveText(
+    "No workloads match the current filters",
+  );
+
   await page.reload();
+  await expect(search).toHaveValue("missing-workload");
   await expect(page.getByLabel("Workload state")).toHaveValue("attention");
   await expect(
     page.getByRole("columnheader", { name: "Pending GPUs" }),
   ).toHaveAttribute("aria-sort", "descending");
-  await expect(page.locator(".table-count")).toContainText("2 workloads");
+  await expect(page.locator(".table-empty")).toHaveText(
+    "No workloads match the current filters",
+  );
 });
 
 test("remains responsive on narrow screens", async ({ page }) => {
