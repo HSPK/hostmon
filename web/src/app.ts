@@ -326,6 +326,7 @@ export class DashboardApp {
               <label>Line width<input id="chart-line-width" type="number" min="0.5" max="5" step="0.5"></label>
               <label>Y minimum<input id="chart-min" type="number" step="any" placeholder="Auto"></label>
               <label>Y maximum<input id="chart-max" type="number" step="any" placeholder="Auto"></label>
+              <output id="chart-range-feedback" class="chart-range-feedback" aria-live="polite"></output>
               <label class="metric-filter-label">Filter metrics<input id="chart-metric-filter" type="search" placeholder="cpu, gpu, latency..."></label>
             </div>
             <div class="metric-picker-layout">
@@ -1400,10 +1401,34 @@ export class DashboardApp {
       ) as string[]);
     const form = this.required("chart-form") as HTMLFormElement;
     const save = this.required("chart-save") as HTMLButtonElement;
+    this.validateChartRange();
     save.disabled =
       metrics.length < 1 ||
       metrics.length > 8 ||
       !form.checkValidity();
+  }
+
+  private validateChartRange(): void {
+    const minimum = this.required("chart-min") as HTMLInputElement;
+    const maximum = this.required("chart-max") as HTMLInputElement;
+    const feedback = this.required("chart-range-feedback");
+    minimum.setCustomValidity("");
+    maximum.setCustomValidity("");
+    const hasMinimum = minimum.value !== "";
+    const hasMaximum = maximum.value !== "";
+    let message = "";
+    if (hasMinimum !== hasMaximum) {
+      message = "Set both Y bounds, or leave both as Auto.";
+      (hasMinimum ? maximum : minimum).setCustomValidity(message);
+    } else if (
+      hasMinimum &&
+      hasMaximum &&
+      minimum.valueAsNumber >= maximum.valueAsNumber
+    ) {
+      message = "Y maximum must be greater than Y minimum.";
+      maximum.setCustomValidity(message);
+    }
+    feedback.textContent = message;
   }
 
   private async saveChart(): Promise<void> {

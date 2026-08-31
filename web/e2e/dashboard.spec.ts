@@ -522,6 +522,22 @@ test("searches metrics and persists a custom chart", async ({ page }) => {
   await expect(page.locator("#chart-metric-selected")).toContainText(
     "custom/latency_ms",
   );
+  const minimum = page.locator("#chart-min");
+  const maximum = page.locator("#chart-max");
+  const rangeFeedback = page.locator("#chart-range-feedback");
+  await minimum.fill("100");
+  await expect(saveChart).toBeDisabled();
+  await expect(rangeFeedback).toHaveText(
+    "Set both Y bounds, or leave both as Auto.",
+  );
+  await maximum.fill("50");
+  await expect(saveChart).toBeDisabled();
+  await expect(rangeFeedback).toHaveText(
+    "Y maximum must be greater than Y minimum.",
+  );
+  await maximum.fill("150");
+  await expect(saveChart).toBeEnabled();
+  await expect(rangeFeedback).toBeEmpty();
   await page.locator("#chart-title").fill("");
   await expect(saveChart).toBeDisabled();
   await page.locator("#chart-title").fill("Request latency");

@@ -543,6 +543,11 @@ body.table-page .table-scroll {
 .form-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; padding: 12px; }
 .form-grid label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 10px; }
 .chart-title-label, .chart-page-label { grid-column: span 2; }
+.chart-range-feedback {
+  grid-column: span 2; align-self: end; color: var(--danger);
+  font-size: 10px; line-height: 1.4;
+}
+.chart-range-feedback:empty { display: none; }
 .metric-filter-label { grid-column: 1 / -1; }
 .metric-picker-layout {
   display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 12px;
@@ -650,7 +655,8 @@ body.table-page .table-scroll {
   .rule-editor { grid-template-columns: 1fr; }
   .rule-editor > * { grid-column: 1; }
   .form-grid { grid-template-columns: 1fr; }
-  .chart-title-label, .chart-page-label, .metric-filter-label { grid-column: auto; }
+  .chart-title-label, .chart-page-label, .chart-range-feedback,
+  .metric-filter-label { grid-column: auto; }
   .layout-dock-panel { right: 8px; width: calc(100vw - 16px); }
   .navigation-section-form,
   .navigation-page-form { grid-template-columns: minmax(0, 1fr) 82px; }
