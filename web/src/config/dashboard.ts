@@ -167,7 +167,8 @@ function isDisplayItem(value: unknown): boolean {
         isRecord(source) &&
         ["metric", "field", "system", "static", "metricMatch"].includes(
           String(source.source),
-        ),
+        ) &&
+        (source.format === undefined || source.format === "timestamp"),
     )
   );
 }

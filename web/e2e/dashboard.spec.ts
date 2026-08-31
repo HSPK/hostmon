@@ -402,6 +402,12 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await page.getByRole("button", { name: "System" }).click();
   await expect(page.locator(".system-grid")).toContainText("/api/ws");
   await expect(page.locator(".system-grid")).toContainText("/healthz");
+  const latestSample = page.locator(".system-card").filter({
+    hasText: "Latest sample (UTC+8)",
+  });
+  await expect(latestSample.locator("code")).toHaveText(
+    /^\d{4}-\d{2}-\d{2}, \d{2}:\d{2}:\d{2}$/,
+  );
 });
 
 test("reconnects when a websocket stream stops publishing samples", async ({

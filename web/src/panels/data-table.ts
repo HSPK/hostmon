@@ -1,4 +1,5 @@
 import type { TableColumnDefinition } from "../domain/types";
+import { formatUtc8Timestamp } from "../core/date-time";
 
 export interface DataColumn<T> {
   id: string;
@@ -103,15 +104,7 @@ export function formatConfiguredValue(
   }
   if (format === "timestamp") {
     if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
-    return new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Shanghai",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).format(new Date(value * 1000));
+    return formatUtc8Timestamp(value, "compact");
   }
   if (format === "duration") {
     return typeof value === "number" && Number.isFinite(value)

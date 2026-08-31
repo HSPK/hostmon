@@ -136,7 +136,7 @@
       "items": [
         {"label": "Host", "template": "{value}", "values": {"value": {"source": "system", "key": "host"}}},
         {"label": "Version", "template": "{value}", "values": {"value": {"source": "system", "key": "version"}}},
-        {"label": "Latest sample", "template": "{value}", "values": {"value": {"source": "system", "key": "updated_at"}}},
+        {"label": "Latest sample (UTC+8)", "template": "{value}", "values": {"value": {"source": "system", "key": "updated_at", "format": "timestamp"}}},
         {"label": "Metrics endpoint", "template": "{value}", "values": {"value": {"source": "static", "value": "/metrics"}}},
         {"label": "Health API", "template": "{value}", "values": {"value": {"source": "static", "value": "/healthz"}}},
         {"label": "Status API", "template": "{value}", "values": {"value": {"source": "static", "value": "/api/status"}}},

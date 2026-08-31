@@ -194,6 +194,7 @@ export interface TableColumnDefinition {
 
 export interface DisplayValueSource {
   source: "metric" | "field" | "system" | "static" | "metricMatch";
+  format?: "timestamp";
   key?: string;
   value?: string | number;
   prefix?: string;

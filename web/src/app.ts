@@ -1,5 +1,6 @@
 import { notifyAppearanceChanged } from "./core/appearance";
 import { ApiClient } from "./core/api-client";
+import { formatUtc8Timestamp } from "./core/date-time";
 import {
   PREFERENCE_FIELDS,
   PreferenceStore,
@@ -58,6 +59,7 @@ export class DashboardApp {
   private updateQueued = false;
   private renderGeneration = 0;
   private paused = false;
+  private sampleStaleAfterSeconds = Number.POSITIVE_INFINITY;
   private editingPanel: TimeSeriesPanelDefinition | null = null;
   private preferenceSaveRunning = false;
   private readonly preferenceSaveFields = new Set<PreferenceField>();
@@ -454,6 +456,8 @@ export class DashboardApp {
         status.websocket_inactivity_timeout_seconds,
         status.updated_at,
       );
+      this.sampleStaleAfterSeconds =
+        status.websocket_inactivity_timeout_seconds;
       this.store.applyStatus(status);
       this.hostText.textContent = status.host;
       this.required("sidebar-host").textContent = status.host;
@@ -1487,20 +1491,12 @@ export class DashboardApp {
       this.sampleAge.textContent = "Updated -- (UTC+8)";
       return;
     }
-    const updated = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Shanghai",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-      second: "2-digit",
-      hour12: false,
-    }).format(new Date(this.store.latestTimestamp * 1000));
+    const updated = formatUtc8Timestamp(this.store.latestTimestamp);
     this.sampleAge.textContent = `Updated ${updated} (UTC+8)`;
     this.sampleAge.classList.toggle(
       "stale",
-      Date.now() / 1000 - this.store.latestTimestamp > 30,
+      Date.now() / 1000 - this.store.latestTimestamp >
+        this.sampleStaleAfterSeconds,
     );
   }
 

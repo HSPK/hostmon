@@ -3,6 +3,7 @@ import type {
   DisplayValueSource,
 } from "../domain/types";
 import type { TimeSeriesStore } from "../core/time-series-store";
+import { formatUtc8Timestamp } from "../core/date-time";
 
 export function renderDisplayItem(
   definition: DisplayItemDefinition,
@@ -11,7 +12,7 @@ export function renderDisplayItem(
   const values = Object.fromEntries(
     Object.entries(definition.values).map(([name, source]) => [
       name,
-      resolveValue(source, store),
+      formatDisplayValue(source, resolveValue(source, store)),
     ]),
   );
   return definition.template.replace(
@@ -29,9 +30,9 @@ function resolveValue(
     if (definition.key === "host") return store.host || "--";
     if (definition.key === "version") return store.version || "--";
     if (definition.key === "updated_at") {
-      return store.latestTimestamp
-        ? new Date(store.latestTimestamp * 1000).toISOString()
-        : "--";
+      return store.latestTimestamp > 0
+        ? store.latestTimestamp
+        : definition.fallback ?? "--";
     }
     return "--";
   }
@@ -41,7 +42,9 @@ function resolveValue(
       : undefined;
     return value === undefined || value === null
       ? definition.fallback ?? "--"
-      : String(value);
+      : typeof value === "number"
+        ? value
+        : String(value);
   }
   if (definition.source === "metric") {
     const value = definition.key
@@ -61,4 +64,14 @@ function resolveValue(
       ? matches.length
       : matches.filter(([, value]) => value === definition.equals).length;
   return `${matched}/${matches.length}`;
+}
+
+function formatDisplayValue(
+  definition: DisplayValueSource,
+  value: string | number,
+): string | number {
+  if (definition.format !== "timestamp") return value;
+  return typeof value === "number" && Number.isFinite(value)
+    ? formatUtc8Timestamp(value)
+    : definition.fallback ?? "--";
 }

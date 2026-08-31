@@ -47,6 +47,8 @@ external JavaScript or CSS, never scans long-term JSONL files in request
 handlers, and receives new points over WebSocket instead of polling. The
 dashboard uses the server-provided inactivity timeout to reconnect silent
 streams; only a newer sample restores the connected state after a timeout.
+Dashboard display values can declare `format: "timestamp"` to render Unix
+seconds consistently in UTC+8.
 
 ## Prometheus scrape configuration
 
