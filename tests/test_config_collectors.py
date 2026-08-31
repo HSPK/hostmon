@@ -539,13 +539,13 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
                 "metadata": {"name": "queue-a"},
                 "spec": {
                     "capability": {
-                        "nvidia.com/gpu": "16",
+                        "nvidia.com/gpu": "32",
                         "cpu": "200",
                     }
                 },
                 "status": {
                     "allocated": {
-                        "nvidia.com/gpu": "8",
+                        "nvidia.com/gpu": "16",
                         "cpu": "125500m",
                     }
                 },
@@ -568,14 +568,19 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
         self.assertEqual(report["workloads"][0]["name"], "job-a")
         self.assertEqual(report["workloads"][0]["status"], "Mixed")
         self.assertEqual(report["workloads"][0]["running_nodes"], ["gpu-1"])
-        self.assertEqual(report["capacity"][0]["no_job_gpus"], 0)
-        self.assertEqual(report["capacity"][0]["gpu_allocation"], "8 / 16")
+        self.assertEqual(report["capacity"][0]["unallocated_gpus"], 16)
+        self.assertEqual(report["capacity"][0]["no_job_gpus"], 12)
+        self.assertEqual(report["capacity"][0]["gpu_allocation"], "16 / 32")
         self.assertEqual(report["capacity"][0]["utilization_percent"], 50)
-        self.assertEqual(report["capacity"][0]["no_job_node_equivalents"], 0)
+        self.assertEqual(report["capacity"][0]["no_job_node_equivalents"], 1)
         self.assertEqual(report["capacity"][0]["allocated_cpus"], 125.5)
         self.assertEqual(
             metrics["cluster_gpu/queue/queue_a/allocated_gpus"],
-            8,
+            16,
+        )
+        self.assertEqual(
+            metrics["cluster_gpu/queue/queue_a/no_job_gpus"],
+            12,
         )
 
     def test_reuses_cached_cluster_report(self):

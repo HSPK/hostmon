@@ -182,6 +182,14 @@ def build_report(
         allocated_gpus = int(parse_quantity(allocated.get(gpu_resource, 0)))
         capacity_cpus = parse_quantity(capability.get("cpu", 0))
         allocated_cpus = parse_quantity(allocated.get("cpu", 0))
+        running_gpus = sum(
+            (
+                row.running_gpus
+                for (usage_queue, _, _), row in usage.items()
+                if usage_queue == queue
+            ),
+            Decimal(),
+        )
         pending_gpus = sum(
             (
                 row.pending_gpus
@@ -191,7 +199,10 @@ def build_report(
             Decimal(),
         )
         unallocated_gpus = capacity_gpus - allocated_gpus
-        no_job_gpus = max(unallocated_gpus - int(pending_gpus), 0)
+        no_job_gpus = max(
+            Decimal(capacity_gpus) - running_gpus - pending_gpus,
+            Decimal(),
+        )
         capacity.append(
             {
                 "queue": queue,
@@ -199,9 +210,10 @@ def build_report(
                 "allocated_gpus": allocated_gpus,
                 "pending_gpus": int(pending_gpus),
                 "unallocated_gpus": unallocated_gpus,
-                "no_job_gpus": no_job_gpus,
-                "no_job_node_equivalents": max(no_job_gpus, 0)
-                // gpus_per_node,
+                "no_job_gpus": _number(no_job_gpus),
+                "no_job_node_equivalents": int(
+                    no_job_gpus // Decimal(gpus_per_node)
+                ),
                 "capacity_cpus": _number(capacity_cpus),
                 "allocated_cpus": _number(allocated_cpus),
                 "free_cpus": _number(capacity_cpus - allocated_cpus),

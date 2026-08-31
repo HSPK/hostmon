@@ -44,7 +44,7 @@ submitter.
 | Allocated GPUs | `status.allocated[nvidia.com/gpu]` |
 | Pending GPUs | Sum of pending Pod GPU requests |
 | Free now | Capacity minus allocated |
-| No-job GPUs | Free now minus pending |
+| No-job GPUs | Capacity minus running and pending Pod GPU requests |
 | No-job nodes | Positive no-job GPUs divided by GPUs per node |
 | Free CPUs | CPU capacity minus allocated CPU |
 
