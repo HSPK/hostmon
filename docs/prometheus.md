@@ -51,8 +51,9 @@ Dashboard display values can declare `format: "timestamp"` to render Unix
 seconds consistently in UTC+8.
 
 Plugin responses include `refresh_seconds` and `refresh_after_seconds`.
-Dashboard panels use these values to share one in-flight request and avoid
-downloading an unchanged plugin document between collector refreshes.
+Dashboard panels share one in-flight request and use the standard collector
+last-success timestamp to fetch only newer documents. Refresh timing remains
+the fallback when that metric is unavailable.
 
 ## Prometheus scrape configuration
 

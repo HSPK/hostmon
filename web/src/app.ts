@@ -26,6 +26,12 @@ import { createPanelRegistry } from "./panels/registry";
 
 type LayoutView = "pages" | "navigation" | "panels";
 
+interface PluginCacheEntry {
+  expiresAt: number;
+  updatedAt: number;
+  document: unknown;
+}
+
 export class DashboardApp {
   private readonly api: ApiClient;
   private readonly preferences: PreferenceStore;
@@ -52,10 +58,7 @@ export class DashboardApp {
   private refreshController: AbortController | null = null;
   private catalogCache: { loadedAt: number; entries: MetricCatalogEntry[] } | null =
     null;
-  private readonly pluginCache = new Map<
-    string,
-    {expiresAt: number; document: unknown}
-  >();
+  private readonly pluginCache = new Map<string, PluginCacheEntry>();
   private readonly pluginRequests = new Map<string, Promise<unknown>>();
   private updateQueued = false;
   private renderGeneration = 0;
@@ -494,12 +497,15 @@ export class DashboardApp {
 
   private async loadPlugin<T>(name: string): Promise<T> {
     const cached = this.pluginCache.get(name);
-    if (cached && Date.now() < cached.expiresAt) {
+    if (cached && !this.hasNewerPluginDocument(name, cached)) {
       return cached.document as T;
     }
     const pending = this.pluginRequests.get(name);
     if (pending) return pending as Promise<T>;
     const request = this.api.plugin<T>(name).then(response => {
+      if (!Number.isFinite(response.updated_at)) {
+        throw new Error(`Plugin ${name} returned an invalid updated_at`);
+      }
       const refreshAfterSeconds =
         Number.isFinite(response.refresh_after_seconds) &&
         response.refresh_after_seconds > 0
@@ -507,6 +513,7 @@ export class DashboardApp {
           : 5;
       this.pluginCache.set(name, {
         expiresAt: Date.now() + refreshAfterSeconds * 1000,
+        updatedAt: response.updated_at,
         document: response.document,
       });
       return response.document;
@@ -519,6 +526,25 @@ export class DashboardApp {
         this.pluginRequests.delete(name);
       }
     }
+  }
+
+  private hasNewerPluginDocument(
+    name: string,
+    cached: PluginCacheEntry,
+  ): boolean {
+    const successAge =
+      this.store.latestMetrics[
+        `monitor/collector/${name}/last_success_age_seconds`
+      ];
+    if (
+      typeof successAge === "number" &&
+      Number.isFinite(successAge) &&
+      this.store.latestTimestamp > 0
+    ) {
+      const lastSuccessAt = this.store.latestTimestamp - successAge;
+      return lastSuccessAt > cached.updatedAt + 0.001;
+    }
+    return Date.now() >= cached.expiresAt;
   }
 
   private historyPointBudget(): number {

@@ -449,17 +449,20 @@ test("reconnects when a websocket stream stops publishing samples", async ({
   await expect.poll(() => connections).toBeGreaterThan(1);
 });
 
-test("caches plugin documents until the server refresh deadline", async ({
+test("fetches plugin documents only after collector success advances", async ({
   page,
 }) => {
   let requests = 0;
-  let sendSnapshot: ((timestamp: number) => void) | null = null;
+  let documentUpdatedAt = now;
+  let sendSnapshot:
+    | ((timestamp: number, successAge: number) => void)
+    | null = null;
   await page.route("**/api/plugins/cluster_gpu_usage", route => {
     requests++;
     return route.fulfill({
       json: {
         name: "cluster_gpu_usage",
-        updated_at: now,
+        updated_at: documentUpdatedAt,
         schema_version: 3,
         refresh_seconds: 60,
         refresh_after_seconds: 0.5,
@@ -468,16 +471,20 @@ test("caches plugin documents until the server refresh deadline", async ({
     });
   });
   await page.routeWebSocket("**/api/ws", socket => {
-    sendSnapshot = timestamp =>
+    sendSnapshot = (timestamp, successAge) =>
       socket.send(
         JSON.stringify({
           timestamp,
           host: "test-host",
-          metrics,
+          metrics: {
+            ...metrics,
+            "monitor/collector/cluster_gpu_usage/last_success_age_seconds":
+              successAge,
+          },
           fields,
         }),
       );
-    sendSnapshot(now + 10);
+    sendSnapshot(now + 10, 10);
   });
 
   await page.goto("/?page=gpu-fleet");
@@ -485,12 +492,13 @@ test("caches plugin documents until the server refresh deadline", async ({
   await expect.poll(() => requests).toBe(1);
   if (!sendSnapshot) throw new Error("WebSocket route was not connected");
 
-  sendSnapshot(now + 20);
-  await page.waitForTimeout(100);
+  await page.waitForTimeout(600);
+  sendSnapshot(now + 20, 20);
+  await page.waitForTimeout(150);
   expect(requests).toBe(1);
 
-  await page.waitForTimeout(500);
-  sendSnapshot(now + 30);
+  documentUpdatedAt = now + 30;
+  sendSnapshot(now + 30, 0);
   await expect.poll(() => requests).toBe(2);
 
   await page.getByRole("button", {name: "Refresh"}).click();
