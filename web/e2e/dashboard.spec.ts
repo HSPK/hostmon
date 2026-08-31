@@ -594,6 +594,49 @@ test("manages sections and metric pages from the Navigation dock", async ({
   ).toHaveCount(0);
 });
 
+test("keeps long sidebar section names clear of hover actions", async ({
+  page,
+}) => {
+  const name =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKLMNOPQRSTUVWXYZABCDEFGHIJKL";
+  await page.goto("/?page=overview");
+  await page.locator("#layout-navigation-button").click();
+  await page.getByLabel("New section name").fill(name);
+  await page.getByRole("button", {name: "Add section"}).click();
+  await page.locator("#layout-close").click();
+
+  const section = page.locator(".sidebar .nav-section").filter({
+    has: page.getByRole("heading", {name}),
+  });
+  await section.hover();
+  const title = section.getByRole("heading", {name});
+  const actions = section.locator(".nav-section-actions");
+  const titleBox = await title.boundingBox();
+  const actionsBox = await actions.boundingBox();
+
+  expect(titleBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(titleBox!.x + titleBox!.width).toBeLessThanOrEqual(
+    actionsBox!.x,
+  );
+  await expect(title).toHaveCSS("text-overflow", "ellipsis");
+  await expect(title).toHaveAttribute("title", name);
+  await expect(section.getByRole("button", {
+    name: `Edit ${name} section`,
+  })).toBeVisible();
+  await expect(section.getByRole("button", {
+    name: `Delete ${name} section`,
+  })).toBeVisible();
+  expect(
+    await title.evaluate(element => element.scrollWidth > element.clientWidth),
+  ).toBe(true);
+
+  page.once("dialog", dialog => dialog.accept());
+  await section.getByRole("button", {
+    name: `Delete ${name} section`,
+  }).click();
+});
+
 test("supports deep links and browser workspace history", async ({ page }) => {
   await page.goto("/?page=workloads");
   await expect(page.locator(".table-controls select")).toHaveCount(2);

@@ -586,6 +586,7 @@ export class DashboardApp {
     header.className = "nav-section-header";
     const title = document.createElement("h3");
     title.textContent = label;
+    title.title = label;
     const actions = document.createElement("div");
     actions.className = "nav-section-actions";
     const drag = sidebarSectionButton(
