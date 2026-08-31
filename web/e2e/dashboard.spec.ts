@@ -1412,6 +1412,51 @@ test("configures web theme and density", async ({ page }) => {
   await expect(page.locator("#chart-line-width")).toHaveValue("2.5");
 });
 
+test("follows live system color scheme without persisting", async ({
+  page,
+}) => {
+  await page.unroute("**/api/preferences");
+  const writes: string[] = [];
+  await page.route("**/api/preferences", route => {
+    if (route.request().method() !== "GET") {
+      writes.push(route.request().method());
+    }
+    return route.fulfill({
+      json: {
+        preferences: {
+          hiddenPanels: [],
+          panelOrder: [],
+          windowSeconds: 3600,
+          activePage: "overview",
+          panelState: {},
+          panelColumns: {},
+          theme: "system",
+          density: "compact",
+          customPanels: [],
+        },
+      },
+    });
+  });
+  await page.emulateMedia({colorScheme: "dark"});
+  await page.goto("/?page=overview");
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
+    "content",
+    "#080b10",
+  );
+
+  await page.emulateMedia({colorScheme: "light"});
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await expect(page.locator('meta[name="theme-color"]')).toHaveAttribute(
+    "content",
+    "#ffffff",
+  );
+
+  await page.emulateMedia({colorScheme: "dark"});
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  expect(writes).toEqual([]);
+});
+
 test("merges unrelated preference changes from stale clients", async ({
   page,
 }) => {

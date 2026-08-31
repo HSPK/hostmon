@@ -31,6 +31,9 @@ export class DashboardApp {
   private readonly store: TimeSeriesStore;
   private readonly registry = createPanelRegistry();
   private readonly realtime: RealtimeClient;
+  private readonly systemTheme = window.matchMedia(
+    "(prefers-color-scheme: light)",
+  );
   private readonly panels: PanelRenderer[] = [];
   private readonly root: HTMLElement;
   private panelsRoot!: HTMLElement;
@@ -67,6 +70,9 @@ export class DashboardApp {
         "overview",
       false,
     );
+  };
+  private readonly handleSystemThemeChange = (): void => {
+    if (this.preferences.get().theme === "system") this.applyAppearance();
   };
 
   constructor(root: HTMLElement, dashboard: DashboardDefinition) {
@@ -123,6 +129,10 @@ export class DashboardApp {
     this.renderNavigation();
     this.renderPanels();
     this.realtime.start();
+    this.systemTheme.addEventListener(
+      "change",
+      this.handleSystemThemeChange,
+    );
     window.addEventListener("popstate", this.handlePopState);
     window.addEventListener("beforeunload", () => this.destroy(), { once: true });
   }
@@ -703,12 +713,15 @@ export class DashboardApp {
     const {theme, density} = this.preferences.get();
     const resolved =
       theme === "system"
-        ? window.matchMedia("(prefers-color-scheme: light)").matches
+        ? this.systemTheme.matches
           ? "light"
           : "dark"
         : theme;
     document.documentElement.dataset.theme = resolved;
     document.documentElement.dataset.density = density;
+    document
+      .querySelector('meta[name="theme-color"]')
+      ?.setAttribute("content", resolved === "light" ? "#ffffff" : "#080b10");
     notifyAppearanceChanged();
   }
 
@@ -1435,6 +1448,10 @@ export class DashboardApp {
   private destroy(): void {
     this.refreshController?.abort();
     this.realtime.stop();
+    this.systemTheme.removeEventListener(
+      "change",
+      this.handleSystemThemeChange,
+    );
     window.removeEventListener("popstate", this.handlePopState);
     for (const panel of this.panels) panel.destroy();
   }
