@@ -577,7 +577,18 @@ body.table-page .table-scroll {
 .selected-metric span { min-width: 0; overflow-wrap: anywhere; }
 
 @media (max-width: 1200px) {
-  .toolbar-search { display: none; }
+  .toolbar-search { width: 130px; }
+}
+@media (max-width: 950px) {
+  .toolbar { gap: var(--space-2); }
+  .toolbar-actions { gap: 4px; flex-wrap: nowrap; }
+  .toolbar-search { width: 110px; }
+  .toolbar-actions .button {
+    padding-inline: 7px; white-space: nowrap; font-size: 10px;
+  }
+}
+@media (min-width: 851px) and (max-width: 950px) {
+  .toolbar-title { min-width: 110px; }
 }
 @media (max-width: 1100px) {
   .panel-grid { grid-template-columns: 1fr; }
@@ -595,7 +606,7 @@ body.table-page .table-scroll {
   .toolbar { align-items: center; }
   .toolbar-title { min-width: 100px; }
   .toolbar-actions {
-    max-width: calc(100% - 112px); flex-wrap: nowrap; overflow-x: auto;
+    max-width: calc(100% - 108px); overflow-x: auto;
     scrollbar-width: none;
   }
   .toolbar-actions::-webkit-scrollbar { display: none; }
@@ -614,6 +625,9 @@ body.table-page .table-scroll {
     scrollbar-width: none;
   }
   .toolbar-actions::-webkit-scrollbar { display: none; }
+  .toolbar-search {
+    grid-column: 1 / -1; width: 100%;
+  }
   .toolbar-actions .control {
     min-width: 0; justify-content: flex-start; font-size: 10px;
   }
@@ -692,7 +706,7 @@ body.table-page .table-scroll {
     font-size: 8px; letter-spacing: .03em;
   }
   .toolbar-actions {
-    grid-template-columns: 58px repeat(4, max-content);
+    grid-template-columns: 58px repeat(4, max-content) minmax(0, 1fr);
   }
   .toolbar-actions .control { min-width: 58px; gap: 0; }
   .toolbar-actions .control select {

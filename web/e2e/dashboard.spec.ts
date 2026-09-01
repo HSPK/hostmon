@@ -1059,18 +1059,19 @@ test("remains responsive on narrow screens", async ({ page }) => {
   const toolbarControls = page.locator(
     ".toolbar-actions > .control, .toolbar-actions > .button",
   );
+  await expect(page.getByLabel("Find chart")).toBeVisible();
   await expect(toolbarControls).toHaveCount(5);
   const toolbarRows = await toolbarControls.evaluateAll(elements =>
-  new Set(
-    elements.map(element =>
-      Math.round(element.getBoundingClientRect().top),
-    ),
-  ).size,
+    new Set(
+      elements.map(element =>
+        Math.round(element.getBoundingClientRect().top),
+      ),
+    ).size,
   );
   expect(toolbarRows).toBe(1);
   const toolbarBox = await page.locator(".toolbar").boundingBox();
   expect(toolbarBox).not.toBeNull();
-  expect(toolbarBox!.height).toBeLessThan(110);
+  expect(toolbarBox!.height).toBeLessThan(130);
 
   await page.locator("#layout-navigation-button").click();
   const layoutBox = await page.locator("#layout-panel").boundingBox();
@@ -1229,9 +1230,11 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   await page.setViewportSize({width: 320, height: 720});
   await page.goto("/?page=overview");
 
+  const chartSearch = page.getByLabel("Find chart");
   const toolbarControls = page.locator(
     ".toolbar-actions > .control, .toolbar-actions > .button",
   );
+  await expect(chartSearch).toBeVisible();
   await expect(toolbarControls).toHaveCount(5);
   const toolbarRows = await toolbarControls.evaluateAll(elements =>
       new Set(
@@ -1240,6 +1243,7 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
         ),
       ).size,
     );
+  const searchBox = await chartSearch.boundingBox();
   const windowBox = await page.locator("#window-select").boundingBox();
   const actionsFit = await page.locator(".toolbar-actions").evaluate(
     element => element.scrollWidth <= element.clientWidth,
@@ -1248,9 +1252,14 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   const dockBox = await page.locator(".layout-dock-nav").boundingBox();
 
   expect(toolbarRows).toBe(1);
+  expect(searchBox).not.toBeNull();
   expect(windowBox).not.toBeNull();
   expect(latencyBox).not.toBeNull();
   expect(dockBox).not.toBeNull();
+  expect(searchBox!.width).toBeGreaterThan(280);
+  expect(searchBox!.y + searchBox!.height).toBeLessThanOrEqual(
+    windowBox!.y,
+  );
   expect(windowBox!.width).toBeGreaterThanOrEqual(58);
   expect(actionsFit).toBe(true);
   expect(latencyBox!.x + latencyBox!.width).toBeLessThanOrEqual(
@@ -1414,14 +1423,34 @@ test("keeps all toolbar controls readable at 320px", async ({ page }) => {
   expect(resetTextFits).toBe(true);
 });
 
+test("searches configured charts on mobile", async ({page}) => {
+  await page.setViewportSize({width: 320, height: 720});
+  await page.goto("/?page=system");
+
+  const search = page.getByLabel("Find chart");
+  await expect(search).toBeVisible();
+  await search.fill("network throughput");
+  await search.press("Enter");
+
+  await expect(page.locator("#page-title")).toHaveText("Overview");
+  await expect(
+    page.locator('[data-panel-id="network"]'),
+  ).toHaveClass(/panel-highlight/);
+});
+
 test("keeps tablet toolbar actions on one row", async ({ page }) => {
   await page.setViewportSize({width: 600, height: 800});
   await page.goto("/?page=overview");
 
+  await expect(page.getByLabel("Find chart")).toBeVisible();
   const actions = page.locator(
     ".toolbar-actions > .control, .toolbar-actions > .button",
   );
   await expect(actions).toHaveCount(5);
+  await expect(page.locator(".toolbar-actions > .button").first()).toHaveCSS(
+    "white-space",
+    "nowrap",
+  );
   const actionRows = await actions.evaluateAll(elements =>
     new Set(
       elements.map(element =>
@@ -1439,6 +1468,22 @@ test("keeps tablet toolbar actions on one row", async ({ page }) => {
 test("keeps narrow desktop charts on one readable column", async ({ page }) => {
   await page.setViewportSize({ width: 900, height: 900 });
   await page.goto("/?page=overview");
+  const toolbarItems = page.locator(
+    ".toolbar-actions > .toolbar-search, .toolbar-actions > .control, .toolbar-actions > .button",
+  );
+  await expect(toolbarItems).toHaveCount(6);
+  await expect(page.locator(".toolbar-actions > .button").first()).toHaveCSS(
+    "white-space",
+    "nowrap",
+  );
+  const toolbarRows = await toolbarItems.evaluateAll(elements =>
+    new Set(
+      elements.map(element =>
+        Math.round(element.getBoundingClientRect().top),
+      ),
+    ).size,
+  );
+  const toolbarBox = await page.locator(".toolbar").boundingBox();
   await expect(
     page.locator('.panel-section[data-section="Charts"] .panel'),
   ).toHaveCount(4);
@@ -1452,6 +1497,9 @@ test("keeps narrow desktop charts on one readable column", async ({ page }) => {
       }),
     );
 
+  expect(toolbarRows).toBe(1);
+  expect(toolbarBox).not.toBeNull();
+  expect(toolbarBox!.height).toBeLessThan(70);
   expect(charts).toHaveLength(2);
   expect(charts[0]!.x).toBe(charts[1]!.x);
   expect(charts[1]!.y).toBeGreaterThan(charts[0]!.y);
@@ -1978,7 +2026,7 @@ test("rolls back failed alert mutations and reports the error", async ({
       new URL(response.url()).pathname === "/api/rules/high-cpu"
     );
   });
-  await enabled.uncheck();
+  await enabled.click();
   expect((await updateFailure).status()).toBe(503);
   await expect(enabled).toBeChecked();
   await expect(enabled).toBeEnabled();
