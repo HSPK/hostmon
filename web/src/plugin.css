@@ -49,6 +49,7 @@
   display: block; margin-top: 4px; font: 600 13px ui-monospace, monospace;
   overflow-wrap: anywhere;
 }
+.workload-node-toggle { margin-top: 8px; }
 @media (max-width: 560px) {
   .gpu-submitters-panel .data-grid-toolbar input[type="search"] {
     grid-column: 1 / -1;

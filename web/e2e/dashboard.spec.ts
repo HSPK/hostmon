@@ -931,6 +931,47 @@ test("supports deep links and browser workspace history", async ({ page }) => {
   );
 });
 
+test("collapses large workload node lists", async ({page}) => {
+  const runningNodes = Array.from(
+    {length: 20},
+    (_, index) => `gpu-node-${String(index + 1).padStart(2, "0")}`,
+  );
+  await page.route("**/api/plugins/cluster_gpu_usage", route =>
+    route.fulfill({
+      json: {
+        name: "cluster_gpu_usage",
+        updated_at: now,
+        refresh_seconds: 60,
+        refresh_after_seconds: 60,
+        document: {
+          ...clusterGPUReport,
+          workloads: clusterGPUReport.workloads.map((row, index) =>
+            index === 0 ? {...row, running_nodes: runningNodes} : row,
+          ),
+        },
+      },
+    }),
+  );
+  await page.goto("/?page=workloads");
+  await page.getByRole("button", {name: "training-job-001"}).click();
+
+  const nodes = page.locator(".workload-detail-grid > div").filter({
+    hasText: "GPU node names",
+  });
+  const toggle = nodes.getByRole("button");
+  await expect(nodes).toContainText("gpu-node-12");
+  await expect(nodes).not.toContainText("gpu-node-13");
+  await expect(toggle).toHaveText("Show all 20 nodes");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(nodes).toContainText("gpu-node-20");
+  await expect(toggle).toHaveText("Show first 12 nodes");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await toggle.click();
+  await expect(nodes).not.toContainText("gpu-node-20");
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
 test("does not persist defaults before a user change", async ({ page }) => {
   const writes: string[] = [];
   page.on("request", request => {

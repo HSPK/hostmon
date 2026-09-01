@@ -24,6 +24,7 @@ import {
 } from "./table-controls";
 
 const SEARCH_PERSIST_DELAY_MS = 250;
+const NODE_NAME_PREVIEW_LIMIT = 12;
 
 export class GPUSubmittersPanel implements PanelRenderer {
   readonly element: HTMLElement;
@@ -303,11 +304,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
       detailCell("Running pods", row.running_pods),
       detailCell("Pending GPUs", row.pending_gpus),
       detailCell("Pending pods", row.pending_pods),
-      detailCell(
-        "GPU node names",
-        row.running_nodes?.join(", ") || "--",
-        "detail-wide",
-      ),
+      nodeNamesCell(row.running_nodes ?? []),
     );
     this.dialog.replaceChildren(header, grid);
     this.activeSelection = selection;
@@ -386,5 +383,35 @@ function detailCell(
   const output = document.createElement("strong");
   output.textContent = String(value);
   cell.append(name, output);
+  return cell;
+}
+
+function nodeNamesCell(nodes: string[]): HTMLElement {
+  if (!nodes.length) return detailCell("GPU node names", "--", "detail-wide");
+  const cell = detailCell("GPU node names", "", "detail-wide");
+  const output = cell.querySelector("strong");
+  if (!output) throw new Error("Missing workload detail output");
+  if (nodes.length <= NODE_NAME_PREVIEW_LIMIT) {
+    output.textContent = nodes.join(", ");
+    return cell;
+  }
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = "table-action workload-node-toggle";
+  const render = (expanded: boolean) => {
+    output.textContent = expanded
+      ? nodes.join(", ")
+      : `${nodes.slice(0, NODE_NAME_PREVIEW_LIMIT).join(", ")} ` +
+        `... (+${nodes.length - NODE_NAME_PREVIEW_LIMIT})`;
+    toggle.textContent = expanded
+      ? `Show first ${NODE_NAME_PREVIEW_LIMIT} nodes`
+      : `Show all ${nodes.length} nodes`;
+    toggle.setAttribute("aria-expanded", String(expanded));
+  };
+  toggle.addEventListener("click", () =>
+    render(toggle.getAttribute("aria-expanded") !== "true"),
+  );
+  render(false);
+  cell.append(toggle);
   return cell;
 }
