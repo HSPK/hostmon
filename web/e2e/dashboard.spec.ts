@@ -1449,6 +1449,23 @@ test("limits search to non-empty chart queries", async ({page}) => {
   await expect(page.locator("#page-title")).toHaveText("System");
 });
 
+test("ranks chart titles and visible series labels", async ({page}) => {
+  for (const [query, panelId] of [
+    ["GPU", "gpu"],
+    ["Network RX", "network"],
+    ["CPU pressure", "pressure"],
+  ]) {
+    await page.goto("/?page=system");
+    const search = page.getByLabel("Find chart");
+    await search.fill(query);
+    await search.press("Enter");
+
+    await expect(page.locator(`[data-panel-id="${panelId}"]`)).toHaveClass(
+      /panel-highlight/,
+    );
+  }
+});
+
 test("reveals hidden charts from search", async ({page}) => {
   await page.goto("/?page=overview");
   await page.locator("#layout-panels-button").click();

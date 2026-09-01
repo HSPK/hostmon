@@ -410,20 +410,7 @@ export class DashboardApp {
         .trim()
         .toLowerCase();
       if (!query) return;
-      const panel = this.allPanels().find(item => {
-        if (item.type !== "timeseries" && item.type !== "stats") {
-          return false;
-        }
-        const metrics =
-          item.type === "timeseries"
-            ? item.metrics
-            : item.metrics.map(metric => metric.metric);
-        return (
-          item.title.toLowerCase().includes(query) ||
-          item.id.toLowerCase().includes(query) ||
-          metrics.some(metric => metric.toLowerCase().includes(query))
-        );
-      });
+      const panel = findChartPanel(this.allPanels(), query);
       if (!panel) return;
       const hidden = this.preferences.get().hiddenPanels.includes(panel.id);
       if (hidden) this.preferences.setVisible(panel.id, true);
@@ -1703,6 +1690,61 @@ export class DashboardApp {
     window.removeEventListener("popstate", this.handlePopState);
     for (const panel of this.panels) panel.destroy();
   }
+}
+
+function findChartPanel(
+  panels: PanelDefinition[],
+  query: string,
+): PanelDefinition | undefined {
+  let best: PanelDefinition | undefined;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (const panel of panels) {
+    const score = chartSearchScore(panel, query);
+    if (score !== null && score < bestScore) {
+      best = panel;
+      bestScore = score;
+    }
+  }
+  return best;
+}
+
+function chartSearchScore(
+  panel: PanelDefinition,
+  query: string,
+): number | null {
+  if (panel.type !== "timeseries" && panel.type !== "stats") return null;
+  const title = panel.title.toLowerCase();
+  const id = panel.id.toLowerCase();
+  const metricNames =
+    panel.type === "timeseries"
+      ? panel.metrics
+      : panel.metrics.map(metric => metric.metric);
+  const labels =
+    panel.type === "timeseries"
+      ? Object.values(panel.series ?? {}).flatMap(metadata =>
+          typeof metadata.label === "string"
+            ? [metadata.label.toLowerCase()]
+            : [],
+        )
+      : panel.metrics.map(metric => metric.label.toLowerCase());
+  const typeOffset = panel.type === "timeseries" ? 0 : 1;
+
+  // Prefer visible chart text over implementation-level metric identifiers.
+  if (title === query) return 0;
+  if (id === query) return 1;
+  if (labels.includes(query)) return 2 + typeOffset;
+  if (title.startsWith(query)) return 4;
+  if (labels.some(label => label.startsWith(query))) return 5 + typeOffset;
+  if (title.includes(query)) return 7;
+  if (id.includes(query)) return 8;
+  if (labels.some(label => label.includes(query))) return 9 + typeOffset;
+  if (metricNames.some(metric => metric.toLowerCase() === query)) {
+    return 11 + typeOffset;
+  }
+  if (metricNames.some(metric => metric.toLowerCase().includes(query))) {
+    return 13 + typeOffset;
+  }
+  return null;
 }
 
 function orderedDefinitions(
