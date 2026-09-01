@@ -174,11 +174,14 @@ test.beforeEach(async ({ page }) => {
       }),
     });
   });
-  await page.route("**/api/catalog?*", route =>
-    route.fulfill({
+  await page.route("**/api/catalog?*", route => {
+    const seconds = Number(
+      new URL(route.request().url()).searchParams.get("seconds"),
+    );
+    return route.fulfill({
       contentType: "application/json",
       body: JSON.stringify({
-        seconds: 3600,
+        seconds,
         metrics: Object.entries(metrics).map(([name, value]) => ({
           name,
           metadata: metadata[name],
@@ -190,8 +193,8 @@ test.beforeEach(async ({ page }) => {
           samples: 60,
         })),
       }),
-    }),
-  );
+    });
+  });
   await page.route("**/api/plugins/cluster_gpu_usage", route =>
     route.fulfill({
       contentType: "application/json",
@@ -1415,15 +1418,17 @@ test("keeps tablet toolbar actions on one row", async ({ page }) => {
   await page.setViewportSize({width: 600, height: 800});
   await page.goto("/?page=overview");
 
-  const actionRows = await page
-    .locator(".toolbar-actions > .control, .toolbar-actions > .button")
-    .evaluateAll(elements =>
-      new Set(
-        elements.map(element =>
-          Math.round(element.getBoundingClientRect().top),
-        ),
-      ).size,
-    );
+  const actions = page.locator(
+    ".toolbar-actions > .control, .toolbar-actions > .button",
+  );
+  await expect(actions).toHaveCount(5);
+  const actionRows = await actions.evaluateAll(elements =>
+    new Set(
+      elements.map(element =>
+        Math.round(element.getBoundingClientRect().top),
+      ),
+    ).size,
+  );
   const toolbarBox = await page.locator(".toolbar").boundingBox();
 
   expect(actionRows).toBe(1);
@@ -1533,6 +1538,20 @@ test("requests bounded adaptive history for long windows", async ({ page }) => {
   );
   expect(maximum).toBeGreaterThanOrEqual(300);
   expect(maximum).toBeLessThanOrEqual(2400);
+});
+
+test("shows the effective metric statistics window", async ({page}) => {
+  await page.goto("/?page=metrics");
+  await expect(page.locator(".catalog-window")).toHaveText("Stats: 1h");
+  await page.locator("#window-select").selectOption("2592000");
+
+  await expect(page.locator(".catalog-window")).toHaveText(
+    "Stats: 6h (max)",
+  );
+  await expect(page.locator(".catalog-window")).toHaveAttribute(
+    "title",
+    "Metric statistics are limited to 6h; charts use 30d.",
+  );
 });
 
 test("loads history only for visible chart pages", async ({ page }) => {

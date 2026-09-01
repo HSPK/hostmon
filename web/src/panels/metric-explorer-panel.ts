@@ -22,6 +22,7 @@ export class MetricExplorerPanel implements PanelRenderer {
   private readonly table: DataTable<MetricCatalogEntry>;
   private readonly columns: DataColumn<MetricCatalogEntry>[];
   private readonly search: HTMLInputElement;
+  private readonly catalogWindow: HTMLElement;
   private sort = "name";
   private sortDirection: SortDirection = "asc";
   private readonly create: HTMLButtonElement;
@@ -32,6 +33,7 @@ export class MetricExplorerPanel implements PanelRenderer {
   private readonly selected = new Set<string>();
   private readonly feedback = new PanelFeedback();
   private lastLoaded = 0;
+  private loadedWindowSeconds = 0;
   private loading = false;
   private page = 0;
 
@@ -60,6 +62,8 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.create.addEventListener("click", () =>
       context.actions.createChart([...this.selected]),
     );
+    this.catalogWindow = document.createElement("span");
+    this.catalogWindow.className = "catalog-window";
     this.count = document.createElement("span");
     this.count.className = "table-count";
     this.previous = pageButton("Previous", () => {
@@ -72,7 +76,7 @@ export class MetricExplorerPanel implements PanelRenderer {
       this.table.scrollToTop();
       this.render();
     });
-    controls.append(this.search, this.create);
+    controls.append(this.search, this.catalogWindow, this.create);
 
     this.columns = configuredColumns(
       definition.columns ?? [],
@@ -110,7 +114,12 @@ export class MetricExplorerPanel implements PanelRenderer {
   }
 
   update(): void {
-    if (Date.now() - this.lastLoaded > 10_000) void this.load();
+    if (
+      this.loadedWindowSeconds !== this.context.actions.windowSeconds() ||
+      Date.now() - this.lastLoaded > 10_000
+    ) {
+      void this.load();
+    }
   }
 
   refresh(): void {
@@ -122,8 +131,12 @@ export class MetricExplorerPanel implements PanelRenderer {
   private async load(): Promise<void> {
     if (this.loading) return;
     this.loading = true;
+    const requestedWindowSeconds = this.context.actions.windowSeconds();
     try {
-      this.catalog = await this.context.actions.loadCatalog();
+      const response = await this.context.actions.loadCatalog();
+      this.catalog = response.metrics;
+      this.loadedWindowSeconds = requestedWindowSeconds;
+      this.renderCatalogWindow(response.seconds, requestedWindowSeconds);
       this.feedback.clear();
       this.lastLoaded = Date.now();
       this.render();
@@ -132,6 +145,19 @@ export class MetricExplorerPanel implements PanelRenderer {
     } finally {
       this.loading = false;
     }
+  }
+
+  private renderCatalogWindow(
+    seconds: number,
+    requestedSeconds: number,
+  ): void {
+    const effective = formatWindow(seconds);
+    const capped = seconds < requestedSeconds;
+    this.catalogWindow.textContent =
+      `Stats: ${effective}${capped ? " (max)" : ""}`;
+    this.catalogWindow.title = capped
+      ? `Metric statistics are limited to ${effective}; charts use ${formatWindow(requestedSeconds)}.`
+      : `Metric statistics use the selected ${effective} window.`;
   }
 
   private render(): void {
@@ -154,4 +180,14 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.table.setRows(pageRows, this.columns, "No metrics match the filter");
   }
 
+}
+
+function formatWindow(seconds: number): string {
+  if (seconds >= 86400 && seconds % 86400 === 0) {
+    return `${seconds / 86400}d`;
+  }
+  if (seconds >= 3600 && seconds % 3600 === 0) {
+    return `${seconds / 3600}h`;
+  }
+  return `${seconds / 60}m`;
 }

@@ -15,7 +15,7 @@ import type {
   ConnectionState,
   DashboardDefinition,
   DashboardPreferences,
-  MetricCatalogEntry,
+  MetricCatalogResponse,
   NavigationSection,
   PageId,
   PanelDefinition,
@@ -60,8 +60,11 @@ export class DashboardApp {
   private operationLatency!: HTMLElement;
   private refreshController: AbortController | null = null;
   private reloadTimer: number | null = null;
-  private catalogCache: { loadedAt: number; entries: MetricCatalogEntry[] } | null =
-    null;
+  private catalogCache: {
+    loadedAt: number;
+    seconds: number;
+    response: MetricCatalogResponse;
+  } | null = null;
   private readonly pluginCache = new Map<string, PluginCacheEntry>();
   private readonly pluginRequests = new Map<string, Promise<unknown>>();
   private updateQueued = false;
@@ -501,15 +504,17 @@ export class DashboardApp {
     this.scheduleDataReload();
   }
 
-  private async loadCatalog(): Promise<MetricCatalogEntry[]> {
-    if (this.catalogCache && Date.now() - this.catalogCache.loadedAt < 5000) {
-      return this.catalogCache.entries;
+  private async loadCatalog(): Promise<MetricCatalogResponse> {
+    const seconds = Math.min(this.store.windowSeconds, 21600);
+    if (
+      this.catalogCache?.seconds === seconds &&
+      Date.now() - this.catalogCache.loadedAt < 5000
+    ) {
+      return this.catalogCache.response;
     }
-    const response = await this.api.catalog(
-      Math.min(this.store.windowSeconds, 21600),
-    );
-    this.catalogCache = {loadedAt: Date.now(), entries: response.metrics};
-    return response.metrics;
+    const response = await this.api.catalog(seconds);
+    this.catalogCache = {loadedAt: Date.now(), seconds, response};
+    return response;
   }
 
   private async loadPlugin<T>(name: string): Promise<T> {

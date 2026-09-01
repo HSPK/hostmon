@@ -1,6 +1,6 @@
 import type {
   ChartDefaults,
-  MetricCatalogEntry,
+  MetricCatalogResponse,
   PanelDefinition,
   TimeSeriesPanelDefinition,
   AlertRuleConfig,
@@ -12,7 +12,7 @@ import type { TimeSeriesStore } from "../core/time-series-store";
 export interface PanelContext {
   store: TimeSeriesStore;
   actions: {
-    loadCatalog(): Promise<MetricCatalogEntry[]>;
+    loadCatalog(): Promise<MetricCatalogResponse>;
     loadPlugin<T>(name: string): Promise<T>;
     panelState<T extends Record<string, string | number | boolean | null>>(
       panelId: string,
