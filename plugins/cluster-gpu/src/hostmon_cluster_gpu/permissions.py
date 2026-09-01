@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from typing import Any
 
@@ -84,6 +85,7 @@ class KubernetesPermissionCollector:
                 "poll_interval_seconds",
                 "kubectl",
                 "timeout_seconds",
+                "max_parallel_queries",
             },
         )
         self.checks = parse_checks(options.get("checks"))
@@ -93,10 +95,21 @@ class KubernetesPermissionCollector:
         self.timeout = float(options.get("timeout_seconds", 15))
         if self.timeout <= 0:
             raise ValueError("timeout_seconds must be positive")
+        self.max_parallel_queries = int(options.get("max_parallel_queries", 2))
+        if self.max_parallel_queries < 1:
+            raise ValueError("max_parallel_queries must be positive")
+        query_count = sum(len(check.verbs) for check in self.checks)
+        self._executor = ThreadPoolExecutor(
+            max_workers=min(self.max_parallel_queries, query_count),
+            thread_name_prefix="hostmon-kubernetes-permissions",
+        )
         self.client = KubectlClient(
             str(options.get("kubectl", "kubectl")),
             timeout_seconds=self.timeout,
         )
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     def _allowed(self, check: PermissionCheck, verb: str) -> bool:
         return self.client.can_i(
@@ -128,9 +141,20 @@ class KubernetesPermissionCollector:
 
         metrics: dict[str, float] = {}
         fields: dict[str, Any] = {}
+        futures = {
+            (check.name, verb): self._executor.submit(
+                self._allowed,
+                check,
+                verb,
+            )
+            for check in self.checks
+            for verb in check.verbs
+        }
+        wait(tuple(futures.values()))
         for check in self.checks:
             results = {
-                verb: self._allowed(check, verb) for verb in check.verbs
+                verb: futures[(check.name, verb)].result()
+                for verb in check.verbs
             }
             prefix = f"permission/{check.name}"
             for verb, allowed in results.items():

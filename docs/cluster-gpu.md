@@ -27,6 +27,22 @@ without delaying localhost samples or dashboard WebSocket updates.
 Independent Pod and Volcano queue requests run concurrently with a bounded,
 configurable worker count.
 
+Permission checks can use the same bounded concurrency without launching all
+`kubectl auth can-i` commands at once:
+
+```toml
+[collectors.kubernetes_permissions]
+enabled = true
+required = false
+poll_interval_seconds = 60
+timeout_seconds = 15
+max_parallel_queries = 2
+```
+
+Two workers are the default. This keeps the total check latency below the
+serial path during normal operation while avoiding the API contention and
+process spike caused by submitting every verb simultaneously.
+
 The collector groups running and pending GPU Pods by:
 
 1. `created-by-name`

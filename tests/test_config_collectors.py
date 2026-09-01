@@ -400,6 +400,7 @@ class KubernetesPermissionCollectorTests(unittest.TestCase):
                 ]
             }
         )
+        self.addCleanup(collector.close)
         answers = {
             "create": False,
             "get": True,
@@ -440,6 +441,7 @@ class KubernetesPermissionCollectorTests(unittest.TestCase):
                 "poll_interval_seconds": 60,
             }
         )
+        self.addCleanup(collector.close)
         previous = {
             "at": 100,
             "metrics": {"permission/access/allowed": 0.0},
@@ -451,6 +453,54 @@ class KubernetesPermissionCollectorTests(unittest.TestCase):
         query.assert_not_called()
         self.assertEqual(result.metrics["permission/access/allowed"], 0)
         self.assertFalse(result.refreshed)
+
+    def test_bounds_parallel_permission_queries(self):
+        collector = KubernetesPermissionCollector(
+            {
+                "checks": [
+                    {
+                        "name": "access",
+                        "resource": "jobs.batch.volcano.sh",
+                        "verbs": ["create", "get", "list", "watch"],
+                    }
+                ],
+                "max_parallel_queries": 2,
+            }
+        )
+        self.addCleanup(collector.close)
+        barrier = threading.Barrier(2)
+        worker_names: set[str] = set()
+        worker_lock = threading.Lock()
+
+        def allowed(_check, _verb):
+            with worker_lock:
+                worker_names.add(threading.current_thread().name)
+            barrier.wait(timeout=5)
+            return True
+
+        with patch.object(collector, "_allowed", side_effect=allowed):
+            result = collector.collect(None, 100)
+
+        self.assertEqual(len(worker_names), 2)
+        self.assertEqual(result.metrics["permission/access/allowed"], 1)
+
+    def test_rejects_invalid_parallel_query_count(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "max_parallel_queries must be positive",
+        ):
+            KubernetesPermissionCollector(
+                {
+                    "checks": [
+                        {
+                            "name": "access",
+                            "resource": "pods",
+                            "verbs": ["get"],
+                        }
+                    ],
+                    "max_parallel_queries": 0,
+                }
+            )
 
     def test_rejects_unsafe_check_names(self):
         with self.assertRaises(ValueError):
