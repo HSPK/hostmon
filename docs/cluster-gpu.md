@@ -18,14 +18,16 @@ gpus_per_node = 8
 poll_interval_seconds = 60
 kubectl = "kubectl"
 timeout_seconds = 30
-max_parallel_queries = 4
+max_parallel_queries = 2
 ```
 
 The daemon refreshes this optional collector in the background. Slow
 Kubernetes responses therefore keep the previous valid report available
 without delaying localhost samples or dashboard WebSocket updates.
 Independent Pod and Volcano queue requests run concurrently with a bounded,
-configurable worker count.
+configurable worker count. Two workers are the default because additional
+workers increase Kubernetes client pressure without improving the normal
+two-queue refresh time.
 
 Permission checks can use the same bounded concurrency without launching all
 `kubectl auth can-i` commands at once:

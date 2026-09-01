@@ -791,6 +791,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
                 collector.close()
 
         executor_type.assert_called_once()
+        self.assertEqual(collector.max_parallel_queries, 2)
         self.assertEqual(trim.call_count, 2)
 
 

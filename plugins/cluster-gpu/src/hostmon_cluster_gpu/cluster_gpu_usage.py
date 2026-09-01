@@ -354,12 +354,7 @@ class ClusterGPUUsageCollector:
         if self.poll_interval <= 0:
             raise ValueError("poll_interval_seconds must be positive")
         self.timeout = float(options.get("timeout_seconds", 30))
-        self.max_parallel_queries = int(
-            options.get(
-                "max_parallel_queries",
-                min(8, len(self.queues) + 1),
-            )
-        )
+        self.max_parallel_queries = int(options.get("max_parallel_queries", 2))
         if self.max_parallel_queries < 1:
             raise ValueError("max_parallel_queries must be positive")
         self._executor = ThreadPoolExecutor(
