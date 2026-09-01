@@ -1554,6 +1554,40 @@ test("shows the effective metric statistics window", async ({page}) => {
   );
 });
 
+test("reloads metric statistics after an in-flight window change", async ({
+  page,
+}) => {
+  const requests: string[] = [];
+  let releaseFirstRequest = () => {};
+  let markFirstRequestStarted = () => {};
+  const firstRequestStarted = new Promise<void>(resolve => {
+    markFirstRequestStarted = resolve;
+  });
+  const firstRequestReleased = new Promise<void>(resolve => {
+    releaseFirstRequest = resolve;
+  });
+  await page.route("**/api/catalog?*", async route => {
+    requests.push(
+      new URL(route.request().url()).searchParams.get("seconds") ?? "",
+    );
+    if (requests.length === 1) {
+      markFirstRequestStarted();
+      await firstRequestReleased;
+    }
+    await route.fallback();
+  });
+
+  await page.goto("/?page=metrics");
+  await firstRequestStarted;
+  await page.locator("#window-select").selectOption("2592000");
+  releaseFirstRequest();
+
+  await expect(page.locator(".catalog-window")).toHaveText(
+    "Stats: 6h (max)",
+  );
+  expect(requests).toEqual(["3600", "21600"]);
+});
+
 test("loads history only for visible chart pages", async ({ page }) => {
   const historyRequests: URL[] = [];
   page.on("request", request => {

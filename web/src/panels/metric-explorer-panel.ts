@@ -35,6 +35,8 @@ export class MetricExplorerPanel implements PanelRenderer {
   private lastLoaded = 0;
   private loadedWindowSeconds = 0;
   private loading = false;
+  private loadingWindowSeconds: number | null = null;
+  private loadQueued = false;
   private page = 0;
 
   constructor(
@@ -123,17 +125,32 @@ export class MetricExplorerPanel implements PanelRenderer {
   }
 
   refresh(): void {
-    void this.load();
+    void this.load(true);
   }
 
   destroy(): void {}
 
-  private async load(): Promise<void> {
-    if (this.loading) return;
-    this.loading = true;
+  private async load(force = false): Promise<void> {
     const requestedWindowSeconds = this.context.actions.windowSeconds();
+    if (this.loading) {
+      if (
+        force ||
+        requestedWindowSeconds !== this.loadingWindowSeconds
+      ) {
+        this.loadQueued = true;
+      }
+      return;
+    }
+    this.loading = true;
+    this.loadingWindowSeconds = requestedWindowSeconds;
     try {
       const response = await this.context.actions.loadCatalog();
+      if (
+        requestedWindowSeconds !== this.context.actions.windowSeconds()
+      ) {
+        this.loadQueued = true;
+        return;
+      }
       this.catalog = response.metrics;
       this.loadedWindowSeconds = requestedWindowSeconds;
       this.renderCatalogWindow(response.seconds, requestedWindowSeconds);
@@ -141,9 +158,20 @@ export class MetricExplorerPanel implements PanelRenderer {
       this.lastLoaded = Date.now();
       this.render();
     } catch (error) {
-      this.feedback.show("Could not load metric catalog", error);
+      if (
+        requestedWindowSeconds !== this.context.actions.windowSeconds()
+      ) {
+        this.loadQueued = true;
+      } else {
+        this.feedback.show("Could not load metric catalog", error);
+      }
     } finally {
       this.loading = false;
+      this.loadingWindowSeconds = null;
+      if (this.loadQueued) {
+        this.loadQueued = false;
+        void this.load();
+      }
     }
   }
 
