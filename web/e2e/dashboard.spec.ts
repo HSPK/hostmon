@@ -1678,6 +1678,49 @@ test("coalesces rapid manual refresh clicks", async ({page}) => {
   expect(failures).toEqual([]);
 });
 
+test("coalesces rapid time-window changes", async ({page}) => {
+  const historyRequests: URL[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/history") historyRequests.push(url);
+  });
+  const failures: string[] = [];
+  page.on("requestfailed", request => {
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/history" || path === "/api/status") {
+      failures.push(`${path}: ${request.failure()?.errorText}`);
+    }
+  });
+
+  await page.goto("/?page=overview");
+  await expect(page.getByRole("button", {name: "Refresh"})).toBeEnabled();
+  historyRequests.length = 0;
+  await page.evaluate(() => {
+    const select = document.querySelector<HTMLSelectElement>(
+      "#window-select",
+    );
+    if (!select) throw new Error("Missing time-window select");
+    for (const value of [
+      "900",
+      "3600",
+      "21600",
+      "43200",
+      "86400",
+      "604800",
+      "2592000",
+    ]) {
+      select.value = value;
+      select.dispatchEvent(new Event("change", {bubbles: true}));
+    }
+  });
+
+  await expect(page.locator("#window-select")).toHaveValue("2592000");
+  await expect.poll(() => historyRequests.length).toBe(1);
+  expect(historyRequests[0]!.searchParams.get("seconds")).toBe("2592000");
+  await expect(page.getByRole("button", {name: "Refresh"})).toBeEnabled();
+  expect(failures).toEqual([]);
+});
+
 test("returns paginated tables to the top after view changes", async ({
   page,
 }) => {
