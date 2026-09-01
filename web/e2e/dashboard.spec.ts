@@ -1640,6 +1640,44 @@ test("debounces history requests during rapid page navigation", async ({
   );
 });
 
+test("coalesces rapid manual refresh clicks", async ({page}) => {
+  let historyRequests = 0;
+  await page.route("**/api/history?*", async route => {
+    historyRequests++;
+    await new Promise(resolve => setTimeout(resolve, 150));
+    await route.fallback();
+  });
+  const failures: string[] = [];
+  page.on("requestfailed", request => {
+    const path = new URL(request.url()).pathname;
+    if (path === "/api/history" || path === "/api/status") {
+      failures.push(`${path}: ${request.failure()?.errorText}`);
+    }
+  });
+
+  await page.goto("/?page=overview");
+  await expect(page.locator(".uplot")).toHaveCount(4);
+  await expect(page.getByRole("button", {name: "Refresh"})).toBeEnabled();
+  historyRequests = 0;
+  const states = await page.evaluate(() => {
+    const button = document.querySelector<HTMLButtonElement>(
+      "#refresh-button",
+    );
+    if (!button) throw new Error("Missing Refresh button");
+    const disabled: boolean[] = [];
+    for (let index = 0; index < 10; index++) {
+      button.click();
+      disabled.push(button.disabled);
+    }
+    return disabled;
+  });
+
+  expect(states).toEqual(Array(10).fill(true));
+  await expect.poll(() => historyRequests).toBe(1);
+  await expect(page.getByRole("button", {name: "Refresh"})).toBeEnabled();
+  expect(failures).toEqual([]);
+});
+
 test("returns paginated tables to the top after view changes", async ({
   page,
 }) => {

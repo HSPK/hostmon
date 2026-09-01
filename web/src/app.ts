@@ -56,6 +56,7 @@ export class DashboardApp {
   private hostText!: HTMLElement;
   private sampleAge!: HTMLElement;
   private pauseButton!: HTMLButtonElement;
+  private refreshButton!: HTMLButtonElement;
   private operationLatency!: HTMLElement;
   private refreshController: AbortController | null = null;
   private navigationReloadTimer: number | null = null;
@@ -350,6 +351,7 @@ export class DashboardApp {
     this.sampleAge = this.required("sample-age");
     this.operationLatency = this.required("operation-latency");
     this.pauseButton = this.required("pause-button") as HTMLButtonElement;
+    this.refreshButton = this.required("refresh-button") as HTMLButtonElement;
     (this.required("window-select") as HTMLSelectElement).value = String(
       this.preferences.get().windowSeconds,
     );
@@ -449,6 +451,7 @@ export class DashboardApp {
     this.refreshController?.abort();
     const controller = new AbortController();
     this.refreshController = controller;
+    this.refreshButton.disabled = true;
     const metrics = this.activeChartMetrics();
     this.store.track(metrics);
     try {
@@ -479,6 +482,11 @@ export class DashboardApp {
       if (!controller.signal.aborted) {
         this.setConnectionState("offline");
         console.error(error);
+      }
+    } finally {
+      if (this.refreshController === controller) {
+        this.refreshController = null;
+        this.refreshButton.disabled = false;
       }
     }
   }
