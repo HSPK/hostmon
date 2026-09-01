@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
 from decimal import Decimal, ROUND_CEILING
 from typing import Any
@@ -195,6 +196,7 @@ class KubernetesCollector:
                 "poll_interval_seconds",
                 "kubectl",
                 "timeout_seconds",
+                "max_parallel_queries",
             },
         )
         self.context = str(options.get("context", "")).strip()
@@ -214,11 +216,22 @@ class KubernetesCollector:
         self.timeout = float(options.get("timeout_seconds", 30))
         if self.timeout <= 0:
             raise ValueError("timeout_seconds must be positive")
+        self.max_parallel_queries = int(options.get("max_parallel_queries", 2))
+        if self.max_parallel_queries < 1:
+            raise ValueError("max_parallel_queries must be positive")
+        query_count = 3 if self.queue else 2
+        self._executor = ThreadPoolExecutor(
+            max_workers=min(self.max_parallel_queries, query_count),
+            thread_name_prefix="hostmon-kubernetes",
+        )
         self.client = KubectlClient(
             str(options.get("kubectl", "kubectl")),
             context=self.context,
             timeout_seconds=self.timeout,
         )
+
+    def close(self) -> None:
+        self._executor.shutdown(wait=False, cancel_futures=True)
 
     def _json(self, *arguments: str) -> dict[str, Any]:
         return self.client.json(*arguments)
@@ -248,8 +261,9 @@ class KubernetesCollector:
                 )
 
         request_timeout = f"--request-timeout={max(1, int(self.timeout))}s"
-        pods = self._items(
-            self._json(
+        futures = {
+            "pods": self._executor.submit(
+                self._json,
                 "get",
                 "pods",
                 "--namespace",
@@ -257,10 +271,8 @@ class KubernetesCollector:
                 "--output=json",
                 request_timeout,
             ),
-            "pod",
-        )
-        jobs = self._items(
-            self._json(
+            "jobs": self._executor.submit(
+                self._json,
                 "get",
                 "jobs",
                 "--namespace",
@@ -268,6 +280,23 @@ class KubernetesCollector:
                 "--output=json",
                 request_timeout,
             ),
+        }
+        if self.queue:
+            futures["queue"] = self._executor.submit(
+                self._json,
+                "get",
+                "queues.scheduling.volcano.sh",
+                self.queue,
+                "--output=json",
+                request_timeout,
+            )
+        wait(tuple(futures.values()))
+        pods = self._items(
+            futures["pods"].result(),
+            "pod",
+        )
+        jobs = self._items(
+            futures["jobs"].result(),
             "job",
         )
         analysis = analyze_workloads(
@@ -298,13 +327,7 @@ class KubernetesCollector:
             }
         )
         if self.queue:
-            queue = self._json(
-                "get",
-                "queues.scheduling.volcano.sh",
-                self.queue,
-                "--output=json",
-                request_timeout,
-            )
+            queue = futures["queue"].result()
             capability = (queue.get("spec") or {}).get("capability") or {}
             if self.gpu_resource not in capability:
                 raise CollectorError(

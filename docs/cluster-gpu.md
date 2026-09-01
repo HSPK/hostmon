@@ -43,6 +43,19 @@ Two workers are the default. This keeps the total check latency below the
 serial path during normal operation while avoiding the API contention and
 process spike caused by submitting every verb simultaneously.
 
+The workload collector applies the same limit to its independent Pod, Job, and
+optional Volcano queue requests:
+
+```toml
+[collectors.kubernetes]
+enabled = true
+required = false
+namespace = "queue-a"
+poll_interval_seconds = 60
+timeout_seconds = 30
+max_parallel_queries = 2
+```
+
 The collector groups running and pending GPU Pods by:
 
 1. `created-by-name`

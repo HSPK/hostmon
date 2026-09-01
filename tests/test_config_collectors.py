@@ -354,6 +354,7 @@ class KubernetesCollectorTests(unittest.TestCase):
                 "poll_interval_seconds": 60,
             }
         )
+        self.addCleanup(collector.close)
         previous = {
             "at": 100,
             "metrics": {"k8s/failed_task_count": 1.0},
@@ -366,6 +367,42 @@ class KubernetesCollectorTests(unittest.TestCase):
         self.assertEqual(result.metrics["k8s/failed_task_count"], 1)
         self.assertEqual(result.fields["k8s_failed_tasks"], "job-a")
         self.assertFalse(result.refreshed)
+
+    def test_bounds_parallel_workload_queries(self):
+        collector = KubernetesCollector(
+            {
+                "namespace": "team-a",
+                "max_parallel_queries": 2,
+            }
+        )
+        self.addCleanup(collector.close)
+        barrier = threading.Barrier(2)
+        worker_names: set[str] = set()
+        worker_lock = threading.Lock()
+
+        def query(*_arguments):
+            with worker_lock:
+                worker_names.add(threading.current_thread().name)
+            barrier.wait(timeout=5)
+            return {"items": []}
+
+        with patch.object(collector, "_json", side_effect=query):
+            result = collector.collect(None, 100)
+
+        self.assertEqual(len(worker_names), 2)
+        self.assertEqual(result.metrics["k8s/failed_task_count"], 0)
+
+    def test_rejects_invalid_workload_parallel_query_count(self):
+        with self.assertRaisesRegex(
+            ValueError,
+            "max_parallel_queries must be positive",
+        ):
+            KubernetesCollector(
+                {
+                    "namespace": "team-a",
+                    "max_parallel_queries": 0,
+                }
+            )
 
     def test_identifies_tasks_that_lost_gpu_nodes(self):
         stopped, details = stopped_gpu_tasks(
