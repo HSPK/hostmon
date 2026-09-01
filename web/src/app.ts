@@ -409,13 +409,15 @@ export class DashboardApp {
       const query = (event.target as HTMLInputElement).value
         .trim()
         .toLowerCase();
+      if (!query) return;
       const panel = this.allPanels().find(item => {
+        if (item.type !== "timeseries" && item.type !== "stats") {
+          return false;
+        }
         const metrics =
           item.type === "timeseries"
             ? item.metrics
-            : item.type === "stats"
-              ? item.metrics.map(metric => metric.metric)
-              : [];
+            : item.metrics.map(metric => metric.metric);
         return (
           item.title.toLowerCase().includes(query) ||
           item.id.toLowerCase().includes(query) ||
@@ -423,7 +425,12 @@ export class DashboardApp {
         );
       });
       if (!panel) return;
+      const hidden = this.preferences.get().hiddenPanels.includes(panel.id);
+      if (hidden) this.preferences.setVisible(panel.id, true);
       this.navigate(panel.page);
+      if (hidden && panel.type === "timeseries") {
+        this.scheduleDataReload();
+      }
       this.focusPanel(panel.id);
     });
     this.required("chart-metric-filter").addEventListener("input", () =>
@@ -758,7 +765,7 @@ export class DashboardApp {
     reload = true,
   ): void {
     const changed = this.preferences.get().activePage !== page;
-    this.preferences.setActivePage(page);
+    if (changed) this.preferences.setActivePage(page);
     if (updateHistory && changed) this.updatePageRoute(page);
     this.renderNavigation();
     this.renderPanels();

@@ -1438,6 +1438,73 @@ test("searches configured charts on mobile", async ({page}) => {
   ).toHaveClass(/panel-highlight/);
 });
 
+test("limits search to non-empty chart queries", async ({page}) => {
+  await page.goto("/?page=system");
+  const search = page.getByLabel("Find chart");
+
+  await search.press("Enter");
+  await expect(page.locator("#page-title")).toHaveText("System");
+  await search.fill("GPU workloads");
+  await search.press("Enter");
+  await expect(page.locator("#page-title")).toHaveText("System");
+});
+
+test("reveals hidden charts from search", async ({page}) => {
+  await page.goto("/?page=overview");
+  await page.locator("#layout-panels-button").click();
+  const setting = page.locator(".panel-setting").filter({
+    hasText: "Network throughput (overview)",
+  });
+  await setting.locator('input[type="checkbox"]').first().uncheck();
+  await page.locator("#layout-close").click();
+  await expect(page.locator('[data-panel-id="network"]')).toHaveCount(0);
+
+  await page.reload();
+  await expect(
+    page.locator('[data-panel-id="host-utilization"]'),
+  ).toBeVisible();
+  await expect(page.locator('[data-panel-id="network"]')).toHaveCount(0);
+  const preferencePatches: Array<Record<string, unknown>> = [];
+  const historyRequests: URL[] = [];
+  page.on("request", request => {
+    const url = new URL(request.url());
+    if (url.pathname === "/api/history") historyRequests.push(url);
+    if (
+      url.pathname === "/api/preferences" &&
+      request.method() === "PATCH"
+    ) {
+      preferencePatches.push(request.postDataJSON());
+    }
+  });
+
+  const search = page.getByLabel("Find chart");
+  await search.fill("Network throughput");
+  await search.press("Enter");
+
+  await expect(page.locator('[data-panel-id="network"]')).toHaveClass(
+    /panel-highlight/,
+  );
+  await expect(
+    page.locator('[data-panel-id="network"]'),
+  ).toBeInViewport({ratio: 0.1});
+  await expect
+    .poll(() =>
+      historyRequests.some(
+        url =>
+          url.searchParams.get("metrics")?.includes("network/rx_mbps") ===
+          true,
+      ),
+    )
+    .toBe(true);
+  await expect.poll(() => preferencePatches.length).toBeGreaterThan(0);
+  expect(
+    preferencePatches.some(patch => "hiddenPanels" in patch),
+  ).toBe(true);
+  expect(
+    preferencePatches.some(patch => "activePage" in patch),
+  ).toBe(false);
+});
+
 test("keeps tablet toolbar actions on one row", async ({ page }) => {
   await page.setViewportSize({width: 600, height: 800});
   await page.goto("/?page=overview");
