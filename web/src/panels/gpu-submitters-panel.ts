@@ -45,6 +45,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
   private searchPersistTimer: number | null = null;
   private page = 0;
   private activeSelection: WorkloadSelection | null = null;
+  private nodeNamesExpanded = false;
 
   constructor(
     private readonly definition: GPUSubmittersPanelDefinition,
@@ -278,6 +279,8 @@ export class GPUSubmittersPanel implements PanelRenderer {
     const changed =
       this.activeSelection?.queue !== selection.queue ||
       this.activeSelection.name !== selection.name;
+    if (changed) this.nodeNamesExpanded = false;
+    const scrollTop = changed ? 0 : this.dialog.scrollTop;
     const header = document.createElement("header");
     const heading = document.createElement("div");
     const eyebrow = document.createElement("span");
@@ -304,9 +307,16 @@ export class GPUSubmittersPanel implements PanelRenderer {
       detailCell("Running pods", row.running_pods),
       detailCell("Pending GPUs", row.pending_gpus),
       detailCell("Pending pods", row.pending_pods),
-      nodeNamesCell(row.running_nodes ?? []),
+      nodeNamesCell(
+        row.running_nodes ?? [],
+        this.nodeNamesExpanded,
+        expanded => {
+          this.nodeNamesExpanded = expanded;
+        },
+      ),
     );
     this.dialog.replaceChildren(header, grid);
+    if (!changed) this.dialog.scrollTop = scrollTop;
     this.activeSelection = selection;
     if (updateRoute) this.selectWorkload(selection);
     if (!this.dialog.open) this.dialog.showModal();
@@ -317,6 +327,7 @@ export class GPUSubmittersPanel implements PanelRenderer {
     if (!this.activeSelection && updateRoute) return;
     if (this.dialog.open) this.dialog.close();
     this.activeSelection = null;
+    this.nodeNamesExpanded = false;
     if (updateRoute) this.selectWorkload(null);
   }
 
@@ -386,7 +397,11 @@ function detailCell(
   return cell;
 }
 
-function nodeNamesCell(nodes: string[]): HTMLElement {
+function nodeNamesCell(
+  nodes: string[],
+  expanded: boolean,
+  onExpandedChange: (expanded: boolean) => void,
+): HTMLElement {
   if (!nodes.length) return detailCell("GPU node names", "--", "detail-wide");
   const cell = detailCell("GPU node names", "", "detail-wide");
   const output = cell.querySelector("strong");
@@ -398,20 +413,22 @@ function nodeNamesCell(nodes: string[]): HTMLElement {
   const toggle = document.createElement("button");
   toggle.type = "button";
   toggle.className = "table-action workload-node-toggle";
-  const render = (expanded: boolean) => {
-    output.textContent = expanded
+  const render = (showAll: boolean) => {
+    output.textContent = showAll
       ? nodes.join(", ")
       : `${nodes.slice(0, NODE_NAME_PREVIEW_LIMIT).join(", ")} ` +
         `... (+${nodes.length - NODE_NAME_PREVIEW_LIMIT})`;
-    toggle.textContent = expanded
+    toggle.textContent = showAll
       ? `Show first ${NODE_NAME_PREVIEW_LIMIT} nodes`
       : `Show all ${nodes.length} nodes`;
-    toggle.setAttribute("aria-expanded", String(expanded));
+    toggle.setAttribute("aria-expanded", String(showAll));
   };
-  toggle.addEventListener("click", () =>
-    render(toggle.getAttribute("aria-expanded") !== "true"),
-  );
-  render(false);
+  toggle.addEventListener("click", () => {
+    const showAll = toggle.getAttribute("aria-expanded") !== "true";
+    onExpandedChange(showAll);
+    render(showAll);
+  });
+  render(expanded);
   cell.append(toggle);
   return cell;
 }

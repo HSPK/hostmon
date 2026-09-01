@@ -967,6 +967,17 @@ test("collapses large workload node lists", async ({page}) => {
   await expect(nodes).toContainText("gpu-node-20");
   await expect(toggle).toHaveText("Show first 12 nodes");
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  const pluginRefresh = page.waitForResponse(
+    response =>
+      new URL(response.url()).pathname ===
+      "/api/plugins/cluster_gpu_usage",
+  );
+  await page.locator("#refresh-button").evaluate(element =>
+    (element as HTMLButtonElement).click(),
+  );
+  await pluginRefresh;
+  await expect(toggle).toHaveText("Show first 12 nodes");
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
   await toggle.click();
   await expect(nodes).not.toContainText("gpu-node-20");
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
