@@ -226,6 +226,11 @@ export interface TimeSeriesPanelDefinition extends BasePanelDefinition {
   height?: number;
 }
 
+export interface MetricTablePanelDefinition extends BasePanelDefinition {
+  type: "metric-table";
+  metrics: MetricName[];
+}
+
 export interface CollectorPanelDefinition extends BasePanelDefinition {
   type: "collectors";
 }
@@ -273,6 +278,7 @@ export interface SectionsPanelDefinition extends BasePanelDefinition {
 export type PanelDefinition =
   | StatPanelDefinition
   | TimeSeriesPanelDefinition
+  | MetricTablePanelDefinition
   | CollectorPanelDefinition
   | TasksPanelDefinition
   | MetricsPanelDefinition
@@ -282,6 +288,11 @@ export type PanelDefinition =
   | RulesPanelDefinition
   | WebSettingsPanelDefinition
   | SectionsPanelDefinition;
+
+export type CustomPanelDefinition =
+  | StatPanelDefinition
+  | TimeSeriesPanelDefinition
+  | MetricTablePanelDefinition;
 
 export type PageId = string;
 
@@ -327,7 +338,7 @@ export interface DashboardPreferences {
   panelColumns: Record<string, string[]>;
   theme: "dark" | "light" | "system";
   density: "compact" | "comfortable";
-  customPanels: TimeSeriesPanelDefinition[];
+  customPanels: CustomPanelDefinition[];
   navigationSections: NavigationSection[];
   hiddenPages: PageId[];
   pageLabels: Record<PageId, string>;

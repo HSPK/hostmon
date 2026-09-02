@@ -6,6 +6,7 @@
     {"id": "metrics", "label": "Metrics", "group": "Tables"},
     {"id": "collectors", "label": "Collectors", "group": "Tables"},
     {"id": "alerts", "label": "Alerts", "group": "Manage"},
+    {"id": "layouts", "label": "Layouts", "placement": "bottom"},
     {"id": "settings", "label": "Settings", "placement": "bottom"},
     {"id": "system", "label": "System", "placement": "bottom"}
   ],
@@ -126,6 +127,7 @@
         {"id": "actions", "label": "", "width": "120px", "pinned": "right", "action": "actions"}
       ]
     },
+    {"id": "layouts", "type": "sections", "page": "layouts", "section": "Layouts", "title": "Tabs and metric pages", "columnSpan": 2},
     {"id": "web-settings", "type": "web-settings", "page": "settings", "title": "Web settings", "columnSpan": 2},
     {
       "id": "system",

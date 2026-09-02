@@ -1,8 +1,8 @@
 import type {
   ChartDefaults,
+  CustomPanelDefinition,
   MetricCatalogResponse,
   PanelDefinition,
-  TimeSeriesPanelDefinition,
   AlertRuleConfig,
   DashboardPreferences,
   CollectorDiagnostic,
@@ -38,8 +38,8 @@ export interface PanelContext {
     setChartDefaults(defaults: ChartDefaults): void;
     renderNavigationEditor(root: HTMLElement): void;
     createChart(metrics?: string[]): void;
-    editChart(panel: TimeSeriesPanelDefinition): void;
-    removeChart(panelId: string): void;
+    editPanel(panel: CustomPanelDefinition): void;
+    removePanel(panelId: string): void;
   };
 }
 
@@ -118,4 +118,16 @@ export function panelShell(
   body.className = "panel-body";
   element.append(header, body);
   return { element, header, body };
+}
+
+export function panelActionButton(
+  label: string,
+  action: () => void,
+): HTMLButtonElement {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "table-action";
+  button.textContent = label;
+  button.addEventListener("click", action);
+  return button;
 }

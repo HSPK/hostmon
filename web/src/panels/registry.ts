@@ -1,6 +1,7 @@
 import type {
   CollectorPanelDefinition,
   MetricsPanelDefinition,
+  MetricTablePanelDefinition,
   GPUFleetPanelDefinition,
   GPUSubmittersPanelDefinition,
   StatPanelDefinition,
@@ -14,6 +15,7 @@ import type {
 import { CollectorPanel } from "./collector-panel";
 import { PanelRegistry } from "./panel";
 import { MetricExplorerPanel } from "./metric-explorer-panel";
+import { MetricTablePanel } from "./metric-table-panel";
 import { GPUFleetPanel } from "./gpu-fleet-panel";
 import { GPUSubmittersPanel } from "./gpu-submitters-panel";
 import { StatPanel } from "./stat-panel";
@@ -50,6 +52,14 @@ export function createPanelRegistry(): PanelRegistry {
       "metrics",
       (definition, context) =>
         new MetricExplorerPanel(definition as MetricsPanelDefinition, context),
+    )
+    .register(
+      "metric-table",
+      (definition, context) =>
+        new MetricTablePanel(
+          definition as MetricTablePanelDefinition,
+          context,
+        ),
     )
     .register(
       "system",

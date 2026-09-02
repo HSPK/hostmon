@@ -16,6 +16,7 @@ import {
   tableFooter,
   TABLE_PAGE_SIZE,
 } from "./table-controls";
+import {catalogWindowLabel} from "./catalog-window";
 
 export class MetricExplorerPanel implements PanelRenderer {
   readonly element: HTMLElement;
@@ -179,13 +180,9 @@ export class MetricExplorerPanel implements PanelRenderer {
     seconds: number,
     requestedSeconds: number,
   ): void {
-    const effective = formatWindow(seconds);
-    const capped = seconds < requestedSeconds;
-    this.catalogWindow.textContent =
-      `Stats: ${effective}${capped ? " (max)" : ""}`;
-    this.catalogWindow.title = capped
-      ? `Metric statistics are limited to ${effective}; charts use ${formatWindow(requestedSeconds)}.`
-      : `Metric statistics use the selected ${effective} window.`;
+    const label = catalogWindowLabel(seconds, requestedSeconds);
+    this.catalogWindow.textContent = label.text;
+    this.catalogWindow.title = label.title;
   }
 
   private render(): void {
@@ -208,14 +205,4 @@ export class MetricExplorerPanel implements PanelRenderer {
     this.table.setRows(pageRows, this.columns, "No metrics match the filter");
   }
 
-}
-
-function formatWindow(seconds: number): string {
-  if (seconds >= 86400 && seconds % 86400 === 0) {
-    return `${seconds / 86400}d`;
-  }
-  if (seconds >= 3600 && seconds % 3600 === 0) {
-    return `${seconds / 3600}h`;
-  }
-  return `${seconds / 60}m`;
 }

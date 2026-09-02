@@ -110,8 +110,11 @@ describe("PreferenceStore", () => {
       ],
     });
 
-    expect(preferences.get().customPanels[0]?.height).toBe(270);
-    expect(preferences.get().customPanels[0]?.lineWidth).toBe(1.5);
+    const panel = preferences.get().customPanels[0];
+    expect(panel?.type).toBe("timeseries");
+    if (panel?.type !== "timeseries") throw new Error("Expected chart panel");
+    expect(panel.height).toBe(270);
+    expect(panel.lineWidth).toBe(1.5);
   });
 
   it("persists visibility, order, and time window", () => {
@@ -168,6 +171,44 @@ describe("PreferenceStore", () => {
     expect(restored.get().customPanels).toHaveLength(0);
   });
 
+  it("persists custom summaries and metric tables", () => {
+    const preferences = new PreferenceStore(DASHBOARD);
+    preferences.saveCustomPanel({
+      id: "custom-summary",
+      type: "stats",
+      page: "overview",
+      title: "Resource summary",
+      custom: true,
+      metrics: [
+        {
+          metric: "cpu/percent",
+          label: "CPU",
+          unit: "%",
+          decimals: 1,
+        },
+      ],
+    });
+    preferences.saveCustomPanel({
+      id: "custom-table",
+      type: "metric-table",
+      page: "metrics",
+      title: "Metric statistics",
+      custom: true,
+      metrics: ["cpu/percent", "memory/percent"],
+    });
+
+    const restored = new PreferenceStore(DASHBOARD);
+    expect(restored.get().customPanels.map(panel => panel.type)).toEqual([
+      "stats",
+      "metric-table",
+    ]);
+    expect(
+      restored.visiblePanels("metrics").some(
+        panel => panel.id === "custom-table",
+      ),
+    ).toBe(true);
+  });
+
   it("persists configurable navigation sections without losing pages", () => {
     const preferences = new PreferenceStore(DASHBOARD);
     const sectionId = preferences.addNavigationSection(
@@ -220,6 +261,7 @@ describe("PreferenceStore", () => {
 
   it("creates, updates, and removes metric pages safely", () => {
     const preferences = new PreferenceStore(DASHBOARD);
+    expect(preferences.removePage("layouts")).toBe(false);
     const charts = preferences.get().navigationSections.find(
       section => section.label === "Charts",
     )!;

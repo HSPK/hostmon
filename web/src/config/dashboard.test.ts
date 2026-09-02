@@ -12,6 +12,7 @@ describe("dashboard definition", () => {
       "collectors",
       "tasks",
       "metrics",
+      "metric-table",
       "system",
       "plugin-summary",
       "plugin-records",
@@ -24,6 +25,17 @@ describe("dashboard definition", () => {
     expect(DASHBOARD.panels.every(panel => supported.has(panel.type))).toBe(true);
     expect(new Set(DASHBOARD.panels.map(panel => panel.page))).toEqual(
       new Set(DASHBOARD.navigation.map(item => item.id)),
+    );
+    expect(DASHBOARD.navigation).toContainEqual({
+      id: "layouts",
+      label: "Layouts",
+      placement: "bottom",
+    });
+    expect(DASHBOARD.panels).toContainEqual(
+      expect.objectContaining({
+        type: "sections",
+        page: "layouts",
+      }),
     );
   });
 

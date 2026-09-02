@@ -4,7 +4,7 @@ import "uplot/dist/uPlot.min.css";
 import { APPEARANCE_CHANGED_EVENT } from "../core/appearance";
 import type { TimeSeriesPanelDefinition } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
-import { panelShell } from "./panel";
+import { panelActionButton, panelShell } from "./panel";
 
 const cursorSync = uPlot.sync("hostmon-dashboard");
 
@@ -49,11 +49,14 @@ export class TimeSeriesPanel implements PanelRenderer {
     shell.header.append(legend);
     const actions = document.createElement("div");
     actions.className = "panel-actions";
-    const edit = actionButton("Edit", () => context.actions.editChart(definition));
+    const edit = panelActionButton(
+      "Edit",
+      () => context.actions.editPanel(definition),
+    );
     actions.append(edit);
     if (definition.custom) {
-      const remove = actionButton("Delete", () =>
-        context.actions.removeChart(definition.id),
+      const remove = panelActionButton("Delete", () =>
+        context.actions.removePanel(definition.id),
       );
       actions.append(remove);
     }
@@ -206,13 +209,4 @@ function themeColor(variable: string, fallback: string): string {
       .getPropertyValue(variable)
       .trim() || fallback
   );
-}
-
-function actionButton(label: string, action: () => void): HTMLButtonElement {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "table-action";
-  button.textContent = label;
-  button.addEventListener("click", action);
-  return button;
 }

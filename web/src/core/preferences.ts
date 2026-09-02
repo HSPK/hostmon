@@ -1,5 +1,6 @@
 import type {
   ChartDefaults,
+  CustomPanelDefinition,
   CustomPageDefinition,
   DashboardDefinition,
   DashboardPreferences,
@@ -65,7 +66,7 @@ export class PreferenceStore {
       ),
       theme: this.value.theme,
       density: this.value.density,
-      customPanels: this.value.customPanels.map(panel => ({...panel})),
+      customPanels: this.value.customPanels.map(cloneCustomPanel),
       navigationSections: this.value.navigationSections.map(section => ({
         ...section,
         pages: [...section.pages],
@@ -387,7 +388,14 @@ export class PreferenceStore {
 
   removePage(pageId: PageId): boolean {
     const pages = this.navigationItems();
-    if (pages.length <= 1 || !pages.some(page => page.id === pageId)) {
+    const protectedPage = this.definition.panels.some(
+      panel => panel.type === "sections" && panel.page === pageId,
+    );
+    if (
+      protectedPage ||
+      pages.length <= 1 ||
+      !pages.some(page => page.id === pageId)
+    ) {
       return false;
     }
     const chartPages = new Set(
@@ -468,7 +476,7 @@ export class PreferenceStore {
     this.save("chartDefaults");
   }
 
-  saveCustomPanel(panel: TimeSeriesPanelDefinition): void {
+  saveCustomPanel(panel: CustomPanelDefinition): void {
     const index = this.value.customPanels.findIndex(item => item.id === panel.id);
     if (index >= 0) this.value.customPanels[index] = panel;
     else {
@@ -718,25 +726,63 @@ function isPageId(
 function isCustomPanel(
   value: unknown,
   pages: Set<PageId>,
-): value is TimeSeriesPanelDefinition {
+): value is CustomPanelDefinition {
   if (!value || typeof value !== "object") return false;
-  const panel = value as Partial<TimeSeriesPanelDefinition>;
-  return (
+  const panel = value as Partial<CustomPanelDefinition>;
+  const common =
     typeof panel.id === "string" &&
     typeof panel.title === "string" &&
-    panel.type === "timeseries" &&
     typeof panel.page === "string" &&
-    isPageId(panel.page, pages) &&
-    Array.isArray(panel.metrics) &&
-    panel.metrics.every(metric => typeof metric === "string")
+    isPageId(panel.page, pages);
+  if (!common || !Array.isArray(panel.metrics)) return false;
+  if (panel.type === "timeseries" || panel.type === "metric-table") {
+    return panel.metrics.every(metric => typeof metric === "string");
+  }
+  return panel.type === "stats" && panel.metrics.every(
+    metric =>
+      Boolean(metric) &&
+      typeof metric === "object" &&
+      typeof metric.metric === "string" &&
+      typeof metric.label === "string" &&
+      typeof metric.unit === "string" &&
+      (metric.decimals === undefined || typeof metric.decimals === "number"),
   );
 }
 
 function normalizeCustomPanel(
-  panel: TimeSeriesPanelDefinition,
-): TimeSeriesPanelDefinition {
+  panel: CustomPanelDefinition,
+): CustomPanelDefinition {
+  if (panel.type === "stats") {
+    return {
+      ...panel,
+      custom: true,
+      columnSpan: panel.columnSpan === 2 ? 2 : 1,
+      metrics: panel.metrics.map(metric => ({...metric})),
+    };
+  }
+  if (panel.type === "metric-table") {
+    return {
+      ...panel,
+      custom: true,
+      columnSpan: panel.columnSpan === 2 ? 2 : 1,
+      metrics: [...panel.metrics],
+    };
+  }
   return {
     ...panel,
+    custom: true,
+    columnSpan: panel.columnSpan === 2 ? 2 : 1,
+    metrics: [...panel.metrics],
+    ...(panel.series
+      ? {
+          series: Object.fromEntries(
+            Object.entries(panel.series).map(([name, metadata]) => [
+              name,
+              {...metadata},
+            ]),
+          ),
+        }
+      : {}),
     height:
       typeof panel.height === "number" && panel.height >= 180
         ? panel.height
@@ -748,6 +794,12 @@ function normalizeCustomPanel(
         ? panel.lineWidth
         : 1.5,
   };
+}
+
+function cloneCustomPanel(
+  panel: CustomPanelDefinition,
+): CustomPanelDefinition {
+  return normalizeCustomPanel(panel);
 }
 
 function effectiveNavigationItems(

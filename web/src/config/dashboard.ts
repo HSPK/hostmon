@@ -87,6 +87,12 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
       )
     );
   }
+  if (value.type === "metric-table") {
+    return (
+      Array.isArray(value.metrics) &&
+      value.metrics.every(metric => typeof metric === "string")
+    );
+  }
   if (
     value.columns !== undefined &&
     (!Array.isArray(value.columns) ||
@@ -145,6 +151,7 @@ function isPanel(value: unknown, pages: Set<string>): value is PanelDefinition {
     "collectors",
     "tasks",
     "metrics",
+    "metric-table",
     "system",
     "plugin-summary",
     "plugin-records",

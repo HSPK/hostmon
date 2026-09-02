@@ -1,6 +1,6 @@
 import type { StatPanelDefinition } from "../domain/types";
 import type { PanelContext, PanelRenderer } from "./panel";
-import { panelShell } from "./panel";
+import { panelActionButton, panelShell } from "./panel";
 
 export class StatPanel implements PanelRenderer {
   readonly element: HTMLElement;
@@ -26,6 +26,21 @@ export class StatPanel implements PanelRenderer {
       card.append(label, value);
       grid.append(card);
       this.values.set(item.metric, value);
+    }
+    if (definition.custom) {
+      const actions = document.createElement("div");
+      actions.className = "panel-actions";
+      actions.append(
+        panelActionButton(
+          "Edit",
+          () => context.actions.editPanel(definition),
+        ),
+        panelActionButton(
+          "Delete",
+          () => context.actions.removePanel(definition.id),
+        ),
+      );
+      shell.header.append(actions);
     }
     shell.body.append(grid);
     this.update();
