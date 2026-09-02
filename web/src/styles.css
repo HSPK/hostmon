@@ -469,11 +469,10 @@ body.table-page .table-scroll {
 .navigation-settings,
 .navigation-section-list { display: grid; gap: 6px; }
 .navigation-setting {
-  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px;
+  display: grid;
+  grid-template-columns: auto minmax(140px, 1fr) 82px auto;
+  align-items: center; gap: 6px;
   padding: 7px; border: 1px solid var(--border); background: var(--surface);
-}
-.navigation-setting-fields {
-  display: grid; grid-template-columns: minmax(0, 1fr) 82px; gap: 5px;
 }
 .navigation-page-assignments {
   display: grid; gap: 5px; margin-top: 10px; padding-top: 10px;
@@ -708,7 +707,21 @@ body.table-page .table-scroll {
   .navigation-page-form { grid-template-columns: minmax(0, 1fr) 82px; }
   .navigation-section-form .button,
   .navigation-page-form .button { grid-column: 1 / -1; }
-  .navigation-setting { grid-template-columns: 1fr; }
+  .navigation-setting {
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .navigation-setting > .navigation-drag-handle {
+    grid-column: 1; grid-row: 1;
+  }
+  .navigation-setting > .navigation-section-name {
+    grid-column: 2; grid-row: 1;
+  }
+  .navigation-setting > .navigation-section-delete {
+    grid-column: 3; grid-row: 1;
+  }
+  .navigation-setting > .navigation-section-placement {
+    grid-column: 2 / 4; grid-row: 2;
+  }
   .navigation-page-setting {
     grid-template-columns: auto minmax(0, 1fr) auto;
   }

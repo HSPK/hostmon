@@ -1004,9 +1004,8 @@ export class DashboardApp {
       const row = document.createElement("div");
       row.className = "navigation-setting";
       row.dataset.navigationSectionId = section.id;
-      const fields = document.createElement("div");
-      fields.className = "navigation-setting-fields";
       const name = document.createElement("input");
+      name.className = "navigation-section-name";
       name.value = section.label;
       name.maxLength = 64;
       name.placeholder = "Unlabeled section";
@@ -1021,6 +1020,7 @@ export class DashboardApp {
         this.refreshNavigationConfiguration();
       });
       const placement = document.createElement("select");
+      placement.className = "navigation-section-placement";
       placement.setAttribute(
         "aria-label",
         `Placement for ${section.label || "unlabeled"} section`,
@@ -1038,9 +1038,6 @@ export class DashboardApp {
         });
         this.refreshNavigationConfiguration();
       });
-      fields.append(name, placement);
-      const actions = document.createElement("div");
-      actions.className = "order-actions";
       const drag = this.navigationEditorDragHandle(
         `Drag ${section.label || "unlabeled"} section`,
         NAVIGATION_SECTION_DRAG_TYPE,
@@ -1057,9 +1054,9 @@ export class DashboardApp {
         if (!this.preferences.removeNavigationSection(section.id)) return;
         this.refreshNavigationConfiguration();
       });
+      remove.classList.add("navigation-section-delete");
       remove.disabled = sections.length <= 1;
-      actions.append(drag, remove);
-      row.append(fields, actions);
+      row.append(drag, name, placement, remove);
       this.bindNavigationEditorDrop(
         row,
         section.id,

@@ -962,6 +962,24 @@ test("drags navigation sections and metric pages in Layouts", async ({
   const charts = editor.locator(
     '[data-navigation-section-id="default-main-charts"]',
   );
+  const sectionHandleBox = await manage
+    .getByRole("button", {name: "Drag Manage section"})
+    .boundingBox();
+  const sectionNameBox = await manage
+    .locator(".navigation-section-name")
+    .boundingBox();
+  const pageHandleBox = await editor
+    .getByRole("button", {name: "Drag Metrics page"})
+    .boundingBox();
+  const pageNameBox = await editor
+    .locator('[data-navigation-page-id="metrics"] .navigation-page-name')
+    .boundingBox();
+  expect(sectionHandleBox).not.toBeNull();
+  expect(sectionNameBox).not.toBeNull();
+  expect(pageHandleBox).not.toBeNull();
+  expect(pageNameBox).not.toBeNull();
+  expect(sectionHandleBox!.x).toBeLessThan(sectionNameBox!.x);
+  expect(pageHandleBox!.x).toBeLessThan(pageNameBox!.x);
   await manage.getByRole("button", {
     name: "Drag Manage section",
   }).dragTo(charts, {targetPosition: {x: 20, y: 2}});
