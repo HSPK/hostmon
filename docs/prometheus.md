@@ -76,7 +76,7 @@ Representative metric names:
 | `disk/percent` | `hostmon_disk_percent` |
 | `network/rx_mbps` | `hostmon_network_rx_mbps` |
 | `gpu/percent` | `hostmon_gpu_percent` |
-| `k8s/occupied_gpu_nodes` | `hostmon_k8s_occupied_gpu_nodes` |
+| `k8s/stopped_task_count` | `hostmon_k8s_stopped_task_count` |
 | `monitor/collector/cpu/up` | `hostmon_monitor_collector_cpu_up` |
 
 Names are sanitized deterministically. If two source names sanitize to the

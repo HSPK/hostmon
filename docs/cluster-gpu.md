@@ -45,8 +45,9 @@ Two workers are the default. This keeps the total check latency below the
 serial path during normal operation while avoiding the API contention and
 process spike caused by submitting every verb simultaneously.
 
-The workload collector applies the same limit to its independent Pod, Job, and
-optional Volcano queue requests:
+The Kubernetes task-health collector applies the same limit to its independent
+Pod and Job requests. GPU capacity and Volcano queue ownership remain in
+`cluster_gpu_usage`:
 
 ```toml
 [collectors.kubernetes]

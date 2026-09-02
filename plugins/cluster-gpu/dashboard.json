@@ -7,7 +7,7 @@
     {"id": "workloads", "label": "Workloads", "group": "Tables"},
     {"id": "metrics", "label": "Metrics", "group": "Tables"},
     {"id": "collectors", "label": "Collectors", "group": "Tables"},
-    {"id": "kubernetes", "label": "Kubernetes", "group": "Tables"},
+    {"id": "kubernetes", "label": "Kubernetes", "group": "Manage"},
     {"id": "alerts", "label": "Alerts", "group": "Manage"},
     {"id": "layouts", "label": "Layouts", "placement": "bottom"},
     {"id": "settings", "label": "Settings", "placement": "bottom"},
@@ -82,17 +82,6 @@
       "range": [0, 100]
     },
     {
-      "id": "kubernetes",
-      "type": "timeseries",
-      "page": "kubernetes",
-      "title": "Kubernetes GPU nodes",
-      "metrics": ["k8s/occupied_gpu_nodes", "k8s/quota_nodes"],
-      "series": {
-        "k8s/occupied_gpu_nodes": {"label": "Occupied nodes"},
-        "k8s/quota_nodes": {"label": "Node quota"}
-      }
-    },
-    {
       "id": "collectors",
       "type": "collectors",
       "page": "collectors",
@@ -114,15 +103,15 @@
       "id": "tasks",
       "type": "tasks",
       "page": "kubernetes",
-      "title": "Kubernetes task state",
+      "section": "Health",
+      "title": "Kubernetes task and access health",
       "columnSpan": 2,
       "items": [
         {
-          "label": "GPU nodes",
-          "template": "{occupied} / {quota}",
+          "label": "Problem task count",
+          "template": "{value}",
           "values": {
-            "occupied": {"source": "metric", "key": "k8s/occupied_gpu_nodes"},
-            "quota": {"source": "metric", "key": "k8s/quota_nodes"}
+            "value": {"source": "metric", "key": "k8s/failed_task_count", "fallback": "0"}
           }
         },
         {"label": "Stopped or reduced", "template": "{value}", "values": {"value": {"source": "field", "key": "k8s_stopped_tasks", "fallback": "(none)"}}},

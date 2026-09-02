@@ -2,15 +2,15 @@ from __future__ import annotations
 
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass
-from decimal import Decimal, ROUND_CEILING
+from decimal import Decimal
 from typing import Any
 
 from host_monitor.collectors.base import CollectorResult, reject_unknown_options
-from host_monitor.errors import CollectorError
 from .kubectl_client import KubectlClient, parse_quantity
 
 
 TERMINAL_PHASES = {"Succeeded", "Failed"}
+STATE_SCHEMA_VERSION = 2
 PROBLEM_WAITING_REASONS = {
     "CrashLoopBackOff",
     "CreateContainerConfigError",
@@ -112,9 +112,7 @@ def analyze_workloads(
     job_problems = failed_jobs(jobs)
     problems = dict(job_problems)
     problem_pods = 0
-    occupied_nodes: set[str] = set()
     gpu_task_nodes: dict[str, set[str]] = {}
-    gpu_pods = 0
     for pod in pods:
         problem = pod_problem(pod)
         if problem:
@@ -128,9 +126,7 @@ def analyze_workloads(
             and node
             and pod_uses_resource(pod, gpu_resource)
         ):
-            occupied_nodes.add(str(node))
             gpu_task_nodes.setdefault(controller_name(pod), set()).add(str(node))
-            gpu_pods += 1
 
     normalized_task_nodes = {
         task: sorted(nodes) for task, nodes in sorted(gpu_task_nodes.items())
@@ -141,9 +137,6 @@ def analyze_workloads(
         "k8s/failed_task_count": float(len(names)),
         "k8s/failed_job_count": float(len(job_problems)),
         "k8s/problem_pod_count": float(problem_pods),
-        "k8s/occupied_gpu_nodes": float(len(occupied_nodes)),
-        "k8s/gpu_pod_count": float(gpu_pods),
-        "k8s/gpu_task_count": float(len(normalized_task_nodes)),
     }
     fields = {
         "k8s_failed_tasks": ", ".join(names) if names else "(none)",
@@ -190,9 +183,7 @@ class KubernetesCollector:
             {
                 "context",
                 "namespace",
-                "queue",
                 "gpu_resource",
-                "gpus_per_node",
                 "poll_interval_seconds",
                 "kubectl",
                 "timeout_seconds",
@@ -203,13 +194,9 @@ class KubernetesCollector:
         self.namespace = str(options.get("namespace", "")).strip()
         if not self.namespace:
             raise ValueError("namespace is required")
-        self.queue = str(options.get("queue", "")).strip()
         self.gpu_resource = str(
             options.get("gpu_resource", "nvidia.com/gpu")
         ).strip()
-        self.gpus_per_node = int(options.get("gpus_per_node", 8))
-        if self.gpus_per_node < 1:
-            raise ValueError("gpus_per_node must be positive")
         self.poll_interval = float(options.get("poll_interval_seconds", 60))
         if self.poll_interval <= 0:
             raise ValueError("poll_interval_seconds must be positive")
@@ -219,9 +206,8 @@ class KubernetesCollector:
         self.max_parallel_queries = int(options.get("max_parallel_queries", 2))
         if self.max_parallel_queries < 1:
             raise ValueError("max_parallel_queries must be positive")
-        query_count = 3 if self.queue else 2
         self._executor = ThreadPoolExecutor(
-            max_workers=min(self.max_parallel_queries, query_count),
+            max_workers=min(self.max_parallel_queries, 2),
             thread_name_prefix="hostmon-kubernetes",
         )
         self.client = KubectlClient(
@@ -248,7 +234,8 @@ class KubernetesCollector:
             metrics = previous.get("metrics")
             fields = previous.get("fields")
             if (
-                isinstance(at, (int, float))
+                previous.get("schema_version") == STATE_SCHEMA_VERSION
+                and isinstance(at, (int, float))
                 and now - float(at) < self.poll_interval
                 and isinstance(metrics, dict)
                 and isinstance(fields, dict)
@@ -281,15 +268,6 @@ class KubernetesCollector:
                 request_timeout,
             ),
         }
-        if self.queue:
-            futures["queue"] = self._executor.submit(
-                self._json,
-                "get",
-                "queues.scheduling.volcano.sh",
-                self.queue,
-                "--output=json",
-                request_timeout,
-            )
         wait(tuple(futures.values()))
         pods = self._items(
             futures["pods"].result(),
@@ -326,27 +304,8 @@ class KubernetesCollector:
                 "k8s_namespace": self.namespace,
             }
         )
-        if self.queue:
-            queue = futures["queue"].result()
-            capability = (queue.get("spec") or {}).get("capability") or {}
-            if self.gpu_resource not in capability:
-                raise CollectorError(
-                    f"Volcano queue {self.queue!r} has no "
-                    f"{self.gpu_resource!r} capability"
-                )
-            quota = parse_quantity(capability[self.gpu_resource])
-            if quota <= 0:
-                raise CollectorError(
-                    f"Volcano queue {self.queue!r} has a non-positive GPU quota"
-                )
-            quota_nodes = int(
-                (quota / Decimal(self.gpus_per_node)).to_integral_value(
-                    rounding=ROUND_CEILING
-                )
-            )
-            metrics["k8s/quota_gpus"] = float(quota)
-            metrics["k8s/quota_nodes"] = float(quota_nodes)
         state = {
+            "schema_version": STATE_SCHEMA_VERSION,
             "at": now,
             "metrics": metrics,
             "fields": fields,

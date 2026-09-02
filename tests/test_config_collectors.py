@@ -338,7 +338,7 @@ class KubernetesCollectorTests(unittest.TestCase):
 
         metrics, fields = analysis.metrics, analysis.fields
         self.assertEqual(metrics["k8s/failed_task_count"], 2)
-        self.assertEqual(metrics["k8s/occupied_gpu_nodes"], 1)
+        self.assertNotIn("k8s/occupied_gpu_nodes", metrics)
         self.assertEqual(
             analysis.gpu_task_nodes,
             {"training": ["gpu-1"]},
@@ -356,6 +356,7 @@ class KubernetesCollectorTests(unittest.TestCase):
         )
         self.addCleanup(collector.close)
         previous = {
+            "schema_version": 2,
             "at": 100,
             "metrics": {"k8s/failed_task_count": 1.0},
             "fields": {"k8s_failed_tasks": "job-a"},
@@ -386,10 +387,19 @@ class KubernetesCollectorTests(unittest.TestCase):
             barrier.wait(timeout=5)
             return {"items": []}
 
-        with patch.object(collector, "_json", side_effect=query):
+        with patch.object(
+            collector,
+            "_json",
+            side_effect=query,
+        ) as query_mock:
             result = collector.collect(None, 100)
 
         self.assertEqual(len(worker_names), 2)
+        self.assertEqual(query_mock.call_count, 2)
+        self.assertEqual(
+            {call.args[1] for call in query_mock.call_args_list},
+            {"pods", "jobs"},
+        )
         self.assertEqual(result.metrics["k8s/failed_task_count"], 0)
 
     def test_rejects_invalid_workload_parallel_query_count(self):

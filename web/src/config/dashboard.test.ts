@@ -53,5 +53,10 @@ describe("dashboard definition", () => {
     expect(pluginDashboard.panels.some(
       panel => panel.type === "plugin-summary",
     )).toBe(true);
+    expect(
+      pluginDashboard.panels
+        .filter(panel => panel.page === "kubernetes")
+        .every(panel => panel.type !== "timeseries"),
+    ).toBe(true);
   });
 });

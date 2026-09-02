@@ -250,9 +250,9 @@ that lost GPU nodes. They are available in `title` and `message`:
 
 ```json
 {
-  "alert": "kubernetes-gpu-node-drop",
-  "expr": "k8s.occupied_gpu_nodes < k8s.quota_nodes and diff(k8s.occupied_gpu_nodes[2]) < 0",
-  "title": "Kubernetes GPU nodes {k8s_occupied_gpu_nodes:.0f}/{k8s_quota_nodes:.0f}",
+  "alert": "kubernetes-task-drop",
+  "expr": "k8s.stopped_task_count > 0",
+  "title": "Kubernetes task stopped or reduced",
   "message": "Stopped or reduced tasks: {k8s_stopped_tasks}\nLost nodes: {k8s_stopped_task_details}",
   "mode": "edge",
   "notify_recovery": false

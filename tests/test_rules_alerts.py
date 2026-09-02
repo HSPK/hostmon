@@ -139,18 +139,12 @@ class RuleEvaluationTests(unittest.TestCase):
 
         self.assertEqual(len(present.alerts), 1)
 
-    def test_k8s_alert_only_fires_on_gpu_node_drop(self):
+    def test_k8s_alert_only_fires_on_stopped_task_edge(self):
         rule = AlertRule.from_dict(
             {
-                "alert": "k8s-node-drop",
-                "expr": (
-                    "k8s.occupied_gpu_nodes < k8s.quota_nodes and "
-                    "diff(k8s.occupied_gpu_nodes[2]) < 0"
-                ),
-                "title": (
-                    "K8s 节点 {k8s_occupied_gpu_nodes:.0f}/"
-                    "{k8s_quota_nodes:.0f}"
-                ),
+                "alert": "k8s-task-drop",
+                "expr": "k8s.stopped_task_count > 0",
+                "title": "K8s 任务停止或缩容",
                 "message": "停止的任务：{k8s_stopped_tasks}",
                 "for": 1,
                 "mode": "edge",
@@ -163,8 +157,7 @@ class RuleEvaluationTests(unittest.TestCase):
             [rule],
             {
                 "k8s/failed_task_count": 0,
-                "k8s/occupied_gpu_nodes": 7,
-                "k8s/quota_nodes": 7,
+                "k8s/stopped_task_count": 0,
             },
             state,
             fields={"k8s_stopped_tasks": "(none)"},
@@ -179,8 +172,7 @@ class RuleEvaluationTests(unittest.TestCase):
             [rule],
             {
                 "k8s/failed_task_count": 1,
-                "k8s/occupied_gpu_nodes": 7,
-                "k8s/quota_nodes": 7,
+                "k8s/stopped_task_count": 0,
             },
             state,
             fields={"k8s_stopped_tasks": "(none)"},
@@ -195,8 +187,7 @@ class RuleEvaluationTests(unittest.TestCase):
             [rule],
             {
                 "k8s/failed_task_count": 1,
-                "k8s/occupied_gpu_nodes": 6,
-                "k8s/quota_nodes": 7,
+                "k8s/stopped_task_count": 1,
             },
             state,
             fields={"k8s_stopped_tasks": "job-a"},
@@ -205,7 +196,7 @@ class RuleEvaluationTests(unittest.TestCase):
             now=3,
         )
 
-        self.assertEqual(dropped.alerts[0].message.title, "K8s 节点 6/7")
+        self.assertEqual(dropped.alerts[0].message.title, "K8s 任务停止或缩容")
         self.assertEqual(dropped.alerts[0].message.text, "停止的任务：job-a")
         state = next_state(state, dropped)
 
@@ -213,8 +204,7 @@ class RuleEvaluationTests(unittest.TestCase):
             [rule],
             {
                 "k8s/failed_task_count": 1,
-                "k8s/occupied_gpu_nodes": 6,
-                "k8s/quota_nodes": 7,
+                "k8s/stopped_task_count": 1,
             },
             state,
             fields={"k8s_stopped_tasks": "(none)"},

@@ -14,8 +14,8 @@ const metrics = {
   "gpu/temperature_c": 71,
   "network/rx_mbps": 12,
   "network/tx_mbps": 3,
-  "k8s/occupied_gpu_nodes": 7,
-  "k8s/quota_nodes": 7,
+  "k8s/failed_task_count": 0,
+  "k8s/stopped_task_count": 0,
   "custom/latency_ms": 18,
   "monitor/collector/cpu/up": 1,
   "monitor/collector/cpu/stale": 0,
@@ -415,7 +415,12 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
 
   await page.getByRole("button", { name: "Kubernetes" }).click();
   await expect(page.locator("#page-title")).toHaveText("Kubernetes");
-  await expect(page.locator(".task-grid")).toContainText("7 / 7");
+  await expect(page.locator(".task-grid")).toContainText(
+    "Problem task count",
+  );
+  await expect(page.locator(".task-grid")).toContainText(
+    "Stopped or reduced",
+  );
 
   await page.getByRole("button", { name: "System" }).click();
   await expect(page.locator(".system-grid")).toContainText("/api/ws");
@@ -1934,6 +1939,15 @@ test("loads history only for visible chart pages", async ({ page }) => {
 
   await page.goto("/?page=workloads");
   await expect(page.locator("#page-title")).toHaveText("Workloads");
+  await page.waitForTimeout(100);
+  expect(historyRequests).toHaveLength(0);
+
+  await page.goto("/?page=kubernetes");
+  await expect(page.locator("#page-title")).toHaveText("Kubernetes");
+  await expect(page.locator(".timeseries-panel")).toHaveCount(0);
+  await expect(page.locator(".task-grid")).toContainText(
+    "Problem task count",
+  );
   await page.waitForTimeout(100);
   expect(historyRequests).toHaveLength(0);
 
