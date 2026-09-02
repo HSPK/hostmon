@@ -56,7 +56,6 @@ export class DashboardApp {
   private layoutPanel!: HTMLElement;
   private layoutTrigger: HTMLElement | null = null;
   private layoutView: LayoutView = "panels";
-  private addPanelDialog!: HTMLDialogElement;
   private chartDialog!: HTMLDialogElement;
   private connectionDot!: HTMLElement;
   private connectionText!: HTMLElement;
@@ -328,18 +327,15 @@ export class DashboardApp {
           <button id="layout-panels-button" class="layout-dock-button" type="button" data-compact-label="Panels" aria-controls="layout-panel" aria-expanded="false" aria-pressed="false">Panels</button>
         </nav>
       </aside>
-      <dialog id="add-panel-dialog" class="add-panel-dialog" aria-labelledby="add-panel-title">
-        <header><div><h2 id="add-panel-title">Add panel</h2><p>Choose a panel type.</p></div><button id="add-panel-close" class="icon-button" type="button">Close</button></header>
-        <div class="add-panel-options">
-          <button id="add-summary" class="add-panel-option" type="button"><strong>Summary</strong><span>Current metric values.</span></button>
-          <button id="add-table" class="add-panel-option" type="button"><strong>Table</strong><span>Current and statistical metric values.</span></button>
-          <button id="add-chart" class="add-panel-option" type="button"><strong>Chart</strong><span>Time-series metric history.</span></button>
-        </div>
-      </dialog>
       <dialog id="chart-dialog" class="chart-dialog" aria-labelledby="chart-dialog-title">
         <form id="chart-form" method="dialog">
           <header><div><h2 id="chart-dialog-title">Create chart</h2><p id="chart-dialog-description">Choose up to eight metrics.</p></div><button id="chart-close" class="icon-button" type="button">Close</button></header>
-          <div class="chart-dialog-body">
+          <div id="panel-type-tabs" class="panel-type-tabs" role="tablist" aria-label="Panel type">
+            <button id="panel-type-summary" class="panel-type-tab" type="button" role="tab" data-panel-type="stats">Summary</button>
+            <button id="panel-type-table" class="panel-type-tab" type="button" role="tab" data-panel-type="metric-table">Table</button>
+            <button id="panel-type-chart" class="panel-type-tab" type="button" role="tab" data-panel-type="timeseries">Chart</button>
+          </div>
+          <div id="chart-dialog-body" class="chart-dialog-body">
             <div class="form-grid">
               <label class="chart-title-label">Title<input id="chart-title" required maxlength="80"></label>
               <label class="chart-page-label">Dashboard page<select id="chart-page"></select></label>
@@ -363,9 +359,6 @@ export class DashboardApp {
     `;
     this.panelsRoot = this.required("panels");
     this.layoutPanel = this.required("layout-panel");
-    this.addPanelDialog = this.required(
-      "add-panel-dialog",
-    ) as HTMLDialogElement;
     this.chartDialog = this.required("chart-dialog") as HTMLDialogElement;
     this.connectionDot = this.required("connection-dot");
     this.connectionText = this.required("connection-text");
@@ -398,20 +391,27 @@ export class DashboardApp {
       void this.reloadData();
     });
     this.required("add-panel-button").addEventListener("click", () =>
-      this.addPanelDialog.showModal(),
-    );
-    this.required("add-panel-close").addEventListener("click", () =>
-      this.addPanelDialog.close(),
+      this.openPanelEditor("timeseries"),
     );
     for (const [id, type] of [
-      ["add-summary", "stats"],
-      ["add-table", "metric-table"],
-      ["add-chart", "timeseries"],
+      ["panel-type-summary", "stats"],
+      ["panel-type-table", "metric-table"],
+      ["panel-type-chart", "timeseries"],
     ] as const) {
-      this.required(id).addEventListener("click", () => {
-        this.addPanelDialog.close();
-        this.openPanelEditor(type);
-      });
+      const tab = this.required(id) as HTMLButtonElement;
+      tab.title = panelTypeDescription(type);
+      tab.addEventListener("click", () => this.switchPanelEditorType(type));
+      for (const eventName of ["mouseenter", "focus"]) {
+        tab.addEventListener(eventName, () => {
+          this.required("chart-dialog-description").textContent =
+            panelTypeDescription(type);
+        });
+      }
+      for (const eventName of ["mouseleave", "blur"]) {
+        tab.addEventListener(eventName, () =>
+          this.restorePanelTypeDescription(),
+        );
+      }
     }
     this.required("export-button").addEventListener("click", () => {
       void this.exportCsv();
@@ -749,7 +749,7 @@ export class DashboardApp {
       add.type = "button";
       add.className = "button button-primary";
       add.textContent = "Add";
-      add.addEventListener("click", () => this.addPanelDialog.showModal());
+      add.addEventListener("click", () => this.openPanelEditor("timeseries"));
       empty.append(title, message, add);
       this.panelsRoot.append(empty);
       return;
@@ -1320,17 +1320,9 @@ export class DashboardApp {
   ): void {
     this.editingPanel = panel ?? null;
     this.chartDialog.dataset.panelType = type;
-    const kind = panelTypeName(type);
-    const isChart = type === "timeseries";
     const chart =
       panel?.type === "timeseries" ? panel : undefined;
     const defaults = this.preferences.get().chartDefaults;
-    this.required("chart-dialog-title").textContent =
-      `${panel ? "Edit" : "Create"} ${kind}`;
-    this.required("chart-dialog-description").textContent =
-      type === "metric-table"
-        ? "Choose up to fifty metrics for the statistics table."
-        : `Choose up to eight metrics for the ${kind}.`;
     (this.required("chart-title") as HTMLInputElement).value =
       panel?.title ?? defaultPanelTitle(type);
     this.renderChartDestinations(panel?.page ?? this.defaultPanelPage(type));
@@ -1354,14 +1346,56 @@ export class DashboardApp {
     this.chartDialog.dataset.selected = JSON.stringify(
       panel ? panelMetricNames(panel) : initialMetrics,
     );
-    this.chartDialog
-      .querySelectorAll<HTMLElement>(".chart-only")
-      .forEach(element => element.toggleAttribute("hidden", !isChart));
+    this.applyPanelEditorType(type);
     this.required("chart-delete").toggleAttribute("hidden", !panel);
-    this.required("chart-delete").textContent = `Delete ${kind}`;
-    this.required("chart-save").textContent = `Save ${kind}`;
     this.renderMetricPicker();
     this.chartDialog.showModal();
+  }
+
+  private switchPanelEditorType(type: PanelEditorType): void {
+    if (this.editingPanel || type === this.editorPanelType()) return;
+    const previous = this.editorPanelType();
+    const title = this.required("chart-title") as HTMLInputElement;
+    if (title.value === defaultPanelTitle(previous)) {
+      title.value = defaultPanelTitle(type);
+    }
+    (this.required("chart-width") as HTMLSelectElement).value = String(
+      type === "metric-table"
+        ? 2
+        : this.preferences.get().chartDefaults.columnSpan,
+    );
+    this.applyPanelEditorType(type);
+    this.renderMetricPicker();
+  }
+
+  private applyPanelEditorType(type: PanelEditorType): void {
+    this.chartDialog.dataset.panelType = type;
+    const kind = panelTypeName(type);
+    this.required("chart-dialog-title").textContent =
+      `${this.editingPanel ? "Edit" : "Create"} ${kind}`;
+    this.required("chart-dialog-description").textContent =
+      panelTypeDescription(type);
+    this.chartDialog
+      .querySelectorAll<HTMLElement>(".chart-only")
+      .forEach(element =>
+        element.toggleAttribute("hidden", type !== "timeseries"),
+      );
+    const tabs = this.required("panel-type-tabs");
+    tabs.toggleAttribute("hidden", Boolean(this.editingPanel));
+    tabs.querySelectorAll<HTMLButtonElement>("[data-panel-type]").forEach(
+      tab => {
+        const selected = tab.dataset.panelType === type;
+        tab.setAttribute("aria-selected", String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+      },
+    );
+    this.required("chart-delete").textContent = `Delete ${kind}`;
+    this.required("chart-save").textContent = `Save ${kind}`;
+  }
+
+  private restorePanelTypeDescription(): void {
+    this.required("chart-dialog-description").textContent =
+      panelTypeDescription(this.editorPanelType());
   }
 
   private renderChartDestinations(selectedPage: PageId): void {
@@ -1835,6 +1869,16 @@ function panelTypeName(type: PanelEditorType): string {
   if (type === "stats") return "summary";
   if (type === "metric-table") return "table";
   return "chart";
+}
+
+function panelTypeDescription(type: PanelEditorType): string {
+  if (type === "stats") {
+    return "Current values for up to eight metrics.";
+  }
+  if (type === "metric-table") {
+    return "Current, Min, Average, P95, and Max for up to fifty metrics.";
+  }
+  return "Time-series history for up to eight metrics.";
 }
 
 function defaultPanelTitle(type: PanelEditorType): string {

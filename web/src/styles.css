@@ -511,38 +511,6 @@ body.table-page .table-scroll {
 .column-options label { min-height: 26px; white-space: nowrap; }
 .order-actions { gap: 3px; }
 
-.add-panel-dialog {
-  width: min(680px, calc(100vw - 24px)); padding: 0; overflow: hidden;
-  color: var(--text); border: 1px solid var(--border-strong);
-  border-radius: 2px; background: var(--chrome);
-}
-.add-panel-dialog::backdrop { background: rgba(0, 0, 0, .72); }
-.add-panel-dialog > header {
-  display: flex; align-items: flex-start; justify-content: space-between;
-  gap: 12px; padding: 12px; border-bottom: 1px solid var(--border);
-}
-.add-panel-dialog h2 { margin: 0; font-size: 15px; }
-.add-panel-dialog p {
-  margin: 3px 0 0; color: var(--muted); font-size: 11px;
-}
-.add-panel-options {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px; padding: 12px;
-}
-.add-panel-option {
-  min-height: 96px; padding: 12px; color: var(--text);
-  border: 1px solid var(--border); border-radius: 2px;
-  background: var(--surface); text-align: left; cursor: pointer;
-}
-.add-panel-option:hover {
-  border-color: var(--accent); background: var(--surface-2);
-}
-.add-panel-option strong,
-.add-panel-option span { display: block; }
-.add-panel-option span {
-  margin-top: 6px; color: var(--muted); font-size: 11px; line-height: 1.4;
-}
-
 .chart-dialog {
   width: min(880px, 96vw); max-height: 90vh; padding: 0; overflow: hidden; color: var(--text);
   border: 1px solid var(--border-strong); border-radius: 2px; background: var(--chrome);
@@ -558,6 +526,23 @@ body.table-page .table-scroll {
 .chart-dialog form > header, .chart-dialog form > footer { padding: 12px; border-bottom: 1px solid var(--border); }
 .chart-dialog form > header, .chart-dialog form > footer {
   flex: 0 0 auto; background: var(--chrome);
+}
+.panel-type-tabs {
+  flex: 0 0 auto; display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1px; padding: 8px 12px; border-bottom: 1px solid var(--border);
+  background: var(--border);
+}
+.panel-type-tabs[hidden] { display: none; }
+.panel-type-tab {
+  min-height: 34px; padding: 0 10px; color: var(--muted);
+  border: 0; background: var(--surface); cursor: pointer;
+  font-size: 11px; font-weight: 600;
+}
+.panel-type-tab:hover,
+.panel-type-tab:focus-visible { color: var(--text); background: var(--surface-2); }
+.panel-type-tab[aria-selected="true"] {
+  color: var(--accent-contrast); background: var(--accent);
 }
 .chart-dialog form > footer {
   align-items: center; border-top: 1px solid var(--border); border-bottom: 0;
@@ -696,7 +681,6 @@ body.table-page .table-scroll {
   .chart-dialog,
   .chart-dialog form { max-height: calc(100dvh - 24px); }
   .chart-dialog { width: calc(100vw - 24px); }
-  .add-panel-options { grid-template-columns: 1fr; }
   .rule-editor { grid-template-columns: 1fr; }
   .rule-editor > * { grid-column: 1; }
   .form-grid { grid-template-columns: 1fr; }

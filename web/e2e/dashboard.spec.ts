@@ -124,9 +124,30 @@ async function openAddPanel(
   type: "Summary" | "Table" | "Chart",
 ): Promise<void> {
   await page.locator(".toolbar").getByRole("button", {name: "Add"}).click();
-  const dialog = page.getByRole("dialog", {name: "Add panel"});
+  await expect(page.locator("#add-panel-dialog")).toHaveCount(0);
+  const dialog = page.getByRole("dialog", {name: "Create chart"});
   await expect(dialog).toBeVisible();
-  await dialog.getByRole("button", {name: new RegExp(`^${type}`)}).click();
+  const tab = dialog.getByRole("tab", {name: type});
+  await expect(tab).toHaveAttribute(
+    "aria-selected",
+    String(type === "Chart"),
+  );
+  if (type !== "Chart") {
+    await tab.hover();
+    await expect(page.locator("#chart-dialog-description")).toHaveText(
+      type === "Summary"
+        ? "Current values for up to eight metrics."
+        : "Current, Min, Average, P95, and Max for up to fifty metrics.",
+    );
+    await dialog.locator("#chart-title").hover();
+    await expect(page.locator("#chart-dialog-description")).toHaveText(
+      "Time-series history for up to eight metrics.",
+    );
+    await tab.click();
+    await expect(
+      page.getByRole("dialog", {name: `Create ${type.toLowerCase()}`}),
+    ).toBeVisible();
+  }
 }
 
 test.beforeEach(async ({ page }) => {
