@@ -507,8 +507,21 @@ body.table-page .table-scroll {
 .navigation-page-assignments h4 { margin-bottom: 2px; }
 .navigation-page-setting {
   display: grid;
-  grid-template-columns: minmax(140px, 1fr) 150px auto;
+  grid-template-columns: auto minmax(140px, 1fr) 150px auto;
   align-items: center; gap: 8px; color: var(--muted); font-size: 10px;
+}
+.navigation-drag-handle {
+  cursor: grab; font-family: ui-monospace, monospace;
+}
+.navigation-setting.dragging,
+.navigation-page-setting.dragging { opacity: .45; }
+.navigation-setting.drag-over-before,
+.navigation-page-setting.drag-over-before {
+  box-shadow: inset 0 2px var(--accent);
+}
+.navigation-setting.drag-over-after,
+.navigation-page-setting.drag-over-after {
+  box-shadow: inset 0 -2px var(--accent);
 }
 .sections-panel .panel-body { padding: 12px; }
 .sections-panel .navigation-settings { max-width: 860px; }
@@ -688,7 +701,19 @@ body.table-page .table-scroll {
   .navigation-page-form .button { grid-column: 1 / -1; }
   .navigation-setting { grid-template-columns: 1fr; }
   .navigation-page-setting {
-    grid-template-columns: minmax(0, 1fr) 120px auto;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+  }
+  .navigation-page-setting > .navigation-drag-handle {
+    grid-column: 1; grid-row: 1;
+  }
+  .navigation-page-setting > .navigation-page-name {
+    grid-column: 2; grid-row: 1;
+  }
+  .navigation-page-setting > .navigation-page-delete {
+    grid-column: 3; grid-row: 1;
+  }
+  .navigation-page-setting > .navigation-page-section {
+    grid-column: 2 / 4; grid-row: 2;
   }
   .statusbar #sample-age { display: none; }
   main { padding: var(--space-2); }

@@ -199,6 +199,19 @@ describe("PreferenceStore", () => {
         .navigationSections.filter(item => item.placement === "main")
         .map(item => item.label),
     ).toEqual(["Operations", "Charts", "Tables", "Manage"]);
+    restored.movePageRelative("metrics", "overview", false);
+    expect(
+      restored
+        .get()
+        .navigationSections.find(item => item.label === "Charts")
+        ?.pages.slice(0, 2),
+    ).toEqual(["metrics", "overview"]);
+    expect(
+      restored
+        .get()
+        .navigationSections.find(item => item.label === "Operations")
+        ?.pages,
+    ).not.toContain("metrics");
     expect(restored.removeNavigationSection(sectionId!)).toBe(true);
     expect(
       restored.get().navigationSections.flatMap(item => item.pages),

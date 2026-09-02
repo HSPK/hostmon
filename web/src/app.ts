@@ -27,6 +27,9 @@ import { createPanelRegistry } from "./panels/registry";
 type LayoutView = "pages" | "navigation" | "panels";
 
 const DATA_RELOAD_DELAY_MS = 100;
+const NAVIGATION_SECTION_DRAG_TYPE =
+  "text/x-hostmon-navigation-setting";
+const NAVIGATION_PAGE_DRAG_TYPE = "text/x-hostmon-navigation-page";
 
 interface PluginCacheEntry {
   expiresAt: number;
@@ -1115,6 +1118,11 @@ export class DashboardApp {
       fields.append(name, placement);
       const actions = document.createElement("div");
       actions.className = "order-actions";
+      const drag = this.navigationEditorDragHandle(
+        `Drag ${section.label || "unlabeled"} section`,
+        NAVIGATION_SECTION_DRAG_TYPE,
+        section.id,
+      );
       const remove = orderButton("Delete", () => {
         if (
           !window.confirm(
@@ -1127,12 +1135,19 @@ export class DashboardApp {
         this.refreshNavigationConfiguration();
       });
       remove.disabled = sections.length <= 1;
-      actions.append(
-        orderButton("Up", () => this.moveNavigationSection(section.id, -1)),
-        orderButton("Down", () => this.moveNavigationSection(section.id, 1)),
-        remove,
-      );
+      actions.append(drag, remove);
       row.append(fields, actions);
+      this.bindNavigationEditorDrop(
+        row,
+        section.id,
+        NAVIGATION_SECTION_DRAG_TYPE,
+        (sourceId, targetId, after) =>
+          this.preferences.moveNavigationSectionRelative(
+            sourceId,
+            targetId,
+            after,
+          ),
+      );
       sectionList.append(row);
     }
     const assignments = document.createElement("div");
@@ -1170,15 +1185,30 @@ export class DashboardApp {
       this.refreshNavigationConfiguration();
     });
     assignments.append(heading, pageForm);
-    for (const item of this.preferences.navigationItems()) {
+    const items = new Map(
+      this.preferences.navigationItems().map(item => [item.id, item]),
+    );
+    const orderedItems = sections.flatMap(section =>
+      section.pages
+        .map(pageId => items.get(pageId))
+        .filter(item => item !== undefined),
+    );
+    for (const item of orderedItems) {
       const row = document.createElement("div");
       row.className = "navigation-page-setting";
       row.dataset.navigationPageId = item.id;
+      const drag = this.navigationEditorDragHandle(
+        `Drag ${item.label} page`,
+        NAVIGATION_PAGE_DRAG_TYPE,
+        item.id,
+      );
       const label = document.createElement("input");
+      label.className = "navigation-page-name";
       label.value = item.label;
       label.maxLength = 80;
       label.setAttribute("aria-label", `Page name ${item.label}`);
       const select = document.createElement("select");
+      select.className = "navigation-page-section";
       select.setAttribute("aria-label", `Section for ${item.label}`);
       for (const section of sections) {
         const option = document.createElement("option");
@@ -1207,8 +1237,16 @@ export class DashboardApp {
         if (!this.preferences.removePage(item.id)) return;
         this.refreshNavigationConfiguration();
       });
+      remove.classList.add("navigation-page-delete");
       remove.disabled = this.preferences.navigationItems().length <= 1;
-      row.append(label, select, remove);
+      row.append(drag, label, select, remove);
+      this.bindNavigationEditorDrop(
+        row,
+        item.id,
+        NAVIGATION_PAGE_DRAG_TYPE,
+        (sourceId, targetId, after) =>
+          this.preferences.movePageRelative(sourceId, targetId, after),
+      );
       assignments.append(row);
     }
     fragment.append(sectionForm, sectionList, assignments);
@@ -1223,11 +1261,6 @@ export class DashboardApp {
     this.renderNavigation();
     this.renderLayoutSettings();
     this.renderPanels();
-  }
-
-  private moveNavigationSection(id: string, direction: -1 | 1): void {
-    this.preferences.moveNavigationSection(id, direction);
-    this.refreshNavigationConfiguration();
   }
 
   private movePanel(id: string, direction: -1 | 1): void {
@@ -1268,6 +1301,82 @@ export class DashboardApp {
       this.renderLayoutSettings();
       this.renderPanels();
     });
+  }
+
+  private navigationEditorDragHandle(
+    label: string,
+    dataType: string,
+    value: string,
+  ): HTMLButtonElement {
+    const handle = document.createElement("button");
+    handle.type = "button";
+    handle.className = "table-action navigation-drag-handle";
+    handle.textContent = "::";
+    handle.setAttribute("aria-label", label);
+    handle.title = label;
+    handle.draggable = true;
+    handle.addEventListener("dragstart", event => {
+      if (!event.dataTransfer) return;
+      event.dataTransfer.effectAllowed = "move";
+      event.dataTransfer.setData(dataType, value);
+      handle
+        .closest(".navigation-setting, .navigation-page-setting")
+        ?.classList.add("dragging");
+    });
+    handle.addEventListener("dragend", () =>
+      this.clearNavigationEditorDragState(),
+    );
+    return handle;
+  }
+
+  private bindNavigationEditorDrop(
+    root: HTMLElement,
+    targetId: string,
+    dataType: string,
+    moveFn: (sourceId: string, targetId: string, after: boolean) => void,
+  ): void {
+    root.addEventListener("dragover", event => {
+      if (!event.dataTransfer?.types.includes(dataType)) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = "move";
+      const bounds = root.getBoundingClientRect();
+      const after = event.clientY > bounds.top + bounds.height / 2;
+      root.classList.toggle("drag-over-before", !after);
+      root.classList.toggle("drag-over-after", after);
+    });
+    root.addEventListener("dragleave", event => {
+      const related = event.relatedTarget;
+      if (!(related instanceof Node) || !root.contains(related)) {
+        root.classList.remove("drag-over-before", "drag-over-after");
+      }
+    });
+    root.addEventListener("drop", event => {
+      const sourceId = event.dataTransfer?.getData(dataType);
+      if (!sourceId || sourceId === targetId) return;
+      event.preventDefault();
+      const bounds = root.getBoundingClientRect();
+      moveFn(
+        sourceId,
+        targetId,
+        event.clientY > bounds.top + bounds.height / 2,
+      );
+      this.clearNavigationEditorDragState();
+      this.refreshNavigationConfiguration();
+    });
+  }
+
+  private clearNavigationEditorDragState(): void {
+    document
+      .querySelectorAll(
+        ".navigation-setting, .navigation-page-setting",
+      )
+      .forEach(item =>
+        item.classList.remove(
+          "dragging",
+          "drag-over-before",
+          "drag-over-after",
+        ),
+      );
   }
 
   private openChartEditor(

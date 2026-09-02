@@ -320,6 +320,27 @@ export class PreferenceStore {
     this.save("navigationSections");
   }
 
+  movePageRelative(
+    sourceId: PageId,
+    targetId: PageId,
+    after: boolean,
+  ): void {
+    if (sourceId === targetId) return;
+    const pages = new Set(this.navigationItems().map(item => item.id));
+    if (!pages.has(sourceId) || !pages.has(targetId)) return;
+    const targetSection = this.value.navigationSections.find(
+      section => section.pages.includes(targetId),
+    );
+    if (!targetSection) return;
+    for (const section of this.value.navigationSections) {
+      section.pages = section.pages.filter(page => page !== sourceId);
+    }
+    const targetIndex = targetSection.pages.indexOf(targetId);
+    if (targetIndex < 0) return;
+    targetSection.pages.splice(targetIndex + (after ? 1 : 0), 0, sourceId);
+    this.save("navigationSections");
+  }
+
   addPage(label: string, sectionId: string): string | null {
     const normalized = label.trim().slice(0, 80);
     const section = this.value.navigationSections.find(

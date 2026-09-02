@@ -860,6 +860,59 @@ test("manages sections and metric pages from the Navigation dock", async ({
   ).toHaveCount(0);
 });
 
+test("drags navigation sections and metric pages in the dock", async ({
+  page,
+}) => {
+  await page.goto("/?page=overview");
+  await page.locator("#layout-navigation-button").click();
+  const editor = page.locator("#layout-navigation-view");
+  await expect(
+    editor.getByRole("button", {name: /^(Up|Down)$/}),
+  ).toHaveCount(0);
+
+  const manage = editor.locator(
+    '[data-navigation-section-id="default-main-manage"]',
+  );
+  const charts = editor.locator(
+    '[data-navigation-section-id="default-main-charts"]',
+  );
+  await manage.getByRole("button", {
+    name: "Drag Manage section",
+  }).dragTo(charts, {targetPosition: {x: 20, y: 2}});
+  await expect
+    .poll(() =>
+      page.locator(".sidebar .nav-main .nav-section h3").allTextContents(),
+    )
+    .toEqual(["Manage", "Charts", "Tables"]);
+
+  const metrics = editor.locator(
+    '[data-navigation-page-id="metrics"]',
+  );
+  const overview = editor.locator(
+    '[data-navigation-page-id="overview"]',
+  );
+  await metrics.getByRole("button", {
+    name: "Drag Metrics page",
+  }).dragTo(overview, {targetPosition: {x: 20, y: 2}});
+  const chartPages = page.locator(".sidebar .nav-section").filter({
+    has: page.getByRole("heading", {name: "Charts", exact: true}),
+  }).locator(".nav-item");
+  await expect(chartPages).toHaveText([
+    "Metrics",
+    "Overview",
+    "GPU Fleet",
+  ]);
+
+  await page.reload();
+  await page.locator("#layout-navigation-button").click();
+  await expect(
+    page.getByLabel("Section for Metrics"),
+  ).toHaveValue("default-main-charts");
+  await expect(
+    page.locator(".sidebar .nav-main .nav-section h3"),
+  ).toHaveText(["Manage", "Charts", "Tables"]);
+});
+
 test("keeps long sidebar section names clear of hover actions", async ({
   page,
 }) => {
