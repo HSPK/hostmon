@@ -67,6 +67,8 @@ class MonitorRuntime:
             settings.rules_file,
             settings.collectors,
             settings.interval_seconds,
+            rvx_snapshots=settings.rvx_snapshots,
+            hostname=self.hostname,
         )
         try:
             self.prometheus.start()
@@ -190,6 +192,13 @@ class MonitorRuntime:
             collection.metrics,
             collection.fields,
         )
+        try:
+            self.prometheus.publish_snapshot(
+                now, self.hostname, collection.metrics, collection.fields,
+                collection.states, rendered_alerts, step=evaluation.sample["_step"],
+            )
+        except MonitorError as error:
+            collection.warnings.append(str(error))
         if send_alerts:
             self.outbox.prune_delivered(before=now - 7 * 86400)
         return CycleResult(

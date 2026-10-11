@@ -13,7 +13,9 @@ from .errors import ConfigError
 
 APP_NAME = "host-monitor"
 CONFIG_ENV = "HOST_MONITOR_CONFIG"
-KNOWN_TOP_LEVEL = {"monitor", "collectors", "alerts", "history", "prometheus"}
+KNOWN_TOP_LEVEL = {
+    "monitor", "collectors", "alerts", "history", "prometheus", "rvx_snapshots",
+}
 KNOWN_MONITOR_KEYS = {
     "interval_seconds",
     "snapshot_seconds",
@@ -32,6 +34,10 @@ KNOWN_PROMETHEUS_KEYS = {
     "dashboard_file",
     "dashboard_directory",
     "preferences_file",
+}
+KNOWN_RVX_SNAPSHOT_KEYS = {
+    "enabled", "run_id", "project", "experiment", "attempt_id",
+    "capacity", "max_buffer_bytes",
 }
 REQUIRED_COLLECTORS = {"cpu", "memory", "disk", "network"}
 
@@ -74,6 +80,19 @@ class PrometheusSettings:
 
 
 @dataclass(frozen=True)
+class RvxSnapshotSettings:
+    """Configure a bounded full-state producer without an embedded RVX engine."""
+
+    enabled: bool = False
+    run_id: str = ""
+    project: str = "hostmon"
+    experiment: str = ""
+    attempt_id: str = "live"
+    capacity: int = 1000
+    max_buffer_bytes: int = 64 * 1024 * 1024
+
+
+@dataclass(frozen=True)
 class Settings:
     config_file: Path
     interval_seconds: float
@@ -86,6 +105,7 @@ class Settings:
     alerts: AlertSettings
     history: HistorySettings
     prometheus: PrometheusSettings
+    rvx_snapshots: RvxSnapshotSettings = field(default_factory=RvxSnapshotSettings)
 
 
 def config_home() -> Path:
@@ -183,6 +203,7 @@ def _dashboard_uses_plugin_panels(path: Path) -> bool:
 
 
 def load_settings(path: str | Path | None = None) -> Settings:
+    """Load and validate the current monitor configuration schema."""
     config_file = resolve_config_path(path)
     try:
         payload = tomllib.loads(config_file.read_text(encoding="utf-8"))
@@ -197,7 +218,6 @@ def load_settings(path: str | Path | None = None) -> Settings:
     unknown = set(payload) - KNOWN_TOP_LEVEL
     if unknown:
         raise ConfigError(f"unknown top-level configuration keys: {sorted(unknown)}")
-
     base = config_file.parent
     monitor = _mapping("monitor", payload.get("monitor", {}))
     unknown = set(monitor) - KNOWN_MONITOR_KEYS
@@ -378,6 +398,43 @@ def load_settings(path: str | Path | None = None) -> Settings:
         state_file.with_name("dashboard-preferences.json"),
     )
 
+    raw_snapshots = _mapping("rvx_snapshots", payload.get("rvx_snapshots", {}))
+    unknown = set(raw_snapshots) - KNOWN_RVX_SNAPSHOT_KEYS
+    if unknown:
+        raise ConfigError(f"unknown RVX snapshot server options: {sorted(unknown)}")
+    snapshots_enabled = raw_snapshots.get("enabled", False)
+    if not isinstance(snapshots_enabled, bool):
+        raise ConfigError("rvx_snapshots.enabled must be true or false")
+    snapshot_identity: dict[str, str] = {}
+    for name, default in (
+        ("run_id", ""),
+        ("project", "hostmon"),
+        ("experiment", ""),
+        ("attempt_id", "live"),
+    ):
+        value = raw_snapshots.get(name, default)
+        if not isinstance(value, str):
+            raise ConfigError(f"rvx_snapshots.{name} must be a string")
+        value = value.strip()
+        if len(value.encode("utf-8")) > 256:
+            raise ConfigError(f"rvx_snapshots.{name} must be at most 256 UTF-8 bytes")
+        snapshot_identity[name] = value
+    if snapshots_enabled and any(
+        not snapshot_identity[name] for name in ("run_id", "project", "attempt_id")
+    ):
+        raise ConfigError(
+            "enabled rvx_snapshots requires run_id, project, and attempt_id"
+        )
+    snapshot_limits: dict[str, int] = {}
+    for name, default, maximum in (
+        ("capacity", 1000, 1_000_000),
+        ("max_buffer_bytes", 64 * 1024 * 1024, 1024 * 1024 * 1024),
+    ):
+        value = raw_snapshots.get(name, default)
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= maximum:
+            raise ConfigError(f"rvx_snapshots.{name} must be an integer in 1..{maximum}")
+        snapshot_limits[name] = value
+
     return Settings(
         config_file=config_file,
         interval_seconds=interval,
@@ -407,6 +464,9 @@ def load_settings(path: str | Path | None = None) -> Settings:
             dashboard_file=dashboard_file,
             dashboard_directory=dashboard_directory,
             preferences_file=preferences_file,
+        ),
+        rvx_snapshots=RvxSnapshotSettings(
+            enabled=snapshots_enabled, **snapshot_identity, **snapshot_limits,
         ),
     )
 

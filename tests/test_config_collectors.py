@@ -42,6 +42,53 @@ from host_monitor.rules import write_default_rules
 
 
 class ConfigTests(unittest.TestCase):
+    def test_rvx_snapshot_producer_settings_have_no_engine_configuration(self):
+        """Configure a standalone consumer's identity without linking its engine."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            initialize_config(path)
+            self.assertFalse(load_settings(path).rvx_snapshots.enabled)
+            original = path.read_text(encoding="utf-8").replace(
+                "[prometheus]\nenabled = false", "[prometheus]\nenabled = true",
+            )
+            path.write_text(
+                original + '\n[rvx_snapshots]\nenabled = true\nrun_id = "run-1"\n'
+                'project = "async-rl"\nexperiment = "host-resources"\nattempt_id = "attempt-2"\n',
+                encoding="utf-8",
+            )
+            settings = load_settings(path)
+            self.assertTrue(settings.rvx_snapshots.enabled)
+            self.assertEqual(settings.rvx_snapshots.run_id, "run-1")
+            self.assertEqual(settings.rvx_snapshots.project, "async-rl")
+            self.assertEqual(settings.rvx_snapshots.attempt_id, "attempt-2")
+            self.assertEqual(settings.rvx_snapshots.capacity, 1000)
+            self.assertEqual(settings.rvx_snapshots.max_buffer_bytes, 64 * 1024 * 1024)
+            self.assertFalse(hasattr(settings, "rvx"))
+            for invalid in (
+                '\n[rvx_snapshots]\nenabled = true\n',
+                '\n[rvx_snapshots]\nenabled = "true"\n',
+                '\n[rvx_snapshots]\nrun_id = 42\n',
+                '\n[rvx_snapshots]\nhot_capacity = 100\n',
+                '\n[rvx_snapshots]\ncapacity = 0\n',
+                '\n[rvx_snapshots]\ncapacity = 1.5\n',
+                '\n[rvx_snapshots]\nmax_buffer_bytes = true\n',
+                '\n[rvx_snapshots]\nmax_buffer_bytes = 1073741825\n',
+                '\n[rvx_snapshots]\nrun_id = "' + "x" * 257 + '"\n',
+                '\n[unsupported_producer]\nenabled = false\n',
+            ):
+                path.write_text(original + invalid, encoding="utf-8")
+                with self.subTest(config=invalid), self.assertRaises(ConfigError):
+                    load_settings(path)
+            path.write_text(
+                original.replace(
+                    "[prometheus]\nenabled = true", "[prometheus]\nenabled = false",
+                ) + '\n[rvx_snapshots]\nenabled = true\nrun_id = "run-1"\n',
+                encoding="utf-8",
+            )
+            paused = load_settings(path)
+            self.assertTrue(paused.rvx_snapshots.enabled)
+            self.assertFalse(paused.prometheus.enabled)
+
     def test_initializes_and_loads_complete_default_config(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"

@@ -14,7 +14,11 @@ from unittest.mock import patch
 
 from aiohttp import ClientSession, WSMsgType, WSServerHandshakeError
 
-from host_monitor.config import CollectorSettings, PrometheusSettings
+from host_monitor.config import (
+    CollectorSettings,
+    PrometheusSettings,
+    RvxSnapshotSettings,
+)
 from host_monitor.dashboard import DashboardStore, infer_metric_metadata
 from host_monitor.dashboard import load_history_window, load_recent_history
 from host_monitor.errors import MonitorError
@@ -258,6 +262,103 @@ class PrometheusHTTPTests(unittest.TestCase):
         self.assertEqual(status["fields"]["task"], "training-a")
         self.assertEqual(status["websocket_inactivity_timeout_seconds"], 30)
         self.assertEqual(catalog["metrics"][0]["name"], "cpu/percent")
+
+    def test_serves_hostmon_as_a_rvx_pull_source(self):
+        now = time.time()
+        self.save_state(now)
+        self.exporter = PrometheusExporter(
+            self.settings, self.state_file, hostname="host-a",
+            rvx_snapshots=RvxSnapshotSettings(enabled=True, run_id="run-live", capacity=2),
+        )
+        self.exporter.start()
+        with urllib.request.urlopen(
+            self.url("/v1/snapshots/descriptor"),
+            timeout=5,
+        ) as response:
+            descriptor = json.load(response)
+        with self.assertRaises(urllib.error.HTTPError) as unavailable:
+            urllib.request.urlopen(self.url("/v1/snapshots/latest"), timeout=5)
+        self.assertEqual(unavailable.exception.code, 503)
+        self.exporter.publish_snapshot(
+            now, "host-a", {"cpu/percent": 42}, {"phase": "train"}, {}, [], step=10,
+        )
+        with urllib.request.urlopen(
+            self.url("/v1/snapshots/history?after=0&limit=1"),
+            timeout=5,
+        ) as response:
+            page = json.load(response)
+
+        self.assertEqual(descriptor["run_id"], "run-live")
+        self.assertEqual(descriptor["node_id"], "host-a")
+        self.assertEqual(descriptor["attempt_id"], "live")
+        self.assertEqual(descriptor["schema_version"], 1)
+        self.assertNotIn("metrics", descriptor)
+        self.assertEqual(page["snapshots"][0]["state"]["metrics"]["cpu/percent"], 42)
+        self.assertEqual(page["next_sequence"], 1)
+        self.exporter.publish_snapshot(
+            now + 1, "host-a", {"memory/used_bytes": 43}, {"phase": "idle"}, {}, [], step=11,
+        )
+        with urllib.request.urlopen(
+            self.url(f"/v1/snapshots/history?after={page['next_sequence']}&limit=1"),
+            timeout=5,
+        ) as response:
+            incremental = json.load(response)
+        with urllib.request.urlopen(
+            self.url("/v1/snapshots/latest"), timeout=5,
+        ) as response:
+            snapshot = json.load(response)
+        self.assertEqual(len(incremental["snapshots"]), 1)
+        self.assertEqual(incremental["snapshots"][0]["state"]["metrics"], {"memory/used_bytes": 43})
+        self.assertEqual(snapshot["state"]["fields"]["phase"], "idle")
+        self.assertNotIn("cpu/percent", snapshot["state"]["metrics"])
+        self.assertEqual(snapshot["source_session_id"], descriptor["source_session_id"])
+        self.exporter.publish_snapshot(now + 2, "host-a", {}, {}, {}, [], step=12)
+        with urllib.request.urlopen(
+            self.url("/v1/snapshots/history?after=0&limit=1"), timeout=5,
+        ) as response:
+            gap = json.load(response)
+        self.assertEqual(gap["dropped_before"], 1)
+        self.assertEqual(gap["next_sequence"], 2)
+        for query in ("after=-1", "limit=0", "limit=257", "after=invalid", "after=10"):
+            with self.subTest(query=query), self.assertRaises(urllib.error.HTTPError) as error:
+                urllib.request.urlopen(self.url(f"/v1/snapshots/history?{query}"), timeout=5)
+            self.assertEqual(error.exception.code, 400)
+
+    def test_snapshot_producer_is_opt_in_and_has_no_management_api(self):
+        """Keep original hostmon behavior without exposing the RVX control plane."""
+        self.save_state(time.time())
+        self.exporter.start()
+        for path in (
+            "/v1/snapshots/descriptor",
+            "/v1/snapshots/history",
+            "/v1/snapshots/latest",
+            "/v1/metrics/descriptor",
+            "/v1/metrics/points",
+            "/v1/metrics/snapshot",
+            "/api/experiments/stats",
+            "/api/experiments/projects",
+        ):
+            with self.subTest(path=path):
+                with self.assertRaises(urllib.error.HTTPError) as error:
+                    urllib.request.urlopen(self.url(path), timeout=5)
+                self.assertEqual(error.exception.code, 404)
+
+    def test_disabling_original_http_server_pauses_snapshot_production(self):
+        """Exporter-off keeps original monitoring valid even when snapshots are configured."""
+        exporter = PrometheusExporter(
+            PrometheusSettings(
+                enabled=False, host="127.0.0.1", port=0, max_sample_age_seconds=30,
+            ),
+            self.state_file,
+            rvx_snapshots=RvxSnapshotSettings(enabled=True, run_id="run-live"),
+        )
+        try:
+            exporter.start()
+            exporter.publish_snapshot(100, "host-a", {}, {}, {}, [], step=0)
+            self.assertIsNone(exporter.rvx_snapshots)
+            self.assertIsNone(exporter.address)
+        finally:
+            exporter.close()
 
     def test_serves_dashboard_history_and_websocket(self):
         self.save_state(time.time())

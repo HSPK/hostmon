@@ -60,6 +60,41 @@ hmon exporter start --host 127.0.0.1 --port 9108 --max-sample-age 30
 See [`docs/prometheus.md`](docs/prometheus.md) for scrape configuration,
 Grafana metric names, health checks, and remote-access guidance.
 
+## RVX HTTP snapshot producer
+
+RVX is a separate project and process. Hostmon does not contain its engine,
+storage, CLI, or UI and has no Rust/native-extension dependency. Its optional
+runtime snapshot producer shares the existing HTTP server:
+
+```toml
+[prometheus]
+enabled = true
+host = "127.0.0.1"
+port = 9108
+
+[rvx_snapshots]
+enabled = true
+run_id = "<run-id-created-in-rvx>"
+project = "hostmon"
+attempt_id = "live"
+# experiment defaults to "hostmon-<hostname>"
+```
+
+Register `http://127.0.0.1:9108` as a Source in the independent RVX server,
+using the same Run ID and Attempt ID. Hostmon exposes read-only
+`/v1/snapshots/descriptor`, `/v1/snapshots/latest`, and
+`/v1/snapshots/history?after=<cursor>&limit=<count>`. Each version contains the
+full current measurements, fields, public collector documents/freshness, and
+alert observations. The immutable buffer retains latest and historical states;
+expired cursors report a gap. Every process uses a fresh Session and local
+sequence.
+
+Collectors, JSONL history, Prometheus `/metrics`, alerts, and the original
+dashboard continue unchanged. Engine/storage settings belong to RVX, not
+hostmon. Structured history begins with actual captures; existing JSONL or
+scalar archives are never reconstructed into invented runtime states.
+See [`docs/rvx_snapshots.md`](docs/rvx_snapshots.md) for the protocol and setup.
+
 The dashboard is a separate TypeScript/Vite application with Overview,
 Metrics, Collectors, Alerts, Settings, and System pages. It includes a
 searchable metric catalog, current/min/average/p95/max statistics, arbitrary

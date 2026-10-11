@@ -108,6 +108,16 @@ def command_config(args: argparse.Namespace) -> int:
                         settings.prometheus.max_sample_age_seconds
                     ),
                 },
+                "rvx_snapshots": {
+                    "enabled": settings.rvx_snapshots.enabled,
+                    "serving": settings.rvx_snapshots.enabled and settings.prometheus.enabled,
+                    "run_id": settings.rvx_snapshots.run_id,
+                    "project": settings.rvx_snapshots.project,
+                    "experiment": settings.rvx_snapshots.experiment,
+                    "attempt_id": settings.rvx_snapshots.attempt_id,
+                    "capacity": settings.rvx_snapshots.capacity,
+                    "max_buffer_bytes": settings.rvx_snapshots.max_buffer_bytes,
+                },
             }
         )
         return 0

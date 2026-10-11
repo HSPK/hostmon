@@ -9,6 +9,7 @@ import logging
 import math
 import mimetypes
 import re
+import socket
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -20,7 +21,7 @@ from urllib.parse import urlsplit
 from aiohttp import WSMsgType, web
 
 from . import __version__
-from .config import CollectorSettings, PrometheusSettings
+from .config import CollectorSettings, PrometheusSettings, RvxSnapshotSettings
 from .dashboard import (
     DASHBOARD_CAPACITY,
     DEFAULT_HISTORY_METRIC_LIMIT,
@@ -33,6 +34,7 @@ from .dashboard import (
 from .errors import MonitorError, RuleError
 from .preferences import DashboardPreferenceStore
 from .rules import RuleStore
+from .rvx_snapshots import RvxSnapshotBuffer, RvxSnapshotsAPI
 from .state import StateStore
 
 
@@ -164,6 +166,8 @@ class PrometheusExporter:
         rules_file: Path | None = None,
         collector_settings: tuple[CollectorSettings, ...] = (),
         interval_seconds: float = 10.0,
+        rvx_snapshots: RvxSnapshotSettings | None = None,
+        hostname: str | None = None,
     ):
         self.settings = settings
         self.state_file = state_file
@@ -171,6 +175,11 @@ class PrometheusExporter:
         self.rules = RuleStore(rules_file) if rules_file is not None else None
         self.collector_settings = collector_settings
         self.interval_seconds = interval_seconds
+        self.rvx_snapshots = (
+            RvxSnapshotBuffer(rvx_snapshots, hostname or socket.gethostname())
+            if settings.enabled and rvx_snapshots is not None and rvx_snapshots.enabled
+            else None
+        )
         self.reader = StateSnapshotReader(state_file)
         self.preferences = DashboardPreferenceStore(
             settings.preferences_file
@@ -677,7 +686,7 @@ class PrometheusExporter:
 
     async def _asset(self, request: web.Request) -> web.Response:
         requested = request.match_info.get("path", "") or "index.html"
-        if requested.startswith("api/"):
+        if requested.startswith(("api/", "v1/")):
             raise web.HTTPNotFound()
         path = PurePosixPath(requested)
         if path.is_absolute() or ".." in path.parts:
@@ -738,6 +747,7 @@ class PrometheusExporter:
         )
         application.add_routes(
             [
+                *RvxSnapshotsAPI(self.rvx_snapshots, self._json_response).routes(),
                 web.get("/metrics", self._metrics),
                 web.get("/healthz", self._health),
                 web.get("/api/status", self._status),
@@ -871,6 +881,23 @@ class PrometheusExporter:
                 loop.call_soon_threadsafe(self._schedule_broadcast, snapshot)
             except RuntimeError:
                 LOGGER.warning("dashboard WebSocket loop stopped before publish")
+
+    def publish_snapshot(
+        self,
+        timestamp: float,
+        host: str,
+        metrics: dict[str, Any],
+        fields: dict[str, Any],
+        collectors: dict[str, Any],
+        alerts: list[dict[str, Any]],
+        *,
+        step: int,
+    ) -> None:
+        """Freeze an optional public full-state observation at the completed cycle boundary."""
+        if self.rvx_snapshots is not None:
+            self.rvx_snapshots.capture(
+                timestamp, host, metrics, fields, collectors, alerts, step=step,
+            )
 
     def close(self) -> None:
         loop = self.loop

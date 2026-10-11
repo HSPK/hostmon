@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import io
+import json
 import logging
 import tempfile
 import unittest
@@ -146,6 +147,101 @@ class CLITests(unittest.TestCase):
 
 
 class RuntimeTests(unittest.TestCase):
+    def test_snapshot_server_has_fresh_sessions_without_loading_rvx_engine(self):
+        """Each process publishes new full-state versions, never reused metric cursors."""
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.toml"
+            initialize_config(path)
+            settings = load_settings(path)
+            settings = replace(
+                settings,
+                state_file=Path(directory) / "state.json",
+                rvx_snapshots=replace(settings.rvx_snapshots, enabled=True, run_id="run-1"),
+                prometheus=replace(settings.prometheus, enabled=True, port=0),
+                history=replace(settings.history, directory=Path(directory) / "history"),
+            )
+            with patch("host_monitor.runtime.build_collectors", return_value=[]):
+                runtime = MonitorRuntime(settings)
+                try:
+                    session = runtime.prometheus.rvx_snapshots.session_id
+                    self.assertTrue(session)
+                    self.assertFalse(hasattr(runtime, "rvx"))
+                    self.assertNotIn("rvx_source_session_id", runtime.state)
+                finally:
+                    runtime.close()
+                restored = MonitorRuntime(settings)
+                try:
+                    self.assertNotEqual(restored.prometheus.rvx_snapshots.session_id, session)
+                    self.assertEqual(
+                        json.loads(restored.prometheus.rvx_snapshots.history(after=0))["snapshots"],
+                        [],
+                    )
+                finally:
+                    restored.close()
+
+    def test_cycle_captures_public_state_independently_of_original_history(self):
+        """The completed cycle publishes full state without moving private internals."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "config.toml"
+            initialize_config(path)
+            settings = load_settings(path)
+            settings = replace(
+                settings,
+                state_file=root / "state.json",
+                history=replace(settings.history, directory=root / "history"),
+                prometheus=replace(settings.prometheus, enabled=True, port=0),
+                rvx_snapshots=replace(settings.rvx_snapshots, enabled=True, run_id="run-1"),
+            )
+            write_default_rules(settings.rules_file)
+            with patch("host_monitor.runtime.build_collectors", return_value=[FakeCollector()]):
+                runtime = MonitorRuntime(settings, clock=lambda: 100, monotonic=lambda: 10)
+                try:
+                    result = runtime.cycle(send_alerts=False)
+                    snapshot = json.loads(runtime.prometheus.rvx_snapshots.latest())
+                    self.assertEqual(snapshot["sequence"], 0)
+                    self.assertEqual(snapshot["observed_at_ns"], 100_000_000_000)
+                    self.assertEqual(snapshot["state"]["metrics"], result.metrics)
+                    self.assertIn("last_success_at", snapshot["state"]["collectors"]["fake"])
+                    self.assertNotIn("plugin_state", snapshot["state"]["collectors"]["fake"])
+                    self.assertNotIn("rules", snapshot["state"])
+                    self.assertNotIn("samples", snapshot["state"])
+                    self.assertEqual(snapshot["axes"]["hostmon_sample"], runtime.state["step"])
+                    original = json.loads(Path(result.history_file).read_text().splitlines()[-1])
+                    self.assertEqual(original["metrics"], result.metrics)
+                    self.assertNotIn("source_session_id", original)
+                finally:
+                    runtime.close()
+
+    def test_snapshot_failure_does_not_abort_original_monitoring(self):
+        """An oversized optional snapshot becomes a warning, not a lost monitoring cycle."""
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "config.toml"
+            initialize_config(path)
+            settings = load_settings(path)
+            settings = replace(
+                settings,
+                state_file=root / "state.json",
+                history=replace(settings.history, directory=root / "history"),
+                prometheus=replace(settings.prometheus, enabled=True, port=0),
+                rvx_snapshots=replace(
+                    settings.rvx_snapshots, enabled=True, run_id="run-1", max_buffer_bytes=100,
+                ),
+            )
+            write_default_rules(settings.rules_file)
+            with patch("host_monitor.runtime.build_collectors", return_value=[FakeCollector()]):
+                runtime = MonitorRuntime(settings, clock=lambda: 100, monotonic=lambda: 10)
+                try:
+                    result = runtime.cycle(send_alerts=False)
+                    self.assertEqual(result.metrics["cpu/percent"], 95)
+                    self.assertTrue(any("RVX snapshot capture failed" in item for item in result.warnings))
+                    self.assertEqual(runtime.state_store.load()["last_metrics"]["cpu/percent"], 95)
+                    self.assertEqual(runtime.prometheus.dashboard.latest().metrics["cpu/percent"], 95)
+                    self.assertTrue(Path(result.history_file).is_file())
+                finally:
+                    runtime.close()
+
     def test_cycle_evaluates_rules_and_persists_state(self):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.toml"
