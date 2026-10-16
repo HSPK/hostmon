@@ -431,7 +431,7 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".workload-dialog")).toContainText("56");
   await expect(page.locator(".workload-dialog")).toContainText("gpu-node-01");
   await expect(page.locator(".workload-detail-grid")).toContainText("State");
-  await expect(page.locator(".workload-detail-grid > div")).toHaveCount(9);
+  await expect(page.locator(".workload-detail-grid > div")).toHaveCount(13);
   await page
     .locator(".workload-dialog")
     .getByRole("button", { name: "Close" })
