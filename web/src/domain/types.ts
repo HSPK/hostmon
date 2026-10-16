@@ -63,8 +63,13 @@ export interface ClusterGPUUsageRow {
 
 export interface ClusterGPUWorkloadRow extends ClusterGPUUsageRow {
   name: string;
-  status: "Running" | "Pending" | "Mixed";
+  status: string;
   running_nodes: string[];
+  job_uid?: string | null;
+  submitted_at?: number | null;
+  started_at?: number | null;
+  finished_at?: number | null;
+  runtime_seconds?: number | null;
 }
 
 export interface WorkloadSelection {
@@ -77,7 +82,12 @@ export type WorkloadStateFilter =
   | "attention"
   | "Running"
   | "Pending"
-  | "Mixed";
+  | "Mixed"
+  | "Completed"
+  | "Succeeded"
+  | "Failed"
+  | "Aborted"
+  | "Terminated";
 
 export type WorkloadSort = string;
 

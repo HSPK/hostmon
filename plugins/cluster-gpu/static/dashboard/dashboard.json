@@ -200,6 +200,10 @@
         {"id": "name", "label": "Workload", "path": "name", "width": "410px", "mobileWidth": "160px", "align": "left", "pinned": true, "sort": "name", "action": "details"},
         {"id": "status", "label": "State", "path": "status", "width": "100px", "align": "center", "format": "state"},
         {"id": "submitter", "label": "Submitter", "path": "submitter", "width": "280px", "align": "left", "sort": "submitter"},
+        {"id": "submitted_at", "label": "Submitted (UTC+8)", "path": "submitted_at", "width": "190px", "format": "timestamp", "sort": "submitted_at"},
+        {"id": "started_at", "label": "Started (UTC+8)", "path": "started_at", "width": "190px", "format": "timestamp", "sort": "started_at"},
+        {"id": "runtime_seconds", "label": "Runtime", "path": "runtime_seconds", "width": "130px", "format": "number", "unit": "s", "sort": "runtime_seconds"},
+        {"id": "finished_at", "label": "Finished (UTC+8)", "path": "finished_at", "width": "190px", "format": "timestamp", "sort": "finished_at"},
         {"id": "running_gpus", "label": "Running GPUs", "path": "running_gpus", "width": "130px", "format": "number", "sort": "running_gpus"},
         {"id": "running_gpu_nodes", "label": "GPU nodes", "path": "running_gpu_nodes", "width": "130px", "format": "number"},
         {"id": "pending_gpus", "label": "Pending GPUs", "path": "pending_gpus", "width": "130px", "format": "number", "sort": "pending_gpus"}

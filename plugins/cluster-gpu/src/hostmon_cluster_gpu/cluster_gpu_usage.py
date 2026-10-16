@@ -8,14 +8,16 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, wait
 from dataclasses import dataclass, field
 from decimal import Decimal
+from datetime import datetime
 from typing import Any, Callable
 
 from host_monitor.collectors.base import CollectorResult, reject_unknown_options
+from host_monitor.errors import CollectorError
 from .kubectl_client import KubectlClient, parse_quantity
 
 
 METRIC_COMPONENT = re.compile(r"[^a-zA-Z0-9_]+")
-STATE_SCHEMA_VERSION = 3
+STATE_SCHEMA_VERSION = 4
 
 
 def _trim_native_heap() -> bool:
@@ -134,6 +136,128 @@ def aggregate_workloads(
             *_submitter_identity(pod),
         ),
     )
+
+
+def _timestamp(value: Any) -> float | None:
+    """Parse an optional Kubernetes RFC3339 timestamp into epoch seconds."""
+    if value is None:
+        return None
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        if parsed.tzinfo is None:
+            raise ValueError("timezone missing")
+        return parsed.timestamp()
+    except (AttributeError, TypeError, ValueError) as error:
+        raise CollectorError("invalid Kubernetes workload timestamp") from error
+
+
+def add_workload_timing(
+    report: dict[str, Any],
+    queue_pods: dict[str, list[dict[str, Any]]],
+    queue_jobs: dict[str, list[dict[str, Any]]],
+    *,
+    now: float,
+    previous_report: dict[str, Any] | None,
+    gpu_resource: str,
+) -> None:
+    """Publish Job timing without counting terminal workloads as allocated GPUs."""
+    terminal = {"Completed", "Succeeded", "Failed", "Aborted", "Terminated"}
+    pods_by_job: dict[tuple[str, str], list[dict[str, Any]]] = defaultdict(list)
+    for queue, pods in queue_pods.items():
+        for pod in pods:
+            pods_by_job[queue, _workload_name(pod)].append(pod)
+    previous = {
+        (row["queue"], row["name"]): row
+        for row in (previous_report or {}).get("workloads", [])
+    }
+    jobs = {
+        (queue, job["metadata"]["name"]): job
+        for queue, items in queue_jobs.items()
+        for job in items
+    }
+    rows = report["workloads"]
+    existing = {(row["queue"], row["name"]) for row in rows}
+    for key, job in jobs.items():
+        if key in existing:
+            continue
+        spec = job.get("spec") or {}
+        templates = [task.get("template") or {} for task in spec.get("tasks", [])]
+        if spec.get("template"):
+            templates.append(spec["template"])
+        if not any(_pod_gpu_request(pod, gpu_resource) > 0 for pod in templates):
+            continue
+        submitter, creator_id = _submitter_identity(job)
+        rows.append({
+            "queue": key[0], "name": key[1],
+            "submitter": submitter, "creator_id": creator_id,
+            "status": "Pending", "running_pods": 0, "running_gpus": 0,
+            "running_gpu_nodes": 0, "running_nodes": [],
+            "pending_pods": 0, "pending_gpus": 0,
+        })
+        existing.add(key)
+    for row in rows:
+        key = (row["queue"], row["name"])
+        job = jobs.get(key)
+        metadata = (job or {}).get("metadata") or {}
+        status = (job or {}).get("status") or {}
+        uid = metadata.get("uid")
+        old = previous.get(key, {})
+        if not uid or old.get("job_uid") != uid:
+            old = {}
+        submitted = _timestamp(metadata.get("creationTimestamp"))
+        started = None
+        finished = _timestamp(status.get("completionTime"))
+        phase = (status.get("state") or {}).get("phase")
+        for condition in status.get("conditions") or []:
+            if condition.get("status") == "True":
+                if condition.get("type") in {"Complete", "Failed"}:
+                    phase = "Completed" if condition["type"] == "Complete" else "Failed"
+                    finished = finished or _timestamp(condition.get("lastTransitionTime"))
+        starts, ends = [], []
+        pods = pods_by_job.get(key, [])
+        for pod in pods:
+            pod_status = pod.get("status") or {}
+            for container in pod_status.get("containerStatuses") or []:
+                for state in (container.get("state") or {}, container.get("lastState") or {}):
+                    for kind in ("running", "terminated"):
+                        start = _timestamp((state.get(kind) or {}).get("startedAt"))
+                        if start is not None:
+                            starts.append(start)
+                    end = _timestamp((state.get("terminated") or {}).get("finishedAt"))
+                    if end is not None:
+                        ends.append(end)
+        started = min(starts) if starts else old.get("started_at")
+        if started is not None and old.get("started_at") is not None:
+            started = min(started, old["started_at"])
+        if phase is None and pods and all(
+            (pod.get("status") or {}).get("phase") in {"Succeeded", "Failed"} for pod in pods
+        ):
+            phase = "Failed" if any(
+                (pod.get("status") or {}).get("phase") == "Failed" for pod in pods
+            ) else "Completed"
+        if phase in terminal:
+            row["status"] = phase
+            finished = finished or _timestamp(
+                (status.get("state") or {}).get("lastTransitionTime")
+            )
+            finished = finished or (max(ends) if ends else old.get("finished_at"))
+        elif phase:
+            row["status"] = phase
+        if started is not None and finished is not None and finished < started:
+            raise CollectorError(f"workload {key} finished before it started")
+        duration = None
+        if started is not None:
+            if finished is not None:
+                duration = finished - started
+            elif phase not in terminal:
+                duration = max(0.0, now - started)
+        row.update({
+            "job_uid": uid,
+            "submitted_at": submitted,
+            "started_at": started,
+            "finished_at": finished,
+            "runtime_seconds": duration,
+        })
 
 
 def build_report(
@@ -422,6 +546,18 @@ class ClusterGPUUsageCollector:
             )
             for queue in self.queues
         }
+        job_futures = {
+            queue: self._executor.submit(
+                self._json,
+                "get",
+                "jobs.batch,jobs.batch.volcano.sh",
+                "--namespace",
+                queue,
+                "--output=json",
+                request_timeout,
+            )
+            for queue in self.queues
+        }
         queue_future = self._executor.submit(
             self._json,
             "get",
@@ -430,7 +566,7 @@ class ClusterGPUUsageCollector:
             "--output=json",
             request_timeout,
         )
-        wait((*pod_futures.values(), queue_future))
+        wait((*pod_futures.values(), *job_futures.values(), queue_future))
         queue_pods = {
             queue: KubectlClient.items(future.result(), "pod")
             for queue, future in pod_futures.items()
@@ -456,6 +592,17 @@ class ClusterGPUUsageCollector:
             gpu_resource=self.gpu_resource,
             workloads=workloads,
         )
+        add_workload_timing(
+            report,
+            queue_pods,
+            {
+                queue: KubectlClient.items(future.result(), "Job")
+                for queue, future in job_futures.items()
+            },
+            now=now,
+            previous_report=previous.get("report") if isinstance(previous, dict) else None,
+            gpu_resource=self.gpu_resource,
+        )
         metrics = report_metrics(report)
         result = CollectorResult(
             metrics=metrics,
@@ -468,6 +615,7 @@ class ClusterGPUUsageCollector:
         )
         del (
             pod_futures,
+            job_futures,
             queue_future,
             queue_pods,
             queue_payload,

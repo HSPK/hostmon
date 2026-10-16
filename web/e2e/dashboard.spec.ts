@@ -81,6 +81,10 @@ const clusterGPUReport = {
       queue: "queue-a",
       name: "training-job-001",
       status: "Mixed",
+      submitted_at: 1767225600,
+      started_at: 1767225660,
+      finished_at: null,
+      runtime_seconds: 240,
       submitter: "training-run",
       creator_id: "user-a",
       running_pods: 7,
@@ -427,7 +431,7 @@ test("navigates operations pages and renders live charts", async ({ page }) => {
   await expect(page.locator(".workload-dialog")).toContainText("56");
   await expect(page.locator(".workload-dialog")).toContainText("gpu-node-01");
   await expect(page.locator(".workload-detail-grid")).toContainText("State");
-  await expect(page.locator(".workload-detail-grid > div")).toHaveCount(9);
+  await expect(page.locator(".workload-detail-grid > div")).toHaveCount(13);
   await page
     .locator(".workload-dialog")
     .getByRole("button", { name: "Close" })
@@ -1221,6 +1225,18 @@ test("tracks metrics from server-restored custom charts", async ({ page }) => {
   await expect(
     page.locator('[data-panel-id="custom-server-latency"]'),
   ).toContainText("Server latency");
+});
+
+test("shows workload submission start and runtime timestamps", async ({ page }) => {
+  await page.goto("/?page=workloads");
+  await page.locator(".gpu-submitters-panel input[type=search]").fill("training-job-001");
+  const row = page.locator(".submitter-table tbody tr").first();
+  await expect(row.locator('[data-column="submitted_at"]')).toContainText("08:00:00");
+  await expect(row.locator('[data-column="started_at"]')).toContainText("08:01:00");
+  await expect(row.locator('[data-column="runtime_seconds"]')).toContainText("4.0 min");
+  await expect(row.locator('[data-column="finished_at"]')).toContainText("--");
+  await page.getByRole("button", {name: "training-job-001", exact: true}).click();
+  await expect(page.getByRole("dialog", {name: "Workload details"})).toContainText("Submitted (UTC+8)");
 });
 
 test("filters and sorts workload triage views", async ({ page }) => {
