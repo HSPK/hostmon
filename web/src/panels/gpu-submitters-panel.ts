@@ -12,6 +12,7 @@ import { panelShell, PanelFeedback } from "./panel";
 import {
   compareByPath,
   configuredColumns,
+  formatConfiguredValue,
   DataTable,
   type DataColumn,
   type SortDirection,
@@ -78,6 +79,11 @@ export class GPUSubmittersPanel implements PanelRenderer {
       ["Running", "Running"],
       ["Pending", "Pending"],
       ["Mixed", "Mixed"],
+      ["Completed", "Completed"],
+      ["Succeeded", "Succeeded"],
+      ["Failed", "Failed"],
+      ["Aborted", "Aborted"],
+      ["Terminated", "Terminated"],
     ]);
     this.state.addEventListener("change", () => {
       this.page = 0;
@@ -302,6 +308,10 @@ export class GPUSubmittersPanel implements PanelRenderer {
       detailCell("Submitter", row.submitter),
       detailCell("Creator ID", row.creator_id),
       detailCell("State", row.status),
+      detailCell("Submitted (UTC+8)", String(formatConfiguredValue(row.submitted_at, "timestamp", row, "", "--"))),
+      detailCell("Started (UTC+8)", String(formatConfiguredValue(row.started_at, "timestamp", row, "", "--"))),
+      detailCell("Finished (UTC+8)", String(formatConfiguredValue(row.finished_at, "timestamp", row, "", "--"))),
+      detailCell("Runtime", String(formatConfiguredValue(row.runtime_seconds, "number", row, "s", "--"))),
       detailCell("Running GPUs", row.running_gpus),
       detailCell("GPU nodes", row.running_gpu_nodes),
       detailCell("Running pods", row.running_pods),

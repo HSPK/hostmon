@@ -735,7 +735,7 @@ class ClusterGPUUsageCollectorTests(unittest.TestCase):
             }
         )
         previous = {
-            "schema_version": 3,
+            "schema_version": 4,
             "at": 100,
             "metrics": {"cluster_gpu/running_gpus": 8},
             "report": {"usage": [], "workloads": []},
